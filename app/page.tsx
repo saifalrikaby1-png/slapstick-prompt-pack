@@ -4,6 +4,8 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CharacterProfile,
   CharacterRole,
+  CreativeAsset,
+  CreativeAssetKind,
   GeneratorMode,
   LegacySavedPack,
   ProductionForm,
@@ -12,6 +14,7 @@ import {
   QualityReport,
   SavedProductionPack,
   StoredPack,
+  VoiceLayer,
   defaultProductionForm,
 } from "./production-types";
 import {
@@ -29,21 +32,30 @@ import {
   selectedTone,
   visualVideoPrompt,
 } from "./production-engine";
+import {
+  CREATIVE_LIBRARY_STORAGE_KEY,
+  creativeCollision,
+  mergeCreativeAssets,
+  migrateCreativeAsset,
+  normalizeCreativeIdentity,
+  parseCreativeLibrary,
+} from "./creative-library";
 
 const STORAGE = {
   characters: "slapstick-character-library",
   presets: "slapstick-project-presets",
   packs: "slapstick-saved-packs",
   form: "slapstick-current-setup",
+  creative: CREATIVE_LIBRARY_STORAGE_KEY,
 };
 
-const roles: CharacterRole[] = ["Hero", "Enemy", "Companion", "Supporting character"];
+const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 
 const emptyCharacter: CharacterProfile = {
   id: "",
   shortName: "",
   fullIdentity: "",
-  role: "Supporting character",
+  role: "Companion",
   description: "",
   appearanceLock: "",
   personalityLock: "",
@@ -147,11 +159,17 @@ Negative identity rules: do not duplicate Sneaky; no extra chameleons, uncontrol
 
 const biscuitForm: ProductionForm = {
   ...defaultProductionForm,
+  videoTitle: "Biscuit and the Golden Log Reversal",
+  locationName: "Golden Cookie Clearing",
   location: "a bright woodland cookie clearing with a smooth dirt path and warm morning light",
+  objectName: "Glow-Crumb Cookie",
   importantObject: "one glowing golden cookie on a low tree-stump pedestal",
+  actionName: "Rolling Log Reversal",
   trapAction: "Grumpy and Sneaky trigger a rolling log trap; Biscuit makes one clean dodge and the same log rolls back toward them",
+  payoffName: "Cookie Victory Tangle",
   endingPayoff: "Biscuit safely holds the glowing cookie in a clear victory pose while Grumpy and Sneaky sit harmlessly tangled behind the stopped log",
-  additionalDirection: "Keep the comedy fast, readable, family-friendly, and loopable.",
+  tones: ["Funny", "Fast", "Chaotic slapstick"],
+  additionalDirection: "",
 };
 
 const builtInPreset: ProjectPreset = {
@@ -161,13 +179,13 @@ const builtInPreset: ProjectPreset = {
   builtIn: true,
 };
 
-const platforms = ["YouTube Shorts", "TikTok", "Instagram Reels", "Facebook Reels", "General video", "Custom"];
-const videoModels = ["Seedance", "Kling", "Google Flow / Veo", "Runway", "Higgsfield", "PixVerse", "Hailuo", "Generic model", "Custom model"];
+const platforms = ["Social Media", "Custom"];
+const videoModels = ["Seedance", "Kling", "Google Flow / Veo", "Runway", "Higgsfield", "PixVerse", "Hailuo / MiniMax", "Generic model", "Custom model"];
 const durations = Array.from({ length: 12 }, (_, index) => String((index + 1) * 5));
 const visualStyles = ["Cinematic 3D family animation", "Stylized 3D cartoon", "High-quality 3D animation", "2D cartoon", "Anime", "Clay animation", "Stop-motion", "Realistic cinematic", "Storybook illustration", "Custom"];
 const tones = ["Calm", "Cute", "Playful", "Funny", "Energetic", "Fast", "Chaotic slapstick", "Suspenseful", "Emotional", "Magical", "Educational", "Custom"];
 const ratios = ["9:16", "16:9", "1:1", "4:5", "5:4", "3:4", "4:3", "2:3", "3:2", "21:9", "2.39:1", "Custom"];
-const narrationModes = ["Silent non-dialogue", "Character voices only", "Narrator only", "Narrator and character voices", "Music and sound effects only"];
+const voiceLayerOptions: VoiceLayer[] = ["Narrator", "Hero Voice", "Companion Voices", "Enemy Voices", "No Spoken Dialogue"];
 
 function safeArray(value: string | null) {
   try {
@@ -258,6 +276,7 @@ function RatioControl({
 export default function Home() {
   const [form, setForm] = useState<ProductionForm>(defaultProductionForm);
   const [characters, setCharacters] = useState<CharacterProfile[]>(builtInCharacters);
+  const [creativeAssets, setCreativeAssets] = useState<CreativeAsset[]>([]);
   const [draft, setDraft] = useState<CharacterProfile>(builtInCharacters[0]);
   const [selectedSupportId, setSelectedSupportId] = useState("");
   const [presets, setPresets] = useState<ProjectPreset[]>([builtInPreset]);
@@ -269,11 +288,13 @@ export default function Home() {
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestingField, setSuggestingField] = useState<string>("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
   const presetImportRef = useRef<HTMLInputElement>(null);
+  const creativeImportRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
 
@@ -297,6 +318,17 @@ export default function Home() {
       setSavedPacks(safeArray(localStorage.getItem(STORAGE.packs))
         .map(migrateStoredPack)
         .filter((entry): entry is StoredPack => Boolean(entry)));
+      const storedCreative = parseCreativeLibrary(localStorage.getItem(STORAGE.creative));
+      setCreativeAssets(storedCreative);
+      const signature = storedCreative.find((asset) => asset.kind === "location" && asset.isSignature);
+      if (signature && !storedForm) {
+        setForm((current) => ({
+          ...current,
+          locationAssetId: signature.id,
+          locationName: signature.name,
+          location: signature.description,
+        }));
+      }
       hydratedRef.current = true;
     }, 0);
     return () => window.clearTimeout(hydrationTask);
@@ -318,6 +350,10 @@ export default function Home() {
     if (!hydratedRef.current) return;
     localStorage.setItem(STORAGE.form, JSON.stringify(form));
   }, [form]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    localStorage.setItem(STORAGE.creative, JSON.stringify(creativeAssets));
+  }, [creativeAssets]);
 
   const hero = characters.find((profile) => profile.id === form.heroId);
   const selectedCharacters = form.selectedCharacterIds
@@ -326,8 +362,8 @@ export default function Home() {
   const productionCharacters = [hero, ...selectedCharacters]
     .filter((entry): entry is CharacterProfile => Boolean(entry));
   const qualityReport = useMemo(
-    () => pack ? inspectProductionPack(pack, form, characters) : null,
-    [pack, form, characters],
+    () => pack ? inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets) : null,
+    [pack, form, characters, savedPacks, creativeAssets],
   );
   const completePrompt = pack ? completeVideoPrompt(pack) : "";
   const visualPrompt = pack ? visualVideoPrompt(pack) : "";
@@ -337,11 +373,185 @@ export default function Home() {
     form.importantObject.trim() &&
     form.trapAction.trim() &&
     form.endingPayoff.trim() &&
-    hero,
+    form.tones.length > 0 &&
+    (form.platform !== "Custom" || form.customPlatform.trim()) &&
+    hero?.role === "Hero",
   );
 
   function update<K extends keyof ProductionForm>(key: K, value: ProductionForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function formForGeneration() {
+    if (form.additionalDirection.trim()) return form;
+    const { additionalDirection: _blankDirection, ...withoutBlankDirection } = form;
+    void _blankDirection;
+    return withoutBlankDirection;
+  }
+
+  const creativeFields: Record<CreativeAssetKind, {
+    id: keyof ProductionForm;
+    name: keyof ProductionForm;
+    description: keyof ProductionForm;
+  }> = {
+    location: { id: "locationAssetId", name: "locationName", description: "location" },
+    object: { id: "objectAssetId", name: "objectName", description: "importantObject" },
+    action: { id: "actionAssetId", name: "actionName", description: "trapAction" },
+    payoff: { id: "payoffAssetId", name: "payoffName", description: "endingPayoff" },
+  };
+
+  function selectCreativeAsset(kind: CreativeAssetKind, id: string) {
+    const keys = creativeFields[kind];
+    const asset = creativeAssets.find((item) => item.id === id && item.kind === kind);
+    setForm((current) => ({
+      ...current,
+      [keys.id]: asset?.id || "",
+      [keys.name]: asset?.name || "",
+      [keys.description]: asset?.description || "",
+    }));
+    setNotice(asset ? `Using latest saved ${kind}: ${asset.name}.` : `${kind} cleared from this production.`);
+  }
+
+  function saveCreativeAsset(kind: CreativeAssetKind) {
+    const keys = creativeFields[kind];
+    const name = String(form[keys.name]).trim();
+    const description = String(form[keys.description]).trim();
+    if (!name || !description) {
+      setError(`Add a ${kind} name and description before saving.`);
+      return;
+    }
+    const currentId = String(form[keys.id]);
+    const collision = creativeAssets.find((asset) =>
+      asset.kind === kind && asset.id !== currentId &&
+      normalizeCreativeIdentity(asset.name) === normalizeCreativeIdentity(name));
+    if (collision) {
+      setError(`A saved ${kind} already uses this name. Select it or choose a distinct name.`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const existing = creativeAssets.find((asset) => asset.id === currentId && asset.kind === kind);
+    const asset: CreativeAsset = {
+      id: existing?.id || crypto.randomUUID(),
+      kind,
+      name,
+      description,
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+      isSignature: kind === "location" ? Boolean(existing?.isSignature) : false,
+    };
+    setCreativeAssets((current) => mergeCreativeAssets(current, [asset]));
+    setForm((current) => ({ ...current, [keys.id]: asset.id }));
+    setNotice(`${name} ${existing ? "updated" : "saved"} in the Creative Library.`);
+    setError("");
+  }
+
+  function deleteCreativeAsset(kind: CreativeAssetKind) {
+    const keys = creativeFields[kind];
+    const id = String(form[keys.id]);
+    const asset = creativeAssets.find((item) => item.id === id);
+    if (!asset || asset.builtIn) {
+      setError(`Select a custom saved ${kind} to delete.`);
+      return;
+    }
+    setCreativeAssets((current) => current.filter((item) => item.id !== id));
+    setForm((current) => ({ ...current, [keys.id]: "" }));
+    setNotice(`${asset.name} deleted from the Creative Library; current editable text was preserved.`);
+  }
+
+  function setSignatureLocation() {
+    if (!form.locationAssetId) {
+      setError("Save or select a location before setting it as the signature location.");
+      return;
+    }
+    setCreativeAssets((current) => current.map((asset) =>
+      asset.kind === "location" ? { ...asset, isSignature: asset.id === form.locationAssetId } : asset));
+    setNotice(`${form.locationName} is now the one active Signature Location.`);
+  }
+
+  function toggleTone(tone: string) {
+    const selected = form.tones.includes(tone);
+    if (selected && form.tones.length === 1) {
+      setError("Select at least one tone.");
+      return;
+    }
+    update("tones", selected ? form.tones.filter((item) => item !== tone) : [...form.tones, tone]);
+    setError("");
+  }
+
+  function toggleVoiceLayer(layer: VoiceLayer) {
+    if (layer === "No Spoken Dialogue") {
+      update("voiceLayers", form.voiceLayers.includes(layer) ? ["Hero Voice"] : ["No Spoken Dialogue"]);
+      return;
+    }
+    const withoutSilent = form.voiceLayers.filter((item) => item !== "No Spoken Dialogue");
+    update("voiceLayers", withoutSilent.includes(layer)
+      ? withoutSilent.filter((item) => item !== layer)
+      : [...withoutSilent, layer]);
+  }
+
+  async function suggestCreative(kind: CreativeAssetKind | "title", expand = false, collisionRetry = false) {
+    setSuggestingField(kind);
+    setError("");
+    const keys = kind === "title" ? null : creativeFields[kind];
+    const idea = kind === "title"
+      ? form.videoTitle
+      : `${String(form[keys!.name])}\n${String(form[keys!.description])}`.trim();
+    try {
+      let result: { name?: string; description?: string; title?: string; error?: string };
+      if (mode === "demo") {
+        const demo = {
+          location: { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a giant spiral oak, with teal moss borders, warm honey light, three recurring acorn lanterns, radial ground grooves, and one distant ribbon waterfall. Preserve the spiral trunk, lantern count, palette, landmark positions, ground pattern, lighting direction, and open central action lane in every production." },
+          object: { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry made of golden layered crust and blue sugar-glass filling, with one visible spring hinge. It compresses, rebounds, and rolls predictably; characters interact by pressing the crust edge. Preserve its crescent silhouette, gold-and-blue palette, size, hinge, material, starting compression, final state, and single-object count." },
+          action: { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: the Enemies press the Moon-Spring Tart toward the Hero; its visible hinge compresses, releases left-to-right, and rebounds along the same path. The Hero makes one readable dodge, the Enemies receive the harmless soft landing, Companions react from fixed positions, and the object settles visibly within ${form.duration} seconds.` },
+          payoff: { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled tart with a relieved smile; each Enemy finishes behind it in a distinct harmless seated reaction; Companions remain in their established side positions. The object is fully visible, the location is unchanged, the final beat is playful, and the held pose can loop naturally to the opening." },
+          title: { title: "The Moon-Spring Double Bounce" },
+        };
+        result = demo[kind];
+      } else {
+        const action = kind === "title"
+          ? "generateVideoTitle"
+          : `${expand ? "expand" : "generate"}${kind[0].toUpperCase()}${kind.slice(1)}`;
+        const exclusions = kind === "title"
+          ? savedPacks.map((saved) => ({ name: saved.title, description: "" }))
+          : kind === "object" && form.allowPreviouslySavedObjects
+            ? []
+            : creativeAssets.filter((asset) => asset.kind === kind)
+              .map(({ name, description }) => ({ name, description }));
+        const response = await fetch("/api/creative-suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            idea,
+            exclusions,
+            collisionRetry,
+            context: { form, characters: productionCharacters.map(({ id, shortName, fullIdentity, role }) => ({ id, shortName, fullIdentity, role })) },
+          }),
+        });
+        result = await response.json() as typeof result & { error?: string };
+        if (!response.ok) throw new Error(result.error || "Creative suggestion failed.");
+      }
+      if (kind === "title") update("videoTitle", result.title || "");
+      else if (result.name && result.description) {
+        const sameKind = creativeAssets.filter((asset) => asset.kind === kind);
+        if (kind === "object" && !form.allowPreviouslySavedObjects &&
+          creativeCollision({ name: result.name, description: result.description }, sameKind)) {
+          if (!collisionRetry && mode === "ai") return await suggestCreative(kind, expand, true);
+          setError("Duplicate Warning: the suggestion resembles a saved object. It remains editable but was not saved.");
+        }
+        setForm((current) => ({
+          ...current,
+          [creativeFields[kind].id]: "",
+          [creativeFields[kind].name]: result.name,
+          [creativeFields[kind].description]: result.description,
+        }));
+      }
+      setNotice(`AI suggestion inserted for editing. It has not been saved.`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Creative suggestion failed.");
+    } finally {
+      setSuggestingField("");
+    }
   }
 
   function loadDemo() {
@@ -374,7 +584,7 @@ export default function Home() {
     setDraft({ ...profile, description: characterDescription(profile) });
   }
 
-  function newCharacter(role: CharacterRole = "Supporting character") {
+  function newCharacter(role: CharacterRole = "Companion") {
     setDraft({ ...emptyCharacter, role });
   }
 
@@ -440,6 +650,7 @@ export default function Home() {
         setDraft((current) => ({
           ...current,
           description: `Full identity: ${subject}
+Customer foundation to preserve: ${current.description.trim() || "No prior description supplied."}
 Species or character type: clearly define the species or character type implied by ${subject}
 Role: ${current.role}
 Appearance: memorable silhouette, stable facial structure, readable eyes, polished anatomy, and production-ready ${selectedStyle(form)} design
@@ -450,7 +661,7 @@ Personality: ${roleDirection}
 Facial-expression style: expressive but anatomically stable reactions appropriate to a ${selectedTone(form).toLowerCase()} production
 Movement style: species-specific motion with visible anticipation, logical weight transfer, smooth arcs, and clean recovery
 Signature actions: define two recognizable poses or actions unique to ${current.shortName}
-Voice profile: ${form.narrationMode === "Silent non-dialogue" ? "no spoken dialogue; use only consistent non-verbal reactions" : `consistent ${form.vocalTone.toLowerCase()} delivery in ${form.language}`}
+Voice profile: ${form.voiceLayers.includes("No Spoken Dialogue") ? "no spoken dialogue; use only consistent non-verbal reactions" : `consistent ${form.vocalTone.toLowerCase()} delivery in ${form.language}`}
 Continuity rules: preserve identity, species, face, colors, clothing, scale, proportions, role, movement, and voice across every frame and future episode
 Negative identity rules: do not duplicate ${current.shortName}; no extra copies, random outfits, species changes, color changes, role changes, morphing, extra limbs, merged bodies, or distorted anatomy`,
         }));
@@ -466,7 +677,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               tone: selectedTone(form),
               platform: selectedPlatform(form),
               model: selectedModel(form),
-              dialogueMode: form.narrationMode,
+              dialogueMode: form.voiceLayers.join(", "),
               characterNotes: form.additionalDirection,
             },
           }),
@@ -475,6 +686,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         if (!response.ok) throw new Error(data.error || "AI could not generate the character description.");
         const description = [
           `Full identity: ${draft.fullIdentity}`,
+          `Customer foundation to preserve: ${draft.description.trim() || "No prior description supplied."}`,
           `Species or character type: infer and lock from the full identity`,
           `Role: ${draft.role}`,
           `Appearance: ${data.appearanceLock}`,
@@ -525,10 +737,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             const response = await fetch("/api/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "generate", form, characters: productionCharacters }),
+              body: JSON.stringify({ action: "generate", form: formForGeneration(), characters: productionCharacters }),
             });
             const data = await response.json() as ProductionPack & { error?: string };
             if (!response.ok) throw new Error(data.error || "AI Mode could not generate the production pack.");
+            if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
             return data;
           })();
       setPack(nextPack);
@@ -551,7 +764,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "fix",
-          form,
+          form: formForGeneration(),
           characters: productionCharacters,
           pack,
           qualityFindings: qualityReport.findings,
@@ -559,6 +772,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       });
       const data = await response.json() as ProductionPack & { error?: string };
       if (!response.ok) throw new Error(data.error || "AI could not improve the pack.");
+      if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
       setPack(data);
       setNotice("The complete pack was synchronized and Quality Control reran automatically.");
     } catch (caught) {
@@ -589,6 +803,13 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       : "builtin-biscuit";
     latest.selectedCharacterIds = latest.selectedCharacterIds
       .filter((id) => characters.some((entry) => entry.id === id) && id !== latest.heroId);
+    (["location", "object", "action", "payoff"] as CreativeAssetKind[]).forEach((kind) => {
+      const keys = creativeFields[kind];
+      const asset = creativeAssets.find((item) => item.id === String(latest[keys.id]));
+      if (asset) {
+        Object.assign(latest, { [keys.name]: asset.name, [keys.description]: asset.description });
+      }
+    });
     setForm(latest);
     setPack(null);
     setLegacyPack(null);
@@ -604,7 +825,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
   function saveCurrentPack() {
     if (!pack || !qualityReport) return;
-    const title = `${hero?.shortName || "Hero"} — ${form.endingPayoff.slice(0, 54) || "Production Pack"}`;
+    const title = pack.videoTitle || form.videoTitle || `${hero?.shortName || "Hero"} Production Pack`;
     const saved: SavedProductionPack = {
       id: crypto.randomUUID(),
       schemaVersion: 2,
@@ -691,6 +912,25 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     }
   }
 
+  async function importCreativeLibrary(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const raw = Array.isArray(parsed) ? parsed : parsed?.creativeAssets;
+      if (!Array.isArray(raw)) throw new Error("The file does not contain a Creative Library list.");
+      const imported = raw.map(migrateCreativeAsset).filter((asset): asset is CreativeAsset => Boolean(asset));
+      if (!imported.length) throw new Error("No valid creative assets were found.");
+      setCreativeAssets((current) => mergeCreativeAssets(current, imported));
+      setNotice(`${imported.length} creative asset${imported.length === 1 ? "" : "s"} imported and merged.`);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Creative Library import failed safely.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   async function downloadWord() {
     if (!pack || !qualityReport) return;
     setIsDownloading(true);
@@ -698,6 +938,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import("docx");
       const { saveAs } = await import("file-saver");
       const sections = [
+        ["Video Title", pack.videoTitle],
         ["Character-Building Prompt", pack.characterBuildingPrompt || "Disabled for this production."],
         ["Start-Frame Image Prompt", pack.startFramePrompt],
         ["End-Frame Image Prompt", pack.endFramePrompt],
@@ -719,12 +960,45 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     }
   }
 
-  const hasNarrator = form.narrationMode === "Narrator only" ||
-    form.narrationMode === "Narrator and character voices";
-  const hasCharacterVoices = form.narrationMode === "Character voices only" ||
-    form.narrationMode === "Narrator and character voices";
-  const silentMode = form.narrationMode === "Silent non-dialogue" ||
-    form.narrationMode === "Music and sound effects only";
+  const hasNarrator = form.voiceLayers.includes("Narrator");
+  const hasCharacterVoices = form.voiceLayers.some((layer) => layer.includes("Voice"));
+  const silentMode = form.voiceLayers.includes("No Spoken Dialogue");
+  const toneConflict = form.tones.includes("Calm") &&
+    (form.tones.includes("Fast") || form.tones.includes("Chaotic slapstick"));
+
+  function creativeEditor(kind: CreativeAssetKind, label: string) {
+    const keys = creativeFields[kind];
+    const selectedId = String(form[keys.id]);
+    const selected = creativeAssets.find((asset) => asset.id === selectedId);
+    const saved = creativeAssets.filter((asset) => asset.kind === kind);
+    return (
+      <article className="creative-editor wide">
+        <div className="mini-heading">
+          <h3>{label}</h3>
+          <p>{selected ? `Using Latest Library Version · ${selected.updatedAt.slice(0, 10)}` : "Editable manual or AI-suggested input"}</p>
+        </div>
+        <label className="field wide"><span>Saved {label}</span>
+          <select value={selectedId} onChange={(event) => selectCreativeAsset(kind, event.target.value)}>
+            <option value="">Manual / unsaved</option>
+            {saved.map((asset) => <option value={asset.id} key={asset.id}>{asset.name}{asset.isSignature ? " · Signature Location" : ""}</option>)}
+          </select>
+        </label>
+        <div className="form-grid">
+          <label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.name]: event.target.value }))} /></label>
+          <label className="field wide"><span>{label} description</span><textarea value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.description]: event.target.value }))} /></label>
+        </div>
+        {kind === "object" && <label className="toggle-field"><input type="checkbox" checked={form.allowPreviouslySavedObjects} onChange={(event) => update("allowPreviouslySavedObjects", event.target.checked)} /><span>Allow Previously Saved Objects</span></label>}
+        <div className="button-row">
+          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, false)}>{suggestingField === kind ? "Creating…" : `Generate ${label} with AI`}</button>
+          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, true)}>{`Continue and Improve ${label}`}</button>
+          <button className="primary-small" type="button" onClick={() => saveCreativeAsset(kind)}>{selected ? `Update ${label}` : `Save ${label}`}</button>
+          {kind === "location" && <button type="button" onClick={setSignatureLocation} disabled={!selectedId}>Set as Signature Location</button>}
+          <button type="button" onClick={() => selectCreativeAsset(kind, "")}>Remove from current video</button>
+          <button type="button" onClick={() => deleteCreativeAsset(kind)} disabled={!selected || Boolean(selected.builtIn)}>Delete custom {label.toLowerCase()}</button>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <main>
@@ -758,11 +1032,27 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           <section className="form-section">
             <div className="section-heading"><span>01</span><div><h2>Episode Idea</h2><p>Define the physical story before adding production settings.</p></div></div>
             <div className="form-grid">
-              <label className="field"><span>Location</span><input value={form.location} onChange={(event) => update("location", event.target.value)} placeholder="Bright woodland clearing" /></label>
-              <label className="field"><span>Important object</span><input value={form.importantObject} onChange={(event) => update("importantObject", event.target.value)} placeholder="One glowing cookie" /></label>
-              <label className="field wide"><span>Trap or main action</span><textarea value={form.trapAction} onChange={(event) => update("trapAction", event.target.value)} placeholder="Describe the physical setup, action direction, and consequence." /></label>
-              <label className="field wide"><span>Ending or payoff</span><textarea value={form.endingPayoff} onChange={(event) => update("endingPayoff", event.target.value)} placeholder="Describe the exact readable ending pose and result." /></label>
-              <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} /></label>
+              <article className="creative-editor title-editor wide">
+                <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
+                <label className="field wide"><span>Video Title</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
+                <div className="button-row"><button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative("title")}>{suggestingField === "title" ? "Creating…" : "Generate Ultra-Unique Title with AI"}</button></div>
+              </article>
+              {creativeEditor("location", "Location")}
+              {creativeEditor("object", "Important Object")}
+              {creativeEditor("action", "Action or Trap")}
+              {creativeEditor("payoff", "Ending or Payoff")}
+              <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
+              <details className="advanced-panel wide">
+                <summary>Creative Library import and export <span>+</span></summary>
+                <div className="advanced-content">
+                  <p>Saved creative assets stay editable and reusable. Imports are validated and merged.</p>
+                  <div className="button-row">
+                    <button type="button" onClick={() => downloadJson({ version: 1, creativeAssets }, "slapstick_prompt_pack_creative_library.json")}>Export Creative Library</button>
+                    <button type="button" onClick={() => creativeImportRef.current?.click()}>Import and Merge Creative Library</button>
+                    <input hidden ref={creativeImportRef} type="file" accept=".json,application/json" onChange={importCreativeLibrary} />
+                  </div>
+                </div>
+              </details>
             </div>
           </section>
 
@@ -772,7 +1062,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               <div className="mini-heading"><h3>Hero Character</h3><p>Choose one saved hero, then review or improve the complete identity description.</p></div>
               <label className="field"><span>Saved-character selector</span>
                 <select value={form.heroId} onChange={(event) => chooseHero(event.target.value)}>
-                  {characters.map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName} · {profile.role}</option>)}
+                  {characters.filter((profile) => profile.role === "Hero").map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName} · {profile.role}</option>)}
                 </select>
               </label>
               <div className="form-grid">
@@ -781,7 +1071,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <label className="field wide"><span>Hero description</span><textarea disabled={Boolean(draft.builtIn)} className="character-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
               </div>
               <div className="button-row">
-                <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Generating…" : "Generate Description with AI"}</button>
+                <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
                 <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(true)}>{draft.id ? "Update Character" : "Save Hero to Library"}</button>
                 <button type="button" onClick={() => newCharacter("Hero")}>New Hero</button>
               </div>
@@ -792,7 +1082,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               <div className="add-character-row">
                 <select aria-label="Saved supporting character" value={selectedSupportId} onChange={(event) => setSelectedSupportId(event.target.value)}>
                   <option value="">Choose a saved character…</option>
-                  {characters.filter((profile) => profile.id !== form.heroId && !form.selectedCharacterIds.includes(profile.id))
+                  {characters.filter((profile) => profile.role !== "Hero" && profile.id !== form.heroId && !form.selectedCharacterIds.includes(profile.id))
                     .map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName} · {profile.role}</option>)}
                 </select>
                 <button type="button" onClick={addSelectedCharacter}>Add to episode</button>
@@ -816,7 +1106,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <label className="field wide"><span>Complete description</span><textarea disabled={Boolean(draft.builtIn)} className="character-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
               </div>
               <div className="button-row">
-                <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Generating…" : "Generate Description with AI"}</button>
+                <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
                 <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(false)}>{draft.id ? "Update Character" : "Save to Character Library"}</button>
                 <button type="button" disabled={!draft.id || Boolean(draft.builtIn)} onClick={deleteCharacter}>Delete Custom Character</button>
               </div>
@@ -843,19 +1133,18 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               <label className="field"><span>Duration</span><select value={form.duration} onChange={(event) => update("duration", event.target.value)}>{durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>
               <label className="field"><span>Motion level</span><select value={form.motionLevel} onChange={(event) => update("motionLevel", event.target.value as ProductionForm["motionLevel"])}>{["Safe", "Balanced", "Ambitious"].map((value) => <option key={value}>{value}</option>)}</select></label>
               <label className="field"><span>Visual style</span><select value={form.visualStyle} onChange={(event) => update("visualStyle", event.target.value)}>{visualStyles.map((value) => <option key={value}>{value}</option>)}</select>{form.visualStyle === "Custom" && <input value={form.customVisualStyle} onChange={(event) => update("customVisualStyle", event.target.value)} />}</label>
-              <label className="field"><span>Tone</span><select value={form.tone} onChange={(event) => update("tone", event.target.value)}>{tones.map((value) => <option key={value}>{value}</option>)}</select>{form.tone === "Custom" && <input value={form.customTone} onChange={(event) => update("customTone", event.target.value)} />}</label>
+              <fieldset className="choice-field wide"><legend>Video tones · select one or more</legend><div className="choice-grid">{tones.map((tone) => <label key={tone}><input type="checkbox" checked={form.tones.includes(tone)} onChange={() => toggleTone(tone)} /><span>{tone}</span></label>)}</div>{form.tones.includes("Custom") && <input value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}{toneConflict && <p className="conflict-note">Tone warning: Calm combined with Fast or Chaotic slapstick needs deliberate pacing. Your selections are preserved.</p>}</fieldset>
               <RatioControl label="Video ratio" value={form.videoRatio} width={form.videoCustomWidth} height={form.videoCustomHeight} onRatio={(value) => update("videoRatio", value)} onWidth={(value) => update("videoCustomWidth", value)} onHeight={(value) => update("videoCustomHeight", value)} />
               <RatioControl label="Start-frame ratio" value={form.startFrameRatio} width={form.startCustomWidth} height={form.startCustomHeight} onRatio={(value) => update("startFrameRatio", value)} onWidth={(value) => update("startCustomWidth", value)} onHeight={(value) => update("startCustomHeight", value)} />
               <RatioControl label="End-frame ratio" value={form.endFrameRatio} width={form.endCustomWidth} height={form.endCustomHeight} onRatio={(value) => update("endFrameRatio", value)} onWidth={(value) => update("endCustomWidth", value)} onHeight={(value) => update("endCustomHeight", value)} />
               <label className="toggle-field"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span>Include Character-Building Prompt</span></label>
-              {form.includeCharacterBuildingPrompt && <label className="field wide"><span>Character-building target</span><select value={form.characterBuildingCharacterId} onChange={(event) => update("characterBuildingCharacterId", event.target.value)}>{characters.map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName}</option>)}</select></label>}
             </div>
 
             <details className="advanced-panel">
               <summary>Advanced Settings · narration, voices, music, and sound <span>+</span></summary>
               <div className="advanced-content">
                 <div className="form-grid">
-                  <label className="field wide"><span>Narration and voice mode</span><select value={form.narrationMode} onChange={(event) => update("narrationMode", event.target.value)}>{narrationModes.map((value) => <option key={value}>{value}</option>)}</select></label>
+                  <fieldset className="choice-field wide"><legend>Narration and voice layers</legend><div className="choice-grid">{voiceLayerOptions.map((layer) => <label key={layer}><input type="checkbox" checked={form.voiceLayers.includes(layer)} onChange={() => toggleVoiceLayer(layer)} /><span>{layer}</span></label>)}</div></fieldset>
                   {hasNarrator && <><label className="field wide"><span>Narrator guidance</span><textarea value={form.narratorGuidance} onChange={(event) => update("narratorGuidance", event.target.value)} /></label><label className="field wide"><span>Narration text</span><textarea value={form.narrationText} onChange={(event) => update("narrationText", event.target.value)} /></label></>}
                   {hasCharacterVoices && <><label className="field wide"><span>Character dialogue</span><textarea value={form.characterDialogue} onChange={(event) => update("characterDialogue", event.target.value)} /></label><label className="field wide"><span>Character voice guidance</span><textarea value={form.characterVoiceGuidance} onChange={(event) => update("characterVoiceGuidance", event.target.value)} /></label></>}
                   {!silentMode && <><label className="field"><span>Language</span><input value={form.language} onChange={(event) => update("language", event.target.value)} /></label><label className="field"><span>Vocal tone</span><input value={form.vocalTone} onChange={(event) => update("vocalTone", event.target.value)} /></label><label className="toggle-field"><input type="checkbox" checked={form.lipSyncRequired} onChange={(event) => update("lipSyncRequired", event.target.checked)} /><span>Lip-sync required</span></label></>}
@@ -866,6 +1155,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                   <label className="field"><span>Audio workflow</span><select value={form.audioMode} onChange={(event) => update("audioMode", event.target.value)}>{["Native-audio mode", "Editing-guide mode"].map((value) => <option key={value}>{value}</option>)}</select></label>
                   <label className="toggle-field"><input type="checkbox" checked={form.noMusic} onChange={(event) => update("noMusic", event.target.checked)} /><span>No music</span></label>
                   <label className="field wide"><span>Sound-effects style</span><input value={form.soundEffectsStyle} onChange={(event) => update("soundEffectsStyle", event.target.value)} /></label>
+                  {form.videoModel === "Custom model" && <label className="field wide"><span>Custom-model guidance</span><textarea value={form.customModelGuidance} onChange={(event) => update("customModelGuidance", event.target.value)} placeholder="Describe known prompt structure, camera, motion, reference-frame, and audio preferences." /></label>}
                 </div>
               </div>
             </details>
@@ -918,7 +1208,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             {pack && <div className="output-actions"><button type="button" onClick={saveCurrentPack}>Save Pack</button><button type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word…" : "Download Word"}</button></div>}
           </div>
 
-          {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Five clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}
+          {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}
 
           {legacyPack && (
             <div className="legacy-output">
@@ -929,10 +1219,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
           {pack && qualityReport && (
             <>
-              <article className="output-card">
+              <div className="video-title-output"><span>VIDEO TITLE</span><h2>{pack.videoTitle}</h2><CopyButton label="Copy Title" value={pack.videoTitle} /></div>
+              {pack.characterBuildingPrompt && <article className="output-card">
                 <div className="card-heading"><span>01 · CHARACTER</span><h3>Character-Building Prompt</h3><CopyButton label="Copy" value={pack.characterBuildingPrompt || "Character-building prompt disabled."} /></div>
-                <pre>{pack.characterBuildingPrompt || "Disabled for this production."}</pre>
-              </article>
+                <pre>{pack.characterBuildingPrompt}</pre>
+              </article>}
               <article className="output-card">
                 <div className="card-heading"><span>02 · REFERENCE FRAME</span><h3>Start-Frame Image Prompt</h3><CopyButton label="Copy" value={pack.startFramePrompt} /></div>
                 <pre>{pack.startFramePrompt}</pre>

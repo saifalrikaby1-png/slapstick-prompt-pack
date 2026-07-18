@@ -37,6 +37,7 @@ test("uses exactly the new synchronized internal production schema", async () =>
     source("app/api/generate/route.ts"),
   ]);
   const keys = [
+    "videoTitle",
     "characterBuildingPrompt",
     "startFramePrompt",
     "endFramePrompt",
@@ -55,15 +56,16 @@ test("uses exactly the new synchronized internal production schema", async () =>
 });
 
 test("keeps OpenAI credentials exclusively on server-side routes", async () => {
-  const [page, engine, generateRoute, characterRoute] = await Promise.all([
+  const [page, engine, generateRoute, characterRoute, creativeRoute] = await Promise.all([
     source("app/page.tsx"),
     source("app/production-engine.ts"),
     source("app/api/generate/route.ts"),
     source("app/api/character-suggest/route.ts"),
+    source("app/api/creative-suggest/route.ts"),
   ]);
   assert.doesNotMatch(`${page}\n${engine}`, /process\.env\.OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/);
-  assert.doesNotMatch(`${generateRoute}\n${characterRoute}`, /NEXT_PUBLIC_.*OPENAI|sk-[A-Za-z0-9_-]{20,}/);
-  for (const route of [generateRoute, characterRoute]) {
+  assert.doesNotMatch(`${generateRoute}\n${characterRoute}\n${creativeRoute}`, /NEXT_PUBLIC_.*OPENAI|sk-[A-Za-z0-9_-]{20,}/);
+  for (const route of [generateRoute, characterRoute, creativeRoute]) {
     assert.match(route, /process\.env\.OPENAI_API_KEY/);
     assert.match(route, /https:\/\/api\.openai\.com\/v1\/responses/);
     assert.match(route, /model:\s*"gpt-5\.6-sol"/);

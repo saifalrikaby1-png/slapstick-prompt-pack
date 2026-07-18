@@ -1,6 +1,26 @@
 export type GeneratorMode = "demo" | "ai";
 
-export type CharacterRole = "Hero" | "Enemy" | "Companion" | "Supporting character";
+export type CharacterRole = "Hero" | "Enemy" | "Companion";
+
+export type CreativeAssetKind = "location" | "object" | "action" | "payoff";
+
+export type CreativeAsset = {
+  id: string;
+  kind: CreativeAssetKind;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  isSignature?: boolean;
+  builtIn?: boolean;
+};
+
+export type VoiceLayer =
+  | "Narrator"
+  | "Hero Voice"
+  | "Companion Voices"
+  | "Enemy Voices"
+  | "No Spoken Dialogue";
 
 export type CharacterProfile = {
   id: string;
@@ -20,9 +40,19 @@ export type CharacterProfile = {
 };
 
 export type ProductionForm = {
+  videoTitle: string;
+  locationAssetId: string;
+  locationName: string;
   location: string;
+  objectAssetId: string;
+  objectName: string;
   importantObject: string;
+  allowPreviouslySavedObjects: boolean;
+  actionAssetId: string;
+  actionName: string;
   trapAction: string;
+  payoffAssetId: string;
+  payoffName: string;
   endingPayoff: string;
   additionalDirection: string;
   heroId: string;
@@ -34,7 +64,7 @@ export type ProductionForm = {
   duration: string;
   visualStyle: string;
   customVisualStyle: string;
-  tone: string;
+  tones: string[];
   customTone: string;
   motionLevel: "Safe" | "Balanced" | "Ambitious";
   videoRatio: string;
@@ -46,7 +76,7 @@ export type ProductionForm = {
   startCustomHeight: string;
   endCustomWidth: string;
   endCustomHeight: string;
-  narrationMode: string;
+  voiceLayers: VoiceLayer[];
   narratorGuidance: string;
   narrationText: string;
   characterDialogue: string;
@@ -61,10 +91,11 @@ export type ProductionForm = {
   noMusic: boolean;
   soundEffectsStyle: string;
   includeCharacterBuildingPrompt: boolean;
-  characterBuildingCharacterId: string;
+  customModelGuidance: string;
 };
 
 export type ProductionPack = {
+  videoTitle: string;
   characterBuildingPrompt: string;
   startFramePrompt: string;
   endFramePrompt: string;
@@ -129,6 +160,7 @@ export type LegacySavedPack = {
 export type StoredPack = SavedProductionPack | LegacySavedPack;
 
 export const productionPackKeys: (keyof ProductionPack)[] = [
+  "videoTitle",
   "characterBuildingPrompt",
   "startFramePrompt",
   "endFramePrompt",
@@ -140,21 +172,31 @@ export const productionPackKeys: (keyof ProductionPack)[] = [
 ];
 
 export const defaultProductionForm: ProductionForm = {
+  videoTitle: "",
+  locationAssetId: "",
+  locationName: "",
   location: "",
+  objectAssetId: "",
+  objectName: "",
   importantObject: "",
+  allowPreviouslySavedObjects: false,
+  actionAssetId: "",
+  actionName: "",
   trapAction: "",
+  payoffAssetId: "",
+  payoffName: "",
   endingPayoff: "",
   additionalDirection: "",
   heroId: "builtin-biscuit",
   selectedCharacterIds: ["builtin-grumpy", "builtin-sneaky"],
-  platform: "YouTube Shorts",
+  platform: "Social Media",
   customPlatform: "",
   videoModel: "Seedance",
   customVideoModel: "",
   duration: "15",
   visualStyle: "Cinematic 3D family animation",
   customVisualStyle: "",
-  tone: "Funny",
+  tones: ["Funny", "Fast"],
   customTone: "",
   motionLevel: "Balanced",
   videoRatio: "9:16",
@@ -166,7 +208,7 @@ export const defaultProductionForm: ProductionForm = {
   startCustomHeight: "",
   endCustomWidth: "",
   endCustomHeight: "",
-  narrationMode: "Silent non-dialogue",
+  voiceLayers: ["No Spoken Dialogue"],
   narratorGuidance: "",
   narrationText: "",
   characterDialogue: "",
@@ -181,5 +223,5 @@ export const defaultProductionForm: ProductionForm = {
   noMusic: false,
   soundEffectsStyle: "Clean synchronized cartoon Foley",
   includeCharacterBuildingPrompt: true,
-  characterBuildingCharacterId: "builtin-biscuit",
+  customModelGuidance: "",
 };

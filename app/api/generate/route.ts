@@ -5,6 +5,7 @@ import {
   QualityFinding,
   productionPackKeys,
 } from "../../production-types";
+import { selectedModelAdapter } from "../../production-engine";
 
 type RequestBody = {
   action?: "generate" | "fix";
@@ -54,7 +55,8 @@ function generationInstructions(action: "generate" | "fix") {
   return `You are the production intelligence engine for Slapstick Prompt Pack.
 Return clean JSON matching the supplied schema exactly. Do not add markdown or extra keys.
 
-Create one synchronized, family-friendly cartoon-video production plan. The eight fields are:
+Create one synchronized, family-friendly cartoon-video production plan. The nine fields are:
+- videoTitle: preserve the customer's non-empty manual title exactly; otherwise create one memorable, original, non-generic title without hashtags, quotation marks, trademarks, or franchise names.
 - characterBuildingPrompt: a reusable, detailed identity-building prompt for the selected character, or a short explanation if disabled.
 - startFramePrompt: a production-ready still-image prompt with the selected start-frame ratio, full cast identity locks, composition, first-second hook, lighting, geography, and negative constraints.
 - endFramePrompt: a matching still-image prompt with the selected end-frame ratio, exact environment/identity continuity, hero's clear win, enemies receiving the harmless backfire, and a readable payoff.
@@ -66,6 +68,8 @@ Create one synchronized, family-friendly cartoon-video production plan. The eigh
 
 Hard requirements:
 - Preserve the exact selected video, start-frame, and end-frame ratios and custom dimensions where supplied.
+- Materially follow the selected model adapter, including its prompt structure, camera, motion, pacing, reference-frame, audio, and negative policies. Do not merely mention the model name.
+- Translate every selected tone into pacing, staging, expressions, camera behavior, motion, timing, music, or sound.
 - Preserve the exact duration in every timing section; all ranges must align and cover it completely.
 - Include the selected platform and selected AI video model prominently in videoLock.
 - Use the supplied Character Library descriptions as authoritative. Introduce full character names once, then short names.
@@ -74,13 +78,13 @@ Hard requirements:
 - No duplicated characters, extra unrequested characters, extra limbs, distorted limbs, morphing faces, merged bodies, random props, sudden background changes, or unexplained objects appearing/disappearing.
 - No sudden cuts unless expressly requested. Prefer one continuous shot with smooth, logical, causally readable movement.
 - No text, subtitles, logos, or watermarks unless expressly requested.
-- Follow narration mode exactly. Silent non-dialogue means no spoken dialogue and no narrator; action, expressions, music, and SFX only. Otherwise keep speaker identity and vocal guidance locked.
+- Follow voice layers exactly. No Spoken Dialogue is exclusive and means no spoken dialogue, narrator, lip-sync, or speech text; otherwise include only selected speaker layers and keep ownership unambiguous.
 - Keep music and SFX synchronized with visible action and duration.
 - Avoid contradictory, overloaded instructions. Prioritize polished, coherent, stable, zero-error continuity.
 - Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
 
 ${action === "fix"
-    ? "Repair task: review the current complete pack and quality findings. Return a complete synchronized replacement pack. Improve weak sections while preserving every selected setting, character lock, story fact, platform, model, ratio, duration, audio choice, narration choice, and already-strong section."
+    ? "Repair task: review the current complete pack and quality findings. Return a complete synchronized replacement pack. Improve weak sections while preserving every selected setting, character lock, story fact, platform, model adapter, ratio, duration, tone, voice layer, audio choice, narration choice, manually written title, and already-strong section."
     : "Generation task: build the complete synchronized pack from the supplied form and character records."}`;
 }
 
@@ -114,11 +118,12 @@ export async function POST(request: Request) {
   const input = action === "fix"
     ? {
         form: body.form,
+        modelAdapter: selectedModelAdapter(body.form),
         characters: body.characters,
         currentPack: body.pack,
         qualityFindings: body.qualityFindings || [],
       }
-    : { form: body.form, characters: body.characters };
+    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {

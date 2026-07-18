@@ -8,9 +8,9 @@ Built for **OpenAI Build Week / Devpost**.
 
 ## Live Demo
 
-- **Live app:** Coming after deployment
-- **Demo video:** Coming after recording
-- **Repository:** Coming after GitHub upload
+- Live app: https://slapstick-prompt-pack.vercel.app
+- Demo video: Coming after recording
+- Repository: https://github.com/saifalrikaby1-png/slapstick-prompt-pack
 
 ## The problem
 
@@ -106,8 +106,8 @@ The API key is read only from `process.env.OPENAI_API_KEY`. It is never placed i
 - React 19
 - TypeScript 5
 - Tailwind CSS 4
-- vinext 0.0.50 with Vite 8 build tooling
 - OpenAI Responses API
+- Vercel deployment using the native Next.js production build
 - `docx` and `file-saver` for Word exports
 - Browser `localStorage` for first-version character, preset, and pack persistence
 

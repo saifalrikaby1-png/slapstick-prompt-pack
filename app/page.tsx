@@ -559,27 +559,80 @@ function profilesUsedByForm(form: FormState, characters: CharacterProfile[]) {
   });
 }
 
-function characterBibleText(form: FormState, characters: CharacterProfile[]) {
+function characterBibleText(
+  form: FormState,
+  characters: CharacterProfile[],
+) {
   const used = profilesUsedByForm(form, characters);
   const existingBible = safeText(form.characterBible);
-  const profilesNotAlreadyIncluded = used.filter((profile) => {
-    const identity = (profile.fullIdentity || profile.shortName).trim();
-    return identity && !existingBible.includes(`${identity} — role:`);
-  });
-  const savedProfiles = profilesNotAlreadyIncluded.map((profile) => [
-    `${profile.fullIdentity || profile.shortName} — role: ${profile.role}`,
-    `Appearance lock: ${profile.appearanceLock || "Not supplied"}`,
-    `Personality lock: ${profile.personalityLock || "Not supplied"}`,
-    `Color lock: ${profile.colorLock || "Not supplied"}`,
-    `Scale lock: ${profile.scaleLock || "Not supplied"}`,
-    `Vocal lock: ${profile.vocalStyleLock || "Not supplied"}`,
-    `Movement style: ${profile.movementStyle || "Not supplied"}`,
-    `Continuity rules: ${profile.continuityRules || "Use global continuity rules"}`,
-    `Negative rules: ${profile.negativeRules || "No duplication, morphing, or identity changes"}`,
-  ].join("\n")).join("\n\n");
-  return [existingBible, savedProfiles].filter(Boolean).join("\n\n").trim();
-}
 
+  const retainedExistingBlocks = existingBible
+    ? existingBible
+        .split(/\n{2,}/)
+        .filter((block) => {
+          const firstLine = block.split("\n")[0]?.trim() || "";
+          const normalizedFirstLine = firstLine.toLowerCase();
+          const roleMarker = " — role:";
+
+          if (!normalizedFirstLine.includes(roleMarker)) {
+            return true;
+          }
+
+          const blockIdentity = normalizedFirstLine
+            .split(roleMarker)[0]
+            .trim();
+
+          return !used.some((profile) => {
+            const fullIdentity = profile.fullIdentity
+              .trim()
+              .toLowerCase();
+
+            const shortName = profile.shortName
+              .trim()
+              .toLowerCase();
+
+            return (
+              Boolean(fullIdentity) &&
+              blockIdentity === fullIdentity
+            ) || (
+              Boolean(shortName) &&
+              (
+                blockIdentity === shortName ||
+                blockIdentity.startsWith(`${shortName} `)
+              )
+            );
+          });
+        })
+        .join("\n\n")
+        .trim()
+    : "";
+
+  const currentLibraryProfiles = used
+    .map((profile) =>
+      [
+        `${profile.fullIdentity || profile.shortName} — role: ${profile.role}`,
+        `Appearance lock: ${profile.appearanceLock || "Not supplied"}`,
+        `Personality lock: ${profile.personalityLock || "Not supplied"}`,
+        `Color lock: ${profile.colorLock || "Not supplied"}`,
+        `Scale lock: ${profile.scaleLock || "Not supplied"}`,
+        `Vocal lock: ${profile.vocalStyleLock || "Not supplied"}`,
+        `Movement style: ${profile.movementStyle || "Not supplied"}`,
+        `Continuity rules: ${
+          profile.continuityRules || "Use global continuity rules"
+        }`,
+        `Negative rules: ${
+          profile.negativeRules ||
+          "No duplication, morphing, or identity changes"
+        }`,
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+  return [retainedExistingBlocks, currentLibraryProfiles]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
 const characterSuggestionFields: { key: CharacterSuggestionField; label: string }[] = [
   { key: "appearanceLock", label: "Appearance lock" },
   { key: "personalityLock", label: "Personality lock" },
@@ -591,9 +644,184 @@ const characterSuggestionFields: { key: CharacterSuggestionField; label: string 
   { key: "negativeRules", label: "Negative rules" },
 ];
 
+function normalizeImportedCharacter(
+  value: unknown,
+): CharacterProfile | null {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  const shortNameValue = safeText(record.shortName);
+  const fullIdentityValue = safeText(record.fullIdentity);
+
+  if (!shortNameValue || !fullIdentityValue) {
+    return null;
+  }
+
+  return {
+    id: safeText(record.id) || crypto.randomUUID(),
+    builtIn: false,
+    shortName: shortNameValue,
+    fullIdentity: fullIdentityValue,
+    role: safeText(record.role) || "Supporting character",
+    appearanceLock: safeText(record.appearanceLock),
+    personalityLock: safeText(record.personalityLock),
+    colorLock: safeText(record.colorLock),
+    scaleLock: safeText(record.scaleLock),
+    vocalStyleLock: safeText(record.vocalStyleLock),
+    movementStyle: safeText(record.movementStyle),
+    continuityRules: safeText(record.continuityRules),
+    negativeRules:
+      safeText(record.negativeRules) ||
+      "Do not duplicate this character. Do not change species. Do not change color. Do not morph face. Do not add extra copies.",
+  };
+}
+
+function characterIdentityKey(
+  profile: CharacterProfile,
+) {
+  return (
+    profile.fullIdentity ||
+    profile.shortName
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function mergeCharacterLibraries(
+  current: CharacterProfile[],
+  imported: CharacterProfile[],
+) {
+  const builtInIds = new Set(
+    builtInCharacters.map((profile) => profile.id),
+  );
+
+  const builtInIdentities = new Set(
+    builtInCharacters.map((profile) =>
+      characterIdentityKey(profile),
+    ),
+  );
+
+  const builtInShortNames = new Set(
+    builtInCharacters.map((profile) =>
+      profile.shortName.trim().toLowerCase(),
+    ),
+  );
+
+  const merged: CharacterProfile[] = [
+    ...builtInCharacters,
+  ];
+
+  current.forEach((profile) => {
+    const identity = characterIdentityKey(profile);
+    const shortName = profile.shortName
+      .trim()
+      .toLowerCase();
+
+    const isProtectedBuiltIn =
+      Boolean(profile.builtIn) ||
+      builtInIds.has(profile.id) ||
+      builtInIdentities.has(identity) ||
+      builtInShortNames.has(shortName);
+
+    if (isProtectedBuiltIn) {
+      return;
+    }
+
+    const alreadyIncluded = merged.some(
+      (existing) =>
+        existing.id === profile.id ||
+        characterIdentityKey(existing) === identity ||
+        (
+          Boolean(shortName) &&
+          existing.shortName.trim().toLowerCase() ===
+            shortName
+        ),
+    );
+
+    if (!alreadyIncluded) {
+      merged.push({
+        ...profile,
+        builtIn: false,
+      });
+    }
+  });
+
+  imported.forEach((profile) => {
+    const identity = characterIdentityKey(profile);
+    const shortName = profile.shortName
+      .trim()
+      .toLowerCase();
+
+    const targetsProtectedBuiltIn =
+      builtInIds.has(profile.id) ||
+      builtInIdentities.has(identity) ||
+      builtInShortNames.has(shortName);
+
+    if (targetsProtectedBuiltIn) {
+      return;
+    }
+
+    const existingIndex = merged.findIndex(
+      (existing) =>
+        !existing.builtIn &&
+        (
+          existing.id === profile.id ||
+          characterIdentityKey(existing) === identity ||
+          (
+            Boolean(shortName) &&
+            existing.shortName
+              .trim()
+              .toLowerCase() === shortName
+          )
+        ),
+    );
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...profile,
+        id: merged[existingIndex].id,
+        builtIn: false,
+      };
+
+      return;
+    }
+
+    merged.push({
+      ...profile,
+      id: profile.id || crypto.randomUUID(),
+      builtIn: false,
+    });
+  });
+
+  return merged;
+}
+
 function characterSpecies(identity: string) {
-  const known = ["squirrel", "hedgehog", "chameleon", "rabbit", "fox", "cat", "dog", "mouse", "bear", "bird"];
-  return known.find((species) => identity.toLowerCase().includes(species)) || "cartoon character";
+  const known = [
+    "squirrel",
+    "hedgehog",
+    "chameleon",
+    "rabbit",
+    "fox",
+    "cat",
+    "dog",
+    "mouse",
+    "bear",
+    "bird",
+  ];
+
+  return (
+    known.find((species) =>
+      identity.toLowerCase().includes(species),
+    ) || "cartoon character"
+  );
 }
 
 function localCharacterSuggestions(profile: CharacterProfile, form: FormState): Record<CharacterSuggestionField, string> {
@@ -1300,26 +1528,182 @@ export default function Home() {
   }
 
   function saveCharacter() {
-    if (!characterDraft.shortName.trim() || !characterDraft.fullIdentity.trim()) return;
-    const profile = { ...characterDraft, id: characterDraft.id || crypto.randomUUID() };
-    setCharacters((current) => characterDraft.id
-      ? current.map((item) => item.id === characterDraft.id ? profile : item)
-      : [...current, profile]);
-    setCharacterDraft(profile);
+  setCharacterSuggestionError("");
+  setCharacterSuggestionStatus("");
+
+  const shortNameValue =
+    characterDraft.shortName.trim();
+
+  const fullIdentityValue =
+    characterDraft.fullIdentity.trim();
+
+  if (!shortNameValue || !fullIdentityValue) {
+    setCharacterSuggestionError(
+      "Add both a short name and a full identity before saving.",
+    );
+
+    return;
   }
 
-  function deleteCharacter() {
-    if (!characterDraft.id) return;
-    setCharacters((current) => current.filter((item) => item.id !== characterDraft.id));
-    setCharacterDraft(emptyCharacter);
+  const duplicateCharacter = characters.find(
+    (profile) =>
+      profile.id !== characterDraft.id &&
+      (
+        characterIdentityKey(profile) ===
+          fullIdentityValue.toLowerCase() ||
+        profile.shortName.trim().toLowerCase() ===
+          shortNameValue.toLowerCase()
+      ),
+  );
+
+  if (duplicateCharacter) {
+    setCharacterSuggestionError(
+      `A character named ${duplicateCharacter.shortName} already exists. Select that profile if you want to update it.`,
+    );
+
+    return;
   }
 
-  function loadCharacter(target: "hero" | "enemies") {
-    const identity = characterDraft.fullIdentity.trim();
-    if (!identity) return;
-    if (target === "hero") update("hero", identity);
-    else update("enemies", form.enemies.trim() ? `${form.enemies.trim()} and ${identity}` : identity);
+  const wasExisting = Boolean(characterDraft.id);
+
+  const profile: CharacterProfile = {
+    ...characterDraft,
+    id:
+      characterDraft.id ||
+      crypto.randomUUID(),
+    shortName: shortNameValue,
+    fullIdentity: fullIdentityValue,
+  };
+
+  setCharacters((current) =>
+    wasExisting
+      ? current.map((item) =>
+          item.id === profile.id
+            ? profile
+            : item,
+        )
+      : [...current, profile],
+  );
+
+  setCharacterDraft(profile);
+
+  setCharacterSuggestionStatus(
+    `${profile.shortName} was ${
+      wasExisting ? "updated" : "saved"
+    } successfully.`,
+  );
+}
+
+function deleteCharacter() {
+  setCharacterSuggestionError("");
+  setCharacterSuggestionStatus("");
+
+  if (!characterDraft.id) {
+    setCharacterSuggestionError(
+      "Select a saved custom character before deleting.",
+    );
+
+    return;
   }
+
+  if (characterDraft.builtIn) {
+    setCharacterSuggestionError(
+      "Built-in characters are protected and cannot be deleted.",
+    );
+
+    return;
+  }
+
+  const deletedName =
+    characterDraft.shortName ||
+    characterDraft.fullIdentity;
+
+  setCharacters((current) =>
+    current.filter(
+      (item) => item.id !== characterDraft.id,
+    ),
+  );
+
+  setCharacterDraft(emptyCharacter);
+
+  setCharacterSuggestionStatus(
+    `${deletedName} was deleted from the Character Library.`,
+  );
+}
+
+function loadCharacter(
+  target: "hero" | "enemies",
+) {
+  setCharacterSuggestionError("");
+  setCharacterSuggestionStatus("");
+
+  const identity =
+    characterDraft.fullIdentity.trim();
+
+  const shortNameValue =
+    characterDraft.shortName.trim();
+
+  if (!identity) {
+    setCharacterSuggestionError(
+      "Select or create a character with a full identity first.",
+    );
+
+    return;
+  }
+
+  if (target === "hero") {
+    update("hero", identity);
+
+    setCharacterSuggestionStatus(
+      `${shortNameValue || identity} was loaded as the Hero.`,
+    );
+
+    return;
+  }
+
+  const currentEnemies = form.enemies.trim();
+
+  const enemyEntries = currentEnemies
+    .split(/\s+(?:and|&)\s+|,\s*/i)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  const identityLower = identity.toLowerCase();
+  const shortNameLower =
+    shortNameValue.toLowerCase();
+
+  const characterAlreadyIncluded =
+    enemyEntries.some(
+      (entry) =>
+        entry === identityLower ||
+        (
+          Boolean(shortNameLower) &&
+          entry === shortNameLower
+        ),
+    ) ||
+    currentEnemies
+      .toLowerCase()
+      .includes(identityLower);
+
+  if (characterAlreadyIncluded) {
+    setCharacterSuggestionStatus(
+      `${shortNameValue || identity} is already in the Enemies field.`,
+    );
+
+    return;
+  }
+
+  update(
+    "enemies",
+    currentEnemies
+      ? `${currentEnemies} and ${identity}`
+      : identity,
+  );
+
+  setCharacterSuggestionStatus(
+    `${shortNameValue || identity} was loaded into Enemies.`,
+  );
+}
 
   function saveProjectPreset() {
     if (!projectName.trim()) return;
@@ -1355,21 +1739,155 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
-  async function importJson(event: ChangeEvent<HTMLInputElement>, kind: "characters" | "projects") {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const parsed = JSON.parse(await file.text());
-      const list = Array.isArray(parsed) ? parsed : kind === "characters" ? parsed.characters : parsed.projectPresets;
-      if (!Array.isArray(list)) throw new Error("Invalid library file");
-      if (kind === "characters") setCharacters(list);
-      else setProjectPresets([builtInPreset, ...list.filter((preset: ProjectPreset) => preset.id !== builtInPreset.id)]);
-    } catch {
-      setError("That JSON file could not be imported. Please choose a valid Slapstick Prompt Pack export.");
-    } finally {
-      event.target.value = "";
-    }
+  async function importJson(
+  event: ChangeEvent<HTMLInputElement>,
+  kind: "characters" | "projects",
+) {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    return;
   }
+
+  setError("");
+
+  try {
+    const parsed: unknown = JSON.parse(
+      await file.text(),
+    );
+
+    const parsedRecord =
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+
+    const possibleList: unknown =
+      Array.isArray(parsed)
+        ? parsed
+        : kind === "characters"
+          ? parsedRecord?.characters
+          : parsedRecord?.projectPresets;
+
+    if (!Array.isArray(possibleList)) {
+      throw new Error(
+        "The selected file does not contain a valid library.",
+      );
+    }
+
+    if (kind === "characters") {
+      const normalizedCharacters =
+        possibleList.map(
+          normalizeImportedCharacter,
+        );
+
+      if (normalizedCharacters.length === 0) {
+        throw new Error(
+          "The selected file does not contain any characters.",
+        );
+      }
+
+      if (
+        normalizedCharacters.some(
+          (profile) => profile === null,
+        )
+      ) {
+        throw new Error(
+          "One or more imported characters are missing a valid short name or full identity.",
+        );
+      }
+
+      const validCharacters =
+        normalizedCharacters.filter(
+          (
+            profile,
+          ): profile is CharacterProfile =>
+            profile !== null,
+        );
+
+      setCharacters((current) =>
+        mergeCharacterLibraries(
+          current,
+          validCharacters,
+        ),
+      );
+
+      setCharacterSuggestionError("");
+
+      setCharacterSuggestionStatus(
+        `${validCharacters.length} character${
+          validCharacters.length === 1
+            ? ""
+            : "s"
+        } imported and merged successfully.`,
+      );
+
+      return;
+    }
+
+    const validProjects =
+      possibleList.filter(
+        (
+          value,
+        ): value is ProjectPreset => {
+          if (
+            !value ||
+            typeof value !== "object" ||
+            Array.isArray(value)
+          ) {
+            return false;
+          }
+
+          const record =
+            value as Record<string, unknown>;
+
+          return (
+            typeof record.id === "string" &&
+            record.id.trim().length > 0 &&
+            typeof record.name === "string" &&
+            record.name.trim().length > 0 &&
+            Boolean(record.form) &&
+            typeof record.form === "object" &&
+            !Array.isArray(record.form)
+          );
+        },
+      );
+
+    if (
+      validProjects.length !==
+      possibleList.length
+    ) {
+      throw new Error(
+        "One or more project presets are invalid.",
+      );
+    }
+
+    setProjectPresets([
+      builtInPreset,
+      ...validProjects.filter(
+        (preset) =>
+          preset.id !== builtInPreset.id,
+      ),
+    ]);
+  } catch (caught) {
+    const message =
+      caught instanceof Error
+        ? caught.message
+        : "That JSON file could not be imported.";
+
+    if (kind === "characters") {
+      setCharacterSuggestionStatus("");
+      setCharacterSuggestionError(message);
+    } else {
+      setError(
+        `${message} Please choose a valid Slapstick Prompt Pack export.`,
+      );
+    }
+  } finally {
+    event.target.value = "";
+  }
+}
 
   async function downloadWordPack() {
     if (!pack) return;
@@ -1897,7 +2415,21 @@ export default function Home() {
               {characterSuggestionError && <p className="character-suggestion-error" role="alert">! {characterSuggestionError}</p>}
               <div className="library-actions">
                 <button type="button" onClick={saveCharacter}>{characterDraft.id ? "Update Character" : "Save Character"}</button>
-                <button type="button" disabled={!characterDraft.id} onClick={deleteCharacter}>Delete Character</button>
+                <button
+ type="button"
+  disabled={
+    !characterDraft.id ||
+    Boolean(characterDraft.builtIn)
+  }
+  title={
+    characterDraft.builtIn
+      ? "Built-in characters cannot be deleted"
+      : undefined
+  }
+  onClick={deleteCharacter}
+>
+  Delete Character
+</button>
                 <button type="button" onClick={() => loadCharacter("hero")}>Load into Hero</button>
                 <button type="button" onClick={() => loadCharacter("enemies")}>Load into Enemies</button>
               </div>

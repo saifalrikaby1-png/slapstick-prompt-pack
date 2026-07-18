@@ -1731,7 +1731,7 @@ export default function Home() {
               {fields.filter((field) => ["hero", "enemies", "object", "trap"].includes(field.key)).map((field) => (
                 <label className="field" key={field.key}>
                   <span>{field.label}</span>
-                  <input value={String(form[field.key])} onChange={(e) => update(field.key, e.target.value)} placeholder={field.placeholder} />
+                  <input value={String(form[field.key] ?? "")} onChange={(e) => update(field.key, e.target.value)} placeholder={field.placeholder} />
                 </label>
               ))}
               <label className="field field-wide">
@@ -1747,7 +1747,7 @@ export default function Home() {
               {fields.filter((field) => ["duration", "ratio", "platform", "videoModel", "style", "tone"].includes(field.key)).map((field) => (
                 <label className="field" key={field.key}>
                   <span>{field.label}</span>
-                  <select value={form[field.key]} onChange={(e) => update(field.key, e.target.value)}>
+                  <select value={String(form[field.key] ?? "")} onChange={(e) => update(field.key, e.target.value)}>
                     {field.options?.map((option) => <option key={option}>{option}</option>)}
                   </select>
                 </label>

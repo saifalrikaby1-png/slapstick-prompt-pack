@@ -411,6 +411,40 @@ function airborneMotionRule(action: string) {
   return `If ${action} requires a jump, launch, bounce, fall, or thrown object, show the visible trigger, launch direction and force, one continuous gravity-driven arc, brief peak, descent, landing surface, impact absorption, follow-through, and complete settling; otherwise keep every character and object supported.`;
 }
 
+export interface MotionPacingProfile {
+  id: "standard" | "fast" | "extreme-fast-chaotic";
+  displayName: string;
+  openingActionStart: number;
+  maximumIdleTime: number;
+  maximumAnticipationLength: number;
+  maximumReactionHold: number;
+  preferredBeatLength: number;
+  accelerationStyle: string;
+  movementStyle: string;
+  reactionStyle: string;
+  cameraStyle: string;
+  endingStyle: string;
+  forbiddenPacingLanguage: string[];
+}
+
+export function extremeFastChaotic(form: ProductionForm) {
+  return form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick");
+}
+
+export function motionPacingProfile(form: ProductionForm): MotionPacingProfile {
+  if (extremeFastChaotic(form)) return {
+    id: "extreme-fast-chaotic", displayName: "Extreme Fast-Chaotic Motion", openingActionStart: 0,
+    maximumIdleTime: 0, maximumAnticipationLength: 0.7, maximumReactionHold: 0.5, preferredBeatLength: 0.8,
+    accelerationStyle: "immediate powerful acceleration with readable body mechanics",
+    movementStyle: "rapid exaggerated tightly connected slapstick movement",
+    reactionStyle: "instant event-driven expressive reactions", cameraStyle: "already framed wide for action with fast smooth tracking only when needed",
+    endingStyle: "fast consequence with a short readable settled payoff",
+    forbiddenPacingLanguage: ["slowly", "gradually", "gently", "calmly", "long pause", "slow reveal", "lingering", "waits", "remains still"],
+  };
+  if (form.tones.includes("Fast")) return { id: "fast", displayName: "Fast", openingActionStart: 0, maximumIdleTime: 0.25, maximumAnticipationLength: 1, maximumReactionHold: 0.75, preferredBeatLength: 1.2, accelerationStyle: "quick readable acceleration", movementStyle: "compact connected movement", reactionStyle: "quick reactions", cameraStyle: "controlled action framing", endingStyle: "brief settled payoff", forbiddenPacingLanguage: ["slowly", "long pause"] };
+  return { id: "standard", displayName: "Standard", openingActionStart: 0, maximumIdleTime: 0.5, maximumAnticipationLength: 2, maximumReactionHold: 1.5, preferredBeatLength: 2, accelerationStyle: "smooth motivated acceleration", movementStyle: "readable connected movement", reactionStyle: "clear reactions", cameraStyle: "controlled framing", endingStyle: "complete settled payoff", forbiddenPacingLanguage: [] };
+}
+
 export interface CharacterVisibilityState {
   characterId: string;
   characterName: string;
@@ -553,6 +587,7 @@ export function generateDemoPack(
   const platform = selectedPlatform(form);
   const model = selectedModel(form);
   const adapter = selectedModelAdapter(form);
+  const pacingProfile = motionPacingProfile(form);
   const ranges = timelineRanges(duration);
   const heroName = hero?.shortName || "Hero";
   const others = supporting.map((profile) => profile.shortName).join(" and ") || "the supporting cast";
@@ -676,8 +711,8 @@ Cast: exactly ${cast.length} characters — ${castRoles}. Exact character count:
 ${compactCast}
 Authorized object: exactly ${objectLedger.length} ${object}. Location: ${location}.
 CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} ${object}. SCENE INVENTORY LOCK and EXACT COUNT LOCK: only this cast, object, and established location. NO-SPAWN / NO-DESPAWN LOCK. STRICT OBJECT PRESENCE LOCK.
-Tone: ${tone} from 0:00. Camera: ${cameraRule}; ${adapter.cameraPolicy}.
-Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK: exact cast remains present. Tone-from-zero lock. Action ownership lock. Natural-motion lock. ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} ${form.tones.includes("Fast") ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""} ${form.tones.includes("Calm") ? "Use smooth controlled movement." : ""}
+Tone: ${tone} from 0:00. Camera: ${cameraRule}; ${adapter.cameraPolicy}. ${extremeFastChaotic(form) ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""}
+Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK: exact cast remains present. Tone-from-zero lock. Action ownership lock. Natural-motion lock. ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} ${extremeFastChaotic(form) ? `EXTREME SPEED LOCK: Fast and Chaotic Slapstick control from 0:00; compressed anticipation, immediate powerful acceleration, rapid connected beats, instant reactions, high-impact midpoint backfire, no idle time. Profile: ${pacingProfile.displayName}.` : form.tones.includes("Fast") ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""} ${form.tones.includes("Calm") && !extremeFastChaotic(form) ? "Use smooth controlled movement." : ""}
 Use the supplied start and end frames as continuity anchors.`;
   const conciseFinalRule = `This production contains exactly ${cast.length} characters — ${cast.map((profile) => profile.shortName).join(", ")} — and exactly ${objectLedger.length} important object — ${object}. No other character or object may appear. Use only authorized selected characters and objects established in the start frame. Preserve exact counts, identities, roles, colors, clothing, proportions, scale, and environment from start to finish.
 
@@ -690,6 +725,33 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
+  const extremeTimeline = extremeFastChaotic(form) && duration === 10 ? `0:00–0:00.7 — ${heroName} is already yanking ${object}; it responds at once while ${others} react with wide eyes.
+0:00.7–0:01.7 — ${object} races along the established path; ${heroName} completes one rapid grounded pull-and-release.
+0:01.7–0:03 — ${others} trigger ${action} through direct contact and shift defensively at the visible cause.
+0:03–0:04.5 — ${heroName} redirects the same action in one fast continuous motion.
+0:04.5–0:06 — Major midpoint backfire: ${object} drives the established consequence and ${others} react instantly.
+0:06–0:07.5 — ${others} recover with rapid grounded steps while ${heroName} follows through.
+0:07.5–0:09 — ${heroName} develops the payoff as ${object} visibly decelerates.
+0:09–0:10 — ${ending}; short readable stable final pose.` : adaptedTimeline;
+  const pacedExtremeTimeline = extremeFastChaotic(form) && duration === 5 ? `0:00–0:00.5 — ${heroName} is already yanking ${object}; it responds instantly as ${others} react.
+0:00.5–0:01.2 — ${object} races along its established path through one rapid grounded action.
+0:01.2–0:02.2 — ${others} trigger ${action} by direct visible contact.
+0:02.2–0:03.2 — Major midpoint backfire: ${object} drives the consequence and ${others} react at once.
+0:03.2–0:04.3 — ${heroName} redirects the same action in one fast continuous follow-through.
+0:04.3–0:05 — ${ending}; stable readable final payoff.` : extremeFastChaotic(form) && duration === 15 ? `0:00–0:00.7 — ${heroName} is already yanking ${object}; it responds at once while ${others} react.
+0:00.7–0:02 — ${object} races along the established path; ${heroName} completes a rapid grounded release.
+0:02–0:03.5 — ${others} trigger ${action} through direct contact and react instantly.
+0:03.5–0:05 — ${heroName} redirects the same action with rapid readable force.
+0:05–0:06.5 — ${object} carries the connected action forward; ${others} recover in quick grounded steps.
+0:06.5–0:08.5 — Major midpoint backfire: ${object} drives the visible consequence for ${others}.
+0:08.5–0:10 — ${heroName} follows through while ${others} react immediately.
+0:10–0:11.5 — ${object} visibly decelerates along its established path.
+0:11.5–0:13 — ${heroName} develops the winning payoff in one continuous action.
+0:13–0:14 — ${others} settle into the harmless consequence with clear reactions.
+0:14–0:15 — ${ending}; short stable final payoff.` : extremeTimeline;
+  const finalTimeline = extremeFastChaotic(form)
+    ? pacedExtremeTimeline.replace(/^0:00/, `At exactly 0:00, ${heroName} begins the first second with immediate visible action; the camera holds a wide action view; no static opening or delayed trigger.\n0:00`).replace("Major midpoint backfire", "Major middle escalation and midpoint backfire")
+    : pacedExtremeTimeline;
   const conciseStartFrame = `Create the opening reference image in ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
   const conciseEndFrame = `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
   const generatedPack: ProductionPack = {
@@ -698,7 +760,7 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
     startFramePrompt: conciseStartFrame,
     endFramePrompt: conciseEndFrame,
     videoLock: conciseLock,
-    videoTimeline: adaptedTimeline,
+    videoTimeline: finalTimeline,
     musicPath: musicLines,
     soundEffects: sfxLines,
     finalGenerationRule: conciseFinalRule + (form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""),
@@ -708,10 +770,17 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
   ) as ProductionPack;
 }
 
-function parseRanges(text: string) {
+function parseRangesLegacy(text: string) {
   const matches = [...text.matchAll(/0:(\d{2})[–-]0:(\d{2})/g)];
   return matches.map((match) => ({ start: Number(match[1]), end: Number(match[2]) }));
 }
+
+function parseRanges(text: string) {
+  const matches = [...text.matchAll(/0:(\d+(?:\.\d+)?).{1,3}0:(\d+(?:\.\d+)?)/g)];
+  return matches.map((match) => ({ start: Number(match[1]), end: Number(match[2]) }));
+}
+
+void parseRangesLegacy;
 
 export function inspectProductionPack(
   pack: ProductionPack,
@@ -754,9 +823,15 @@ export function inspectProductionPack(
   const endWords = words(pack.endFramePrompt);
   const completeWords = words(completeVideoPrompt(pack));
   const adapter = selectedModelAdapter(form);
+  const pacingProfile = motionPacingProfile(form);
   const inventory = buildAuthorizedSceneInventory(form, cast);
   const objectStates = buildObjectStateLedger(inventory);
   const findings: QualityFinding[] = [
+    finding("Extreme Fast-Chaotic motion pacing", !extremeFastChaotic(form) || (
+      /extreme speed lock/i.test(pack.videoLock) &&
+      /^0:00.{1,3}0:00\.7/m.test(pack.videoTimeline) &&
+      !pacingProfile.forbiddenPacingLanguage.some((term) => pack.videoTimeline.toLowerCase().includes(term))
+    ), "Fast + Chaotic slapstick needs frame-zero movement, compressed beats, and no slow pacing language."),
     finding("Video title exists", pack.videoTitle.trim().length >= 3, "Add a clear original video title."),
     finding("Video title is original in saved history", !savedTitles.some((title) =>
       title.trim().toLowerCase() === pack.videoTitle.trim().toLowerCase()), "Choose a title not already used by a saved production.", true),

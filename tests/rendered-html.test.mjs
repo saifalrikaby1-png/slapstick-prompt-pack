@@ -3,73 +3,114 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
+const source = (path) => readFile(new URL(path, root), "utf8");
 
-async function source(path) {
-  return readFile(new URL(path, root), "utf8");
-}
-
-test("includes the complete creator workflow in Demo and AI modes", async () => {
+test("renders the approved five-output workflow in Demo and AI modes", async () => {
   const page = await source("app/page.tsx");
-
-  for (const requiredText of [
+  for (const text of [
     "Demo Mode",
     "AI Mode",
-    "Biscuit Demo",
-    "Character Library / Brand Bible",
-    "Prompt Quality Control",
-    "Video Timeline by Seconds",
-    "Music Path by Seconds",
-    "Sound Effects Timeline by Seconds",
-    "Download Word Pack",
-    "Copy Full Pack",
-    "Saved Production Packs",
-    "AI-assisted character builder",
-    "Generate Full Character Bible",
-    "Quality summary",
-    "Production safety notes",
+    "Load Biscuit Demo",
+    "Episode Idea",
+    "Include in This Video",
+    "Selected for This Video",
+    "Production Setup",
+    "Generate Production Pack",
+    "Character-Building Prompt",
+    "Start-Frame Image Prompt",
+    "End-Frame Image Prompt",
+    "All-in-One Video Production Prompt",
+    "Quality-Control Report",
+    "Copy Complete Production Prompt",
+    "Copy Visual Portion Only",
+    "Copy Audio Portion Only",
+    "Fix and Improve with AI",
   ]) {
-    assert.match(page, new RegExp(requiredText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-
-  assert.match(page, /style:\s*"colorful 3D cartoon slapstick animation"/);
-  assert.match(page, /options:\s*\[\s*"colorful 3D cartoon slapstick animation"/);
-  assert.match(page, /const builtInCharacters: CharacterProfile\[\]/);
-  assert.match(page, /profilesNotAlreadyIncluded/);
 });
 
-test("keeps OpenAI credentials on secure server-side routes", async () => {
-  const [page, generateRoute, characterRoute] = await Promise.all([
+test("uses exactly the new synchronized internal production schema", async () => {
+  const [types, page, route] = await Promise.all([
+    source("app/production-types.ts"),
     source("app/page.tsx"),
     source("app/api/generate/route.ts"),
-    source("app/api/character-suggest/route.ts"),
   ]);
+  const keys = [
+    "videoTitle",
+    "characterBuildingPrompt",
+    "startFramePrompt",
+    "endFramePrompt",
+    "videoLock",
+    "videoTimeline",
+    "musicPath",
+    "soundEffects",
+    "finalGenerationRule",
+  ];
+  for (const key of keys) {
+    assert.match(types, new RegExp(`${key}: string`));
+    assert.match(route, new RegExp(key));
+  }
+  assert.match(page, /completeVideoPrompt\(pack\)/);
+  assert.doesNotMatch(page, /selectedModelPrompt|alternativeModelPrompt|facebookCaption/);
+});
 
-  assert.doesNotMatch(page, /process\.env\.OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/);
-  assert.doesNotMatch(`${page}\n${generateRoute}\n${characterRoute}`, /NEXT_PUBLIC_.*OPENAI/);
-
-  for (const route of [generateRoute, characterRoute]) {
+test("keeps OpenAI credentials exclusively on server-side routes", async () => {
+  const [page, engine, generateRoute, characterRoute, creativeRoute] = await Promise.all([
+    source("app/page.tsx"),
+    source("app/production-engine.ts"),
+    source("app/api/generate/route.ts"),
+    source("app/api/character-suggest/route.ts"),
+    source("app/api/creative-suggest/route.ts"),
+  ]);
+  assert.doesNotMatch(`${page}\n${engine}`, /process\.env\.OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/);
+  assert.doesNotMatch(`${generateRoute}\n${characterRoute}\n${creativeRoute}`, /NEXT_PUBLIC_.*OPENAI|sk-[A-Za-z0-9_-]{20,}/);
+  for (const route of [generateRoute, characterRoute, creativeRoute]) {
     assert.match(route, /process\.env\.OPENAI_API_KEY/);
     assert.match(route, /https:\/\/api\.openai\.com\/v1\/responses/);
     assert.match(route, /model:\s*"gpt-5\.6-sol"/);
     assert.match(route, /type:\s*"json_schema"/);
-    assert.doesNotMatch(route, /sk-[A-Za-z0-9_-]{20,}/);
   }
 });
 
-test("preserves local persistence and export integrations", async () => {
-  const page = await source("app/page.tsx");
-
+test("preserves character safety, storage, migration, and exports", async () => {
+  const [page, engine] = await Promise.all([
+    source("app/page.tsx"),
+    source("app/production-engine.ts"),
+  ]);
   for (const storageKey of [
     "slapstick-character-library",
     "slapstick-project-presets",
     "slapstick-saved-packs",
     "slapstick-current-setup",
-  ]) {
-    assert.match(page, new RegExp(storageKey));
-  }
+  ]) assert.match(page, new RegExp(storageKey));
 
+  assert.match(page, /mergeCharacterLibraries/);
+  assert.match(page, /Built-in characters are protected and cannot be deleted/);
+  assert.match(page, /Import and Merge Library/);
+  assert.match(engine, /schemaVersion:\s*1/);
+  assert.match(engine, /schemaVersion:\s*2/);
+  assert.match(page, /Legacy.*read only/);
   assert.match(page, /import\("docx"\)/);
   assert.match(page, /import\("file-saver"\)/);
-  assert.match(page, /characterBibleText\(form, characters\)/);
-  assert.match(page, /launchersForModel\(form\.videoModel\)/);
+});
+
+test("Demo Mode is local and quality control validates the synchronized pack", async () => {
+  const [page, engine] = await Promise.all([
+    source("app/page.tsx"),
+    source("app/production-engine.ts"),
+  ]);
+  assert.match(page, /mode === "demo"\s*\?\s*generateDemoPack/);
+  assert.match(engine, /export function generateDemoPack/);
+  assert.match(engine, /export function inspectProductionPack/);
+  for (const rule of [
+    "Duplicate-character prohibition",
+    "Start-frame ratio",
+    "End-frame ratio",
+    "Video ratio",
+    "Full duration covered",
+    "No timing gaps",
+    "Audio matches visible action",
+    "Character identities match",
+  ]) assert.match(engine, new RegExp(rule));
 });

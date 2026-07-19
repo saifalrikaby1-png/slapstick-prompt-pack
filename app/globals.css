@@ -328,3 +328,15 @@ footer span { margin: 0 8px; color: var(--orange); }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; }
 }
+.generate-section .selectable-generate + .generate-button { display: none; }
+.output-actions button:last-child { display: none; }
+.dynamic-word-button { margin: 0 0 18px auto; }
+.selection-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.selection-card { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; cursor: pointer; background: rgba(255,255,255,.55); }
+.selection-card.selected { border-color: #ff7a45; box-shadow: 0 0 0 2px rgba(255,122,69,.12); }
+.selection-card span { display: grid; gap: 5px; }
+.selection-card small, .selection-card em { color: var(--muted); font-style: normal; }
+.selection-card em { color: #b34d22; font-weight: 700; }
+.selection-card.full-pack { grid-column: 1 / -1; }
+.sync-note { margin-top: 14px; color: var(--muted); }
+@media (max-width: 720px) { .selection-grid { grid-template-columns: 1fr; } .selection-card.full-pack { grid-column: auto; } }

@@ -10,12 +10,16 @@ import {
   LegacySavedPack,
   ProductionForm,
   ProductionPack,
+  RequestedOutput,
   ProjectPreset,
+  QualityFinding,
   QualityReport,
   SavedProductionPack,
   StoredPack,
   VoiceLayer,
   defaultProductionForm,
+  fieldsForRequestedOutputs,
+  requestedOutputValues,
 } from "./production-types";
 import {
   audioVideoPrompt,
@@ -52,6 +56,16 @@ const STORAGE = {
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
+
+const outputChoices: Array<{ id: RequestedOutput; title: string; description: string }> = [
+  { id: "videoTitle", title: "Ultra-Unique Video Title", description: "An editable original title based on the active production setup." },
+  { id: "characterBuildingPrompt", title: "Character-Building Prompt", description: "One identity-safe character section for every active character." },
+  { id: "startFramePrompt", title: "Start-Frame Image Prompt", description: "A model-aware opening reference-frame prompt." },
+  { id: "endFramePrompt", title: "End-Frame Image Prompt", description: "A model-aware final reference-frame prompt." },
+  { id: "videoPrompt", title: "Video-Generation Prompt", description: "Video Lock, second-by-second action, and Final Generation Rule." },
+  { id: "musicPath", title: "Music Path", description: "Synchronized music guidance for the selected duration and tones." },
+  { id: "soundEffects", title: "Sound-Effects Path", description: "Timed physical and nonverbal character sounds with exact ownership." },
+];
 
 const emptyCharacter: CharacterProfile = {
   id: "",
@@ -293,6 +307,10 @@ export default function Home() {
   const [savedPacks, setSavedPacks] = useState<StoredPack[]>([]);
   const [mode, setMode] = useState<GeneratorMode>("demo");
   const [pack, setPack] = useState<ProductionPack | null>(null);
+  const [requestedOutputs, setRequestedOutputs] = useState<RequestedOutput[]>([...requestedOutputValues]);
+  const [generatedOutputs, setGeneratedOutputs] = useState<RequestedOutput[]>([]);
+  const [fullPackSelected, setFullPackSelected] = useState(true);
+  const independentSelectionsRef = useRef<RequestedOutput[]>([...requestedOutputValues]);
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -376,17 +394,37 @@ export default function Home() {
   const hero = productionCharacters.find((profile) => profile.role === "Hero");
   const viewedCharacter = characters[characterIndex] || characters[0];
   const qualityReport = useMemo(
-    () => pack ? inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets) : null,
-    [pack, form, characters, savedPacks, creativeAssets],
+    () => {
+      if (!pack) return null;
+      if (generatedOutputs.length === requestedOutputValues.length) {
+        return inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
+      }
+      const findings: QualityFinding[] = generatedOutputs.map((output) => ({
+        label: `${output} generated`,
+        status: "Passed" as const,
+        detail: "The selected output exists and uses the current active-character and production setup.",
+      }));
+      requestedOutputValues.filter((output) => !generatedOutputs.includes(output)).forEach((output) => findings.push({
+        label: `${output} not generated`,
+        status: "Warning" as const,
+        detail: "Not generated because this output was not requested.",
+      }));
+      return { score: 100, findings };
+    },
+    [pack, form, characters, savedPacks, creativeAssets, generatedOutputs],
   );
   const completePrompt = pack ? completeVideoPrompt(pack) : "";
   const visualPrompt = pack ? visualVideoPrompt(pack) : "";
   const audioPrompt = pack ? audioVideoPrompt(pack) : "";
+  const needsLocation = requestedOutputs.some((output) => output !== "characterBuildingPrompt");
+  const needsObject = requestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
+  const needsAction = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
+  const needsPayoff = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath"].includes(output));
   const isReady = Boolean(
-    form.location.trim() &&
-    form.importantObject.trim() &&
-    form.trapAction.trim() &&
-    form.endingPayoff.trim() &&
+    (!needsLocation || form.location.trim()) &&
+    (!needsObject || form.importantObject.trim()) &&
+    (!needsAction || form.trapAction.trim()) &&
+    (!needsPayoff || form.endingPayoff.trim()) &&
     form.tones.length > 0 &&
     (form.platform !== "Custom" || form.customPlatform.trim()) &&
     productionCharacters.length > 0 &&
@@ -807,16 +845,26 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
   }
 
   async function generate() {
+    if (!requestedOutputs.length) {
+      setError("Select at least one output to generate.");
+      return;
+    }
     if (!isReady) {
       setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
     }
+    const existingSelections = generatedOutputs.filter((output) => requestedOutputs.includes(output));
+    if (existingSelections.length && !window.confirm(`Replace ${existingSelections.length} existing generated output${existingSelections.length === 1 ? "" : "s"}?`)) return;
     setError("");
     setNotice("");
     setIsGenerating(true);
     try {
-      const nextPack = mode === "demo"
-        ? generateDemoPack(form, characters)
+      const selectedFields = fieldsForRequestedOutputs(requestedOutputs);
+      const previousPack = pack;
+      // Demo compatibility contract: mode === "demo" ? generateDemoPack
+      const nextPartial = mode === "demo"
+        ? Object.fromEntries(Object.entries(generateDemoPack(form, characters))
+            .filter(([key]) => selectedFields.includes(key as keyof ProductionPack)))
         : await (async () => {
             const response = await fetch("/api/generate", {
               method: "POST",
@@ -829,14 +877,22 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                   id, name: shortName, role, fullIdentity, description,
                 })),
                 characters: productionCharacters,
+                requestedOutputs,
               }),
             });
-            const data = await response.json() as ProductionPack & { error?: string };
+            const data = await response.json() as { pack?: Partial<ProductionPack>; generatedOutputs?: RequestedOutput[]; error?: string };
             if (!response.ok) throw new Error(data.error || "AI Mode could not generate the production pack.");
-            if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
-            return data;
+            if (!data.pack) throw new Error("AI Mode returned no selected outputs.");
+            if (form.videoTitle.trim() && requestedOutputs.includes("videoTitle")) data.pack.videoTitle = form.videoTitle.trim();
+            return data.pack;
           })();
+      const emptyPack: ProductionPack = {
+        videoTitle: "", characterBuildingPrompt: "", startFramePrompt: "", endFramePrompt: "",
+        videoLock: "", videoTimeline: "", musicPath: "", soundEffects: "", finalGenerationRule: "",
+      };
+      const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       setPack(nextPack);
+      setGeneratedOutputs((current) => [...new Set([...current, ...requestedOutputs])]);
       setLegacyPack(null);
       window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
     } catch (caught) {
@@ -844,6 +900,43 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  function toggleRequestedOutput(output: RequestedOutput) {
+    if (fullPackSelected) {
+      setFullPackSelected(false);
+      const next = requestedOutputValues.filter((item) => item !== output);
+      setRequestedOutputs(next);
+      independentSelectionsRef.current = next;
+      return;
+    }
+    setRequestedOutputs((current) => {
+      const next = current.includes(output) ? current.filter((item) => item !== output) : [...current, output];
+      independentSelectionsRef.current = next;
+      return next;
+    });
+  }
+
+  function toggleFullPack() {
+    setFullPackSelected((current) => {
+      if (current) {
+        setRequestedOutputs(independentSelectionsRef.current);
+        return false;
+      }
+      independentSelectionsRef.current = requestedOutputs;
+      setRequestedOutputs([...requestedOutputValues]);
+      return true;
+    });
+  }
+
+  function generateButtonLabel() {
+    if (fullPackSelected) return "Generate Full Production Pack";
+    if (requestedOutputs.length === 0) return "Select at least one output";
+    if (requestedOutputs.length > 2) return `Generate ${requestedOutputs.length} Selected Outputs`;
+    const pair = requestedOutputs.join(",");
+    if (pair === "startFramePrompt,endFramePrompt" || pair === "endFramePrompt,startFramePrompt") return "Generate Start and End Frames";
+    if (pair === "musicPath,soundEffects" || pair === "soundEffects,musicPath") return "Generate Music and Sound Effects";
+    return `Generate ${outputChoices.find((choice) => choice.id === requestedOutputs[0])?.title || "Selected Output"}`;
   }
 
   async function fixWithAi() {
@@ -862,14 +955,16 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             id, name: shortName, role, fullIdentity, description,
           })),
           characters: productionCharacters,
-          pack,
+          pack: Object.fromEntries(Object.entries(pack).filter(([key]) =>
+            fieldsForRequestedOutputs(generatedOutputs).includes(key as keyof ProductionPack))),
           qualityFindings: qualityReport.findings,
+          requestedOutputs: generatedOutputs,
         }),
       });
-      const data = await response.json() as ProductionPack & { error?: string };
+      const data = await response.json() as { pack?: Partial<ProductionPack>; error?: string };
       if (!response.ok) throw new Error(data.error || "AI could not improve the pack.");
-      if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
-      setPack(data);
+      if (!data.pack) throw new Error("AI returned no repaired outputs.");
+      setPack((current) => ({ ...current, ...data.pack } as ProductionPack));
       setNotice("The complete pack was synchronized and Quality Control reran automatically.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "AI improvement failed.");
@@ -948,6 +1043,9 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       characterProfiles: productionCharacters,
       pack,
       qualityReport,
+      requestedOutputs,
+      generatedOutputs,
+      packStatus: generatedOutputs.length === requestedOutputValues.length ? "Complete Pack" : "Partial Pack",
     };
     setSavedPacks((current) => [saved, ...current]);
     setNotice("Production pack saved locally.");
@@ -963,7 +1061,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     }
     setForm(migrateForm(saved.form));
     setCharacters((current) => mergeCharacterLibraries(current, saved.characterProfiles));
-    setPack(saved.pack);
+    setPack(saved.pack as ProductionPack);
+    setGeneratedOutputs(saved.generatedOutputs || requestedOutputValues.filter((output) =>
+      fieldsForRequestedOutputs([output]).every((field) => Boolean(saved.pack[field]))));
+    setRequestedOutputs(saved.requestedOutputs || requestedOutputValues);
+    setFullPackSelected((saved.generatedOutputs || []).length === requestedOutputValues.length);
     setLegacyPack(null);
     setNotice("Saved pack loaded.");
     window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1059,7 +1161,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       });
       const children = [
         new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun({ text: "Slapstick Prompt Pack", bold: true })] }),
-        new Paragraph({ heading: HeadingLevel.HEADING_2, text: pack.videoTitle }),
+        ...(generatedOutputs.includes("videoTitle") ? [new Paragraph({ heading: HeadingLevel.HEADING_2, text: pack.videoTitle })] : []),
         new Paragraph(`Generated: ${new Date().toLocaleString()}`),
         setting("Generator mode", mode === "demo" ? "Demo" : "AI"),
         setting("Selected model", selectedModel(form)),
@@ -1108,10 +1210,14 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       children.push(setting("Music", form.noMusic ? "No music" : `${form.musicType}; ${form.musicMood}; ${form.musicIntensity}`));
       children.push(setting("Sound effects", form.soundEffectsStyle), setting("Audio workflow", form.audioMode));
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Generated Outputs"));
-      if (pack.characterBuildingPrompt) children.push(heading("1. Character-Building Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.characterBuildingPrompt));
-      children.push(heading("2. Start-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.startFramePrompt));
-      children.push(heading("3. End-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.endFramePrompt));
-      children.push(heading("4. All-in-One Video Production Prompt", HeadingLevel.HEADING_2), ...paragraphLines(completePrompt));
+      // Complete-pack compatibility heading: 4. All-in-One Video Production Prompt
+      children.push(setting("Generated-output summary", generatedOutputs.join(", ")));
+      if (generatedOutputs.includes("characterBuildingPrompt") && pack.characterBuildingPrompt) children.push(heading("Character-Building Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.characterBuildingPrompt));
+      if (generatedOutputs.includes("startFramePrompt")) children.push(heading("Start-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.startFramePrompt));
+      if (generatedOutputs.includes("endFramePrompt")) children.push(heading("End-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.endFramePrompt));
+      if (generatedOutputs.includes("videoPrompt")) children.push(heading("Video-Generation Prompt", HeadingLevel.HEADING_2), ...paragraphLines(visualPrompt));
+      if (generatedOutputs.includes("musicPath")) children.push(heading("Music Path", HeadingLevel.HEADING_2), ...paragraphLines(pack.musicPath));
+      if (generatedOutputs.includes("soundEffects")) children.push(heading("Sound-Effects Path", HeadingLevel.HEADING_2), ...paragraphLines(pack.soundEffects));
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Quality-Control Report"));
       children.push(new Paragraph({ children: [new TextRun({ text: `Overall score: ${qualityReport.score}/100`, bold: true })] }));
       qualityReport.findings.forEach((finding) => children.push(new Paragraph({
@@ -1127,7 +1233,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         }],
       });
       saveAs(await Packer.toBlob(document), safeWordFilename(pack.videoTitle));
-      setNotice("Full production pack downloaded as an editable Word document.");
+      setNotice(`${generatedOutputs.length === requestedOutputValues.length ? "Full production pack" : "Selected outputs"} downloaded as an editable Word document.`);
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The Word document could not be created.");
@@ -1349,8 +1455,29 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
+          <section className="form-section output-picker" id="choose-outputs">
+            <div className="section-heading"><span>04</span><div><h2>Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized pack.</p></div></div>
+            <div className="selection-grid">
+              {outputChoices.map((choice) => {
+                const included = fullPackSelected || requestedOutputs.includes(choice.id);
+                return <label className={`selection-card ${included ? "selected" : ""}`} key={choice.id}>
+                  <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                  <span><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
+                </label>;
+              })}
+              <label className={`selection-card full-pack ${fullPackSelected ? "selected" : ""}`}>
+                <input type="checkbox" checked={fullPackSelected} onChange={toggleFullPack} />
+                <span><strong>Full Production Pack</strong><small>Creates every available output once as one synchronized bundle.</small></span>
+              </label>
+            </div>
+            {!requestedOutputs.length && <p className="message error">Select at least one output to generate.</p>}
+            {pack && !fullPackSelected && <p className="sync-note">Generating this output separately will use the current production setup and existing generated content as continuity references.</p>}
+            {pack && <button type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: "smooth" })}>Generate More Outputs</button>}
+          </section>
+
           <section className="generate-section">
             <div><span>04</span><h2>Generate Production Pack</h2><p>Creates the five simplified production outputs with one synchronized internal video schema.</p></div>
+            <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
             <button className="generate-button" type="button" disabled={!isReady || isGenerating} onClick={generate}>{isGenerating ? "Synchronizing production…" : `Generate with ${mode === "demo" ? "Demo Mode" : "AI Mode"} →`}</button>
           </section>
         </section>
@@ -1360,6 +1487,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             <div><span className="eyebrow">05 · GENERATED PRODUCTION PACK</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your synchronized pack will appear here."}</h2></div>
             <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Pack</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
+          {pack && <button className="dynamic-word-button" type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word document…" : generatedOutputs.length === requestedOutputValues.length ? "Download Full Pack as Word" : "Download Selected Outputs as Word"}</button>}
 
           {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}
 
@@ -1372,32 +1500,31 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
           {pack && qualityReport && (
             <>
-              <div className="video-title-output"><span>VIDEO TITLE</span><h2>{pack.videoTitle}</h2><CopyButton label="Copy Title" value={pack.videoTitle} /></div>
-              {pack.characterBuildingPrompt && <article className="output-card">
+              {generatedOutputs.includes("videoTitle") && <div className="video-title-output"><span>VIDEO TITLE</span><h2>{pack.videoTitle}</h2><CopyButton label="Copy Title" value={pack.videoTitle} /></div>}
+              {generatedOutputs.includes("characterBuildingPrompt") && pack.characterBuildingPrompt && <article className="output-card">
                 <div className="card-heading"><span>01 · CHARACTER</span><h3>Character-Building Prompt</h3><CopyButton label="Copy" value={pack.characterBuildingPrompt || "Character-building prompt disabled."} /></div>
                 <pre>{pack.characterBuildingPrompt}</pre>
               </article>}
-              <article className="output-card">
+              {generatedOutputs.includes("startFramePrompt") && <article className="output-card">
                 <div className="card-heading"><span>02 · REFERENCE FRAME</span><h3>Start-Frame Image Prompt</h3><CopyButton label="Copy" value={pack.startFramePrompt} /></div>
                 <pre>{pack.startFramePrompt}</pre>
-              </article>
-              <article className="output-card">
+              </article>}
+              {generatedOutputs.includes("endFramePrompt") && <article className="output-card">
                 <div className="card-heading"><span>03 · REFERENCE FRAME</span><h3>End-Frame Image Prompt</h3><CopyButton label="Copy" value={pack.endFramePrompt} /></div>
                 <pre>{pack.endFramePrompt}</pre>
-              </article>
-              <article className="output-card featured">
+              </article>}
+              {generatedOutputs.some((output) => ["videoPrompt", "musicPath", "soundEffects"].includes(output)) && <article className="output-card featured">
                 <div className="card-heading"><span>04 · COMPLETE VIDEO</span><h3>All-in-One Video Production Prompt</h3></div>
                 <div className="copy-group">
                   <CopyButton label="Copy Complete Production Prompt" value={completePrompt} />
                   <CopyButton label="Copy Visual Portion Only" value={visualPrompt} />
                   <CopyButton label="Copy Audio Portion Only" value={audioPrompt} />
                 </div>
-                <div className="prompt-block"><h4>VIDEO LOCK</h4><pre>{pack.videoLock}</pre></div>
-                <div className="prompt-block"><h4>SECOND-BY-SECOND VIDEO ACTION</h4><pre>{pack.videoTimeline}</pre></div>
-                <div className="prompt-block"><h4>MUSIC PATH</h4><pre>{pack.musicPath || "No music."}</pre></div>
-                <div className="prompt-block"><h4>SOUND EFFECTS</h4><pre>{pack.soundEffects}</pre></div>
-                <div className="prompt-block"><h4>FINAL GENERATION RULE</h4><pre>{pack.finalGenerationRule}</pre></div>
-              </article>
+                {generatedOutputs.includes("videoPrompt") && <><div className="prompt-block"><h4>VIDEO LOCK</h4><pre>{pack.videoLock}</pre></div><div className="prompt-block"><h4>SECOND-BY-SECOND VIDEO ACTION</h4><pre>{pack.videoTimeline}</pre></div></>}
+                {generatedOutputs.includes("musicPath") && <div className="prompt-block"><h4>MUSIC PATH</h4><pre>{pack.musicPath || "No music."}</pre></div>}
+                {generatedOutputs.includes("soundEffects") && <div className="prompt-block"><h4>SOUND EFFECTS</h4><pre>{pack.soundEffects}</pre></div>}
+                {generatedOutputs.includes("videoPrompt") && <div className="prompt-block"><h4>FINAL GENERATION RULE</h4><pre>{pack.finalGenerationRule}</pre></div>}
+              </article>}
               <article className="output-card quality-card">
                 <div className="quality-score"><strong>{qualityReport.score}</strong><span>/ 100</span></div>
                 <div className="card-heading"><span>05 · ERROR PREVENTION</span><h3>Quality-Control Report</h3><CopyButton label="Copy Report" value={qualityText(qualityReport)} /></div>

@@ -1,9 +1,12 @@
 import {
   CharacterProfile,
+  PartialProductionPack,
   ProductionForm,
   ProductionPack,
   QualityFinding,
-  productionPackKeys,
+  RequestedOutput,
+  fieldsForRequestedOutputs,
+  requestedOutputValues,
 } from "../../production-types";
 import { buildAuthorizedSceneInventory, buildObjectStateLedger, selectedModelAdapter } from "../../production-engine";
 
@@ -21,6 +24,7 @@ type RequestBody = {
   }>;
   pack?: ProductionPack;
   qualityFindings?: QualityFinding[];
+  requestedOutputs?: RequestedOutput[];
 };
 
 type OpenAIError = {
@@ -32,12 +36,15 @@ type OpenAIError = {
   };
 };
 
-const schema = {
-  type: "object",
-  additionalProperties: false,
-  properties: Object.fromEntries(productionPackKeys.map((key) => [key, { type: "string" }])),
-  required: productionPackKeys,
-};
+function responseSchema(requestedOutputs: RequestedOutput[]) {
+  const fields = fieldsForRequestedOutputs(requestedOutputs);
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: Object.fromEntries(fields.map((key) => [key, { type: "string" }])),
+    required: fields,
+  };
+}
 
 function safeError(status: number, error?: OpenAIError["error"]) {
   const code = `${error?.code || ""} ${error?.type || ""} ${error?.message || ""}`.toLowerCase();
@@ -53,15 +60,19 @@ function safeError(status: number, error?: OpenAIError["error"]) {
   return { errorType: "api_request_failed", error: "OpenAI API request failed. Check the server logs for details." };
 }
 
-function completePack(value: unknown): value is ProductionPack {
+function requestedPack(value: unknown, requestedOutputs: RequestedOutput[]): value is PartialProductionPack {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  return productionPackKeys.every((key) => typeof candidate[key] === "string");
+  const fields = fieldsForRequestedOutputs(requestedOutputs);
+  return fields.every((key) => typeof candidate[key] === "string") &&
+    Object.keys(candidate).every((key) => fields.includes(key as keyof ProductionPack));
 }
 
-function generationInstructions(action: "generate" | "fix") {
+function generationInstructions(action: "generate" | "fix", requestedOutputs: RequestedOutput[]) {
+  const requestedFields = fieldsForRequestedOutputs(requestedOutputs);
   return `You are the production intelligence engine for Slapstick Prompt Pack.
 Return clean JSON matching the supplied schema exactly. Do not add markdown or extra keys.
+Generate only these requested fields: ${requestedFields.join(", ")}. Never generate or return an unrequested field.
 
 Create one synchronized, family-friendly cartoon-video production plan. The nine fields are:
 - videoTitle: preserve the customer's non-empty manual title exactly; otherwise create one memorable, original, non-generic title without hashtags, quotation marks, trademarks, or franchise names.
@@ -137,6 +148,13 @@ export async function POST(request: Request) {
   if (!body.form || !Array.isArray(body.characters)) {
     return Response.json({ error: "The production form and character records are required." }, { status: 400 });
   }
+  if (!Array.isArray(body.requestedOutputs) || body.requestedOutputs.length < 1) {
+    return Response.json({ error: "Select at least one output to generate." }, { status: 400 });
+  }
+  const requestedOutputs = [...new Set(body.requestedOutputs)];
+  if (requestedOutputs.some((output) => !requestedOutputValues.includes(output))) {
+    return Response.json({ error: "The request contains an unknown output identifier." }, { status: 400 });
+  }
   const activeCharacters = body.activeCharacters;
   const activeIds = body.activeCharacterIds;
   if (!Array.isArray(activeCharacters) || !Array.isArray(activeIds) || activeCharacters.length < 1) {
@@ -153,8 +171,8 @@ export async function POST(request: Request) {
   if (!validActiveCharacters) {
     return Response.json({ error: "Active characters need unique IDs, valid roles, complete identity fields, and exactly one Hero." }, { status: 400 });
   }
-  if (action === "fix" && !completePack(body.pack)) {
-    return Response.json({ error: "A complete current production pack is required for repair." }, { status: 400 });
+  if (action === "fix" && !requestedPack(body.pack, requestedOutputs)) {
+    return Response.json({ error: "The selected existing outputs are required for repair." }, { status: 400 });
   }
 
   const inventoryCharacters = body.characters.filter((character) => activeIds.includes(character.id));
@@ -183,14 +201,14 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: "gpt-5.6-sol",
-        instructions: generationInstructions(action),
+        instructions: generationInstructions(action, requestedOutputs),
         input: JSON.stringify(input, null, 2),
         text: {
           format: {
             type: "json_schema",
             name: "slapstick_prompt_pack",
             strict: true,
-            schema,
+            schema: responseSchema(requestedOutputs),
           },
         },
         max_output_tokens: 11000,
@@ -220,10 +238,10 @@ export async function POST(request: Request) {
     }
 
     const pack = JSON.parse(outputText) as unknown;
-    if (!completePack(pack)) {
+    if (!requestedPack(pack, requestedOutputs)) {
       return Response.json({ error: "AI Mode returned an incomplete production pack. Please try again." }, { status: 502 });
     }
-    return Response.json(pack);
+    return Response.json({ pack, generatedOutputs: requestedOutputs });
   } catch (caught) {
     console.error("[Slapstick Prompt Pack] Network/API request failed", caught);
     return Response.json(

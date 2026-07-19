@@ -5,12 +5,15 @@ import {
   LegacySavedPack,
   ProductionForm,
   ProductionPack,
+  PartialProductionPack,
+  RequestedOutput,
   QualityFinding,
   QualityReport,
   SavedProductionPack,
   StoredPack,
   defaultProductionForm,
-  productionPackKeys,
+  fieldsForRequestedOutputs,
+  requestedOutputValues,
 } from "./production-types";
 
 const stringValue = (value: unknown, fallback = "") =>
@@ -324,7 +327,13 @@ export function migrateStoredPack(value: unknown): StoredPack | null {
       ...pack,
       videoTitle: stringValue(pack.videoTitle, title),
     };
-    if (!productionPackKeys.every((key) => typeof migratedPack[key] === "string")) return null;
+    const generatedOutputs = Array.isArray(item.generatedOutputs)
+      ? [...new Set(item.generatedOutputs.filter((output): output is RequestedOutput =>
+          typeof output === "string" && requestedOutputValues.includes(output as RequestedOutput)))]
+      : requestedOutputValues.filter((output) => fieldsForRequestedOutputs([output])
+          .every((key) => typeof migratedPack[key] === "string" && Boolean(migratedPack[key])));
+    if (!generatedOutputs.length || !fieldsForRequestedOutputs(generatedOutputs)
+      .every((key) => typeof migratedPack[key] === "string")) return null;
     const characters = Array.isArray(item.characterProfiles)
       ? item.characterProfiles.map(migrateCharacter).filter((entry): entry is CharacterProfile => Boolean(entry))
       : [];
@@ -341,8 +350,11 @@ export function migrateStoredPack(value: unknown): StoredPack | null {
       duration,
       form: migrateForm(item.form),
       characterProfiles: characters,
-      pack: migratedPack as ProductionPack,
+      pack: migratedPack as PartialProductionPack,
       qualityReport: quality,
+      requestedOutputs: generatedOutputs,
+      generatedOutputs,
+      packStatus: generatedOutputs.length === requestedOutputValues.length ? "Complete Pack" : "Partial Pack",
     } satisfies SavedProductionPack;
   }
   const legacyItems = Array.isArray(item.pack)

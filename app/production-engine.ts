@@ -51,44 +51,44 @@ export type ModelPromptAdapter = {
 export const modelPromptAdapters: Record<string, ModelPromptAdapter> = {
   Seedance: {
     displayName: "Seedance", promptStructure: "chronological multimodal-reference progression",
-    cameraPolicy: "one controlled camera progression", motionPolicy: "coherent subject motion with explicit cause and effect",
-    pacingPolicy: "compact chronological beats", referenceFramePolicy: "treat both reference frames as identity and geometry anchors",
+    cameraPolicy: "one controlled camera progression", motionPolicy: "coherent subject motion with explicit cause, physical support, and gravity-aware follow-through",
+    pacingPolicy: "compact chronological readable beats", referenceFramePolicy: "treat both reference frames as identity, ground-plane, and geometry anchors",
     audioPolicy: "concise native-audio direction only when enabled", negativePolicy: "concise identity and continuity exclusions",
   },
   Kling: {
     displayName: "Kling", promptStructure: "subject, movement, scene, camera, lighting",
-    cameraPolicy: "state physical direction, force, and one controlled camera move", motionPolicy: "explicit start pose, force, trajectory, and final pose",
+    cameraPolicy: "state physical direction, force, and one controlled camera move", motionPolicy: "explicit grounded start pose, force, trajectory, landing, and final settled pose",
     pacingPolicy: "action ownership in clearly ordered physical phases", referenceFramePolicy: "lock start/end poses and spatial transition",
     audioPolicy: "audio secondary to readable physical action", negativePolicy: "forbid motion ambiguity, morphing, and substitutions",
   },
   "Google Flow / Veo": {
     displayName: "Google Flow / Veo", promptStructure: "cinematic shot, subject action, environment, lighting, camera, audio",
-    cameraPolicy: "natural cinematic camera language with stable lens", motionPolicy: "natural coherent motion described in cinematic prose",
+    cameraPolicy: "natural cinematic camera language with stable lens", motionPolicy: "natural coherent motion, contact, gravity, and landing described in cinematic prose",
     pacingPolicy: "story beats with attributable audio", referenceFramePolicy: "first-frame and last-frame continuity with matching lens and perspective",
     audioPolicy: "attribute dialogue, ambience, and Foley to exact sources", negativePolicy: "avoid contradictions and unexplained changes",
   },
   Runway: {
     displayName: "Runway", promptStructure: "reference image, motion, temporal progression, camera",
-    cameraPolicy: "one clear camera movement per short clip", motionPolicy: "describe what changes over time without redescribing the anchored image",
+    cameraPolicy: "one clear camera movement per short clip", motionPolicy: "describe one grounded motion chain over time without redescribing the anchored image",
     pacingPolicy: "segment clips longer than ten seconds", referenceFramePolicy: "use the reference image as the primary visual anchor",
     audioPolicy: "provide editing-guide audio separately", negativePolicy: "short motion-focused exclusions",
     maxSingleClipSeconds: 10,
   },
   Higgsfield: {
     displayName: "Higgsfield", promptStructure: "subject staging, action beat, intentional camera path",
-    cameraPolicy: "one explicit cinematic camera move compatible with subject motion", motionPolicy: "slapstick timing remains readable along the camera path",
+    cameraPolicy: "one explicit cinematic camera move compatible with subject motion", motionPolicy: "slapstick timing remains physically grounded and readable along the camera path",
     pacingPolicy: "controlled action beats with clean holds", referenceFramePolicy: "preserve framing while using reference-friendly subject separation",
     audioPolicy: "sync accents to visible camera-readable beats", negativePolicy: "no conflicting camera commands",
   },
   PixVerse: {
     displayName: "PixVerse", promptStructure: "action-first subject, staging, simple camera",
-    cameraPolicy: "simple stable camera behavior", motionPolicy: "conservative readable subject motion",
+    cameraPolicy: "simple stable camera behavior", motionPolicy: "conservative grounded readable subject motion",
     pacingPolicy: "few direct beats", referenceFramePolicy: "clear silhouettes and conservative geometry",
     audioPolicy: "simple visible-source audio", negativePolicy: "concise broadly supported constraints",
   },
   "Hailuo / MiniMax": {
     displayName: "Hailuo / MiniMax", promptStructure: "subject, action, scene, style, camera",
-    cameraPolicy: "conservative supported camera motion stated separately", motionPolicy: "direct action commands separated from camera commands",
+    cameraPolicy: "conservative supported camera motion stated separately", motionPolicy: "direct grounded action commands separated from camera commands",
     pacingPolicy: "concise action phases", referenceFramePolicy: "stable perspective and direct reference continuity",
     audioPolicy: "minimal separate audio direction", negativePolicy: "direct concise exclusions",
   },
@@ -100,7 +100,7 @@ export const modelPromptAdapters: Record<string, ModelPromptAdapter> = {
   },
   "Generic model": {
     displayName: "Generic model", promptStructure: "subject, setting, action, camera, style, continuity",
-    cameraPolicy: "one broadly compatible camera move", motionPolicy: "smooth logical motion",
+    cameraPolicy: "one broadly compatible camera move", motionPolicy: "smooth logical grounded motion with explicit cause and effect",
     pacingPolicy: "universal chronological beats", referenceFramePolicy: "stable reference-friendly composition",
     audioPolicy: "separate universal audio guide", negativePolicy: "universal continuity constraints",
   },
@@ -255,6 +255,7 @@ export function migrateForm(value: unknown): ProductionForm {
       ? [...new Set(item.tones.filter((tone): tone is string => typeof tone === "string"))]
       : [stringValue(item.tone, "Funny")],
     customTone: stringValue(item.customTone),
+    ultraRetentionMode: boolValue(item.ultraRetentionMode, true),
     motionLevel: item.motionLevel === "Safe" || item.motionLevel === "Ambitious"
       ? item.motionLevel
       : "Balanced",
@@ -380,6 +381,30 @@ function rangeLabel(start: number, end: number) {
   return `0:${String(start).padStart(2, "0")}–0:${String(end).padStart(2, "0")}`;
 }
 
+function physicalGroundingLock() {
+  return "PHYSICAL GROUNDING LOCK: Establish one clear ground plane or support surface. All standing characters keep visible foot, paw, wheel, seat, or body contact with that surface; ordinary objects rest on it, are held, attached, or moved by a visible force. Believable weight, contact shadows, and gravity remain active. No unexplained hovering, weightless drifting, gliding, elevation changes, or floating props.";
+}
+
+function smoothMotionLock() {
+  return "SMOOTH MOTION LOCK: Every action has readable anticipation, acceleration, main movement, impact or change, follow-through, deceleration, and a complete settling pose. Use continuous paths, planted feet or paws, natural weight transfer, clear collision response, and supported limbs. No snapping, teleportation, gliding feet, frozen midair motion, instant reversals, geometry intersections, or objects passing through bodies or surfaces.";
+}
+
+function toneRetentionDirection(form: ProductionForm) {
+  const ultra = form.ultraRetentionMode;
+  const fast = form.tones.some((tone) => ["Fast", "Energetic", "Chaotic slapstick"].includes(tone));
+  const calmOnly = (form.tones.includes("Calm") || form.tones.includes("Emotional")) && !fast;
+  const pace = ultra && fast
+    ? "ULTRA-FAST OPENING HOOK: the first frame is already active; within the first second the visual problem is obvious, with one rapid but readable surprise and no slow introduction"
+    : calmOnly
+      ? "strong opening visual question with smooth controlled movement, gentle micro-changes, and no frantic camera behavior"
+      : "immediate readable opening activity, one clear visual question, and continuous cause-and-effect micro-beats";
+  return `${pace}. ${toneProductionDirection(form)}. ${ultra ? "Retention scheduler enabled: one dominant visual event per beat, a major physically caused escalation around 50–65% of the duration, and a completed final payoff with settling." : "Retention scheduler is relaxed: keep the opening active and the ending complete without forcing frantic pacing."}`;
+}
+
+function airborneMotionRule(action: string) {
+  return `If ${action} requires a jump, launch, bounce, fall, or thrown object, show the visible trigger, launch direction and force, one continuous gravity-driven arc, brief peak, descent, landing surface, impact absorption, follow-through, and complete settling; otherwise keep every character and object supported.`;
+}
+
 export function generateDemoPack(
   form: ProductionForm,
   characters: CharacterProfile[],
@@ -433,17 +458,17 @@ export function generateDemoPack(
     const end = ranges[index + 1];
     const actions = ranges.length === 5
       ? [
-          `${heroName} begins in the stated start pose; ${others} visibly initiate ${action} around ${object}.`,
-          `${heroName} reacts and redirects the same action; object direction remains readable and every character owns one clear movement.`,
-          `The physical consequence develops continuously; ${others} receive the harmless result while ${heroName} remains clearly safe.`,
-          `${ending}. Every character reaches the final pose described by the end frame.`,
+          `${heroName} is already in a motion-ready grounded pose; within the first second the visual problem begins immediately as ${others} visibly anticipate ${action} around ${object}. Clear support contact, one dominant hook, and no static introduction.`,
+          `${others} apply the visible trigger to ${object}; ${heroName} plants, accelerates, and redirects the same action. Direction, force, facial reaction, and object path remain readable.`,
+          `Major middle escalation: the established action intensifies through one physically caused collision, reversal, or backfire. ${others} receive the harmless result while ${heroName} remains clearly safe; show follow-through and gravity-driven landing where relevant.`,
+          `${ending}. Every character reaches the final pose described by the end frame, visibly supported, with complete settling and one memorable reaction hold.`,
         ]
       : [
-          `${heroName} begins in the stated start pose and the setup becomes immediately readable.`,
-          `${others} visibly initiate ${action}; ${object} moves from its established starting position.`,
-          `${heroName} responds with one clear action; cause and effect remain continuous.`,
-          `The action reaches its main consequence without teleportation, substitution, or a cut.`,
-          `${ending}; hold a readable final reaction and match the end frame.`,
+          `${heroName} is already active in a grounded, motion-ready pose; the visual question is clear in the first second with no static introduction.`,
+          `${others} visibly initiate ${action}; ${object} moves from its established supported starting position under a clear force.`,
+          `${heroName} anticipates, plants, accelerates, and responds with one clear action; cause and effect remain continuous.`,
+          `Major middle escalation: the established action reaches a stronger physically caused consequence, with readable collision response, follow-through, and no cut.`,
+          `${ending}; hold a readable final reaction, fully settled support contact, and match the end frame.`,
         ];
     return `${rangeLabel(start, end)} — ${actions[index]}`;
   }).join("\n");
@@ -489,6 +514,8 @@ Video ratio: ${videoRatio}
 Style: ${style}
 Tone: ${tone}
 Tone translation: ${toneProductionDirection(form)}
+Tone and pace lock: ${toneRetentionDirection(form)}
+Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}
 Motion level: ${form.motionLevel}
 Exact character count: ${cast.length}
 Exact identities: ${castNames}
@@ -498,6 +525,11 @@ ${identities}
 Selection rule: only these checked characters may appear. Do not include any unchecked saved character.
 Environment lock: ${location}; no unexplained location or background change.
 Important-object lock: ${object}; show every movement from its established start position to its final position.
+Ground contact lock: ${physicalGroundingLock()}
+Object support lock: Every ordinary object is visibly supported, held, attached, or moved by an established on-screen force; no floating object or unexplained direction change.
+Gravity lock: ${airborneMotionRule(action)}
+Smooth motion lock: ${smoothMotionLock()}
+Retention lock: Open with visible action in the first second, use one dominant readable visual event per beat, create the major middle escalation around 50–65% of the duration, then reserve the ending for consequence, settled payoff, and a loop-ready final pose.
 Reference continuity: follow the supplied start frame and complete the supplied end frame.
 Camera rule: ${cameraRule}; no sudden cuts unless explicitly requested.
 Adapter camera policy: ${adapter.cameraPolicy}.
@@ -526,7 +558,7 @@ ${identities}
 
 Scene: ${location}. Important object: ${object}, clearly visible in its starting position near the central action area. ${heroName} starts foreground-center facing toward the object, in an alert ready pose with a focused, curious expression. ${supporting.map((profile, index) => `${profile.shortName} starts ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing ${heroName}, in a role-appropriate preparation pose with a readable expression.`).join(" ")}
 
-Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Keep silhouettes separated and ${object} unobstructed. Establish exact screen direction, relative scale, spatial distance, initial poses, facial expressions, and object position. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
+Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Keep silhouettes separated and ${object} unobstructed. Establish exact screen direction, relative scale, spatial distance, initial poses, facial expressions, and object position. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Physical start-state lock: all feet, paws, wheels, and resting objects maintain visible contact with supporting surfaces; natural contact shadows, believable weight, balanced poses, and nothing hovers or floats. ${heroName} visibly begins the opening hook, but no action is already completed. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
     endFramePrompt: `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference.
 
 EXACT CAST (${cast.length})
@@ -534,12 +566,12 @@ ${identities}
 
 Use exactly the same ${cast.length} characters and exactly the same environment, lighting direction, lens, perspective, camera height, colors, clothing, accessories, scale, proportions, camera axis, and object history. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Final result: ${ending}. ${heroName} finishes clearly safe in the resolved hero position with a readable final expression. ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a distinct resolved ${profile.role.toLowerCase()} pose and remains fully visible.`).join(" ")} The same ${object} is visible in its logical final position after ${action}. The positional change from the opening frame must be physically feasible.
 
-No missing characters, extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
+Physical final-state lock: every character is in a stable completed pose with clear ground or support contact; the important object is visibly supported in its logical final position; contact shadows, gravity, completed landing, impact absorption, follow-through, and settling are visible. No unresolved airborne character, floating prop, impossible balance, or frozen peak-of-jump ending. No missing characters, extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
     videoLock: lock,
     videoTimeline: adaptedTimeline,
     musicPath: musicLines,
     soundEffects: sfxLines,
-    finalGenerationRule: `Follow the reference frames. Only the ${cast.length} checked characters may appear: ${cast.map((profile) => profile.shortName).join(", ")}. Preserve exact identities, roles, colors, clothing, proportions, scale, exact character count, and correct sound ownership. Preserve chronological cause-and-effect and complete the ending. Do not add, remove, duplicate, replace, transform, or teleport characters. Do not introduce unchecked saved characters, random voices, unrequested speech, random props, unexplained changes, sudden cuts, sudden appearances, or sudden disappearances.${form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""}`,
+    finalGenerationRule: `Follow the reference frames. Only the ${cast.length} checked characters may appear: ${cast.map((profile) => profile.shortName).join(", ")}. Preserve exact identities, roles, colors, clothing, proportions, scale, exact character count, and correct sound ownership. Preserve chronological cause-and-effect, physical grounding, gravity, visible support, smooth anticipation-to-settling motion, one dominant readable beat at a time, and a completed ending. Do not add, remove, duplicate, replace, transform, teleport, hover, glide, or freeze characters. Do not introduce unchecked saved characters, random voices, unrequested speech, random props, unexplained changes, sudden cuts, sudden appearances, sudden disappearances, or broken collision physics.${form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""}`,
   };
   return Object.fromEntries(
     Object.entries(generatedPack).map(([key, value]) => [key, removeUncheckedCharacters(value)]),
@@ -657,6 +689,14 @@ export function inspectProductionPack(
         !/squeak|grunt|yelp|gasp|chuckle|nonverbal/.test(pack.musicPath.toLowerCase())
       : !/character vocal sounds are allowed/.test(pack.videoLock.toLowerCase()),
     "Assign nonverbal sounds only to exact active names, visible reactions, and SOUND EFFECTS; never Music Path or spoken quotation."),
+    finding("Grounding and support lock", /physical grounding lock|ground contact lock/.test(all) && /support/.test(all) && /gravity/.test(all), "Include clear ground contact, object support, and gravity rules."),
+    finding("No unexplained floating", !/\b(?:unexplained )?(?:character|object|prop)?\s*(?:hovers?|floats?|floating|drifts?)\b/.test(pack.videoTimeline.toLowerCase()) && /no unexplained hovering|nothing hovers/.test(all), "Remove floating language and keep the no-hovering constraint."),
+    finding("Smooth motion phases", /anticipation/.test(all) && /accelerat/.test(all) && /follow-through/.test(all) && /settling/.test(all), "Define anticipation, acceleration, follow-through, and settling."),
+    finding("No gliding rule", /no snapping.*gliding|no gliding/.test(all), "Explicitly prohibit gliding feet and snapping."),
+    finding("Immediate active opening hook", /first second|first frame|opening hook|already active/.test(`${pack.startFramePrompt} ${pack.videoTimeline}`.toLowerCase()) && !/static introduction/.test(pack.videoTimeline.toLowerCase()), "Open with an active visual question in the first second."),
+    finding("Major middle escalation", /major middle escalation/.test(pack.videoTimeline.toLowerCase()), "Place a physically caused escalation around the middle of the duration."),
+    finding("Completed grounded ending", /settled|settling|stable completed pose/.test(`${pack.endFramePrompt} ${pack.videoTimeline}`.toLowerCase()) && /support contact|ground or support/.test(pack.endFramePrompt.toLowerCase()), "End on a supported, settled, physically resolved payoff."),
+    finding("Ultra Retention Mode is respected", !form.ultraRetentionMode || /retention scheduler enabled|ultra-fast opening hook/.test(all), "When enabled, include active hook, micro-beats, middle escalation, and settled payoff."),
     finding("Frame perspective continuity", /lens|perspective/.test(pack.startFramePrompt.toLowerCase()) &&
       /lens|perspective/.test(pack.endFramePrompt.toLowerCase()), "Start and end frames need compatible lens and perspective."),
     finding("Frame prompt length budget", startWords >= 100 && startWords <= 320 && endWords >= 100 && endWords <= 320, `Start frame: ${startWords} words; end frame: ${endWords} words.`, true),

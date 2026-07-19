@@ -67,6 +67,7 @@ export type ProductionForm = {
   customVisualStyle: string;
   tones: string[];
   customTone: string;
+  ultraRetentionMode: boolean;
   motionLevel: "Safe" | "Balanced" | "Ambitious";
   videoRatio: string;
   startFrameRatio: string;
@@ -202,6 +203,7 @@ export const defaultProductionForm: ProductionForm = {
   customVisualStyle: "",
   tones: ["Funny", "Fast"],
   customTone: "",
+  ultraRetentionMode: true,
   motionLevel: "Balanced",
   videoRatio: "9:16",
   startFrameRatio: "9:16",

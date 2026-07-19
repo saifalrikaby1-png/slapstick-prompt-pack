@@ -53,18 +53,20 @@ const STORAGE = {
   packs: "slapstick-saved-packs",
   form: "slapstick-current-setup",
   creative: CREATIVE_LIBRARY_STORAGE_KEY,
+  outputSelection: "slapstick-output-selection",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
+type OutputSelectionMode = "custom" | "fullPack";
 
-const outputChoices: Array<{ id: RequestedOutput; title: string; description: string }> = [
-  { id: "videoTitle", title: "Ultra-Unique Video Title", description: "An editable original title based on the active production setup." },
-  { id: "characterBuildingPrompt", title: "Character-Building Prompt", description: "One identity-safe character section for every active character." },
-  { id: "startFramePrompt", title: "Start-Frame Image Prompt", description: "A model-aware opening reference-frame prompt." },
-  { id: "endFramePrompt", title: "End-Frame Image Prompt", description: "A model-aware final reference-frame prompt." },
-  { id: "videoPrompt", title: "Video-Generation Prompt", description: "Video Lock, second-by-second action, and Final Generation Rule." },
-  { id: "musicPath", title: "Music Path", description: "Synchronized music guidance for the selected duration and tones." },
-  { id: "soundEffects", title: "Sound-Effects Path", description: "Timed physical and nonverbal character sounds with exact ownership." },
+const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
+  { id: "videoTitle", icon: "T", title: "Ultra-Unique Video Title", short: "Video Title", description: "Original editable title for this production." },
+  { id: "characterBuildingPrompt", icon: "C", title: "Character-Building Prompt", short: "Character Building", description: "Identity-safe design prompt for every active character." },
+  { id: "startFramePrompt", icon: "S", title: "Start-Frame Image Prompt", short: "Start Frame", description: "Model-aware opening reference frame." },
+  { id: "endFramePrompt", icon: "E", title: "End-Frame Image Prompt", short: "End Frame", description: "Matching final reference frame and payoff." },
+  { id: "videoPrompt", icon: "V", title: "Video-Generation Prompt", short: "Video Prompt", description: "Video Lock, timed action, and Final Generation Rule." },
+  { id: "musicPath", icon: "M", title: "Music Path", short: "Music", description: "Synchronized music direction across the duration." },
+  { id: "soundEffects", icon: "FX", title: "Sound-Effects Path", short: "Sound Effects", description: "Timed physical and nonverbal character sounds." },
 ];
 
 const emptyCharacter: CharacterProfile = {
@@ -311,10 +313,10 @@ export default function Home() {
   const [savedPacks, setSavedPacks] = useState<StoredPack[]>([]);
   const [mode, setMode] = useState<GeneratorMode>("demo");
   const [pack, setPack] = useState<ProductionPack | null>(null);
-  const [requestedOutputs, setRequestedOutputs] = useState<RequestedOutput[]>([...requestedOutputValues]);
+  const [requestedOutputs, setRequestedOutputs] = useState<RequestedOutput[]>(["videoPrompt"]);
   const [generatedOutputs, setGeneratedOutputs] = useState<RequestedOutput[]>([]);
-  const [fullPackSelected, setFullPackSelected] = useState(true);
-  const independentSelectionsRef = useRef<RequestedOutput[]>([...requestedOutputValues]);
+  const [selectionMode, setSelectionMode] = useState<OutputSelectionMode>("custom");
+  const independentSelectionsRef = useRef<RequestedOutput[]>(["videoPrompt"]);
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -356,6 +358,19 @@ export default function Home() {
         .filter((entry): entry is StoredPack => Boolean(entry)));
       const storedCreative = parseCreativeLibrary(localStorage.getItem(STORAGE.creative));
       setCreativeAssets(storedCreative);
+      const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
+      if (storedSelection) {
+        const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
+        const valid: RequestedOutput[] = Array.isArray(storedSelection.requestedOutputs)
+          ? [...new Set<RequestedOutput>(storedRequestedOutputs.filter((output: unknown): output is RequestedOutput =>
+              typeof output === "string" && requestedOutputValues.includes(output as RequestedOutput)))]
+          : [];
+        const mode = storedSelection.mode === "fullPack" ? "fullPack" : "custom";
+        const restored = valid.length ? valid : ["videoPrompt"] as RequestedOutput[];
+        independentSelectionsRef.current = restored;
+        setSelectionMode(mode);
+        setRequestedOutputs(mode === "fullPack" ? [...requestedOutputValues] : restored);
+      }
       const signature = storedCreative.find((asset) => asset.kind === "location" && asset.isSignature);
       if (signature && !storedForm) {
         setForm((current) => ({
@@ -390,6 +405,13 @@ export default function Home() {
     if (!hydratedRef.current) return;
     localStorage.setItem(STORAGE.creative, JSON.stringify(creativeAssets));
   }, [creativeAssets]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    localStorage.setItem(STORAGE.outputSelection, JSON.stringify({
+      mode: selectionMode,
+      requestedOutputs: selectionMode === "fullPack" ? independentSelectionsRef.current : requestedOutputs,
+    }));
+  }, [selectionMode, requestedOutputs]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -960,13 +982,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   function toggleRequestedOutput(output: RequestedOutput) {
-    if (fullPackSelected) {
-      setFullPackSelected(false);
-      const next = requestedOutputValues.filter((item) => item !== output);
-      setRequestedOutputs(next);
-      independentSelectionsRef.current = next;
-      return;
-    }
     setRequestedOutputs((current) => {
       const next = current.includes(output) ? current.filter((item) => item !== output) : [...current, output];
       independentSelectionsRef.current = next;
@@ -974,20 +989,29 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     });
   }
 
-  function toggleFullPack() {
-    setFullPackSelected((current) => {
-      if (current) {
-        setRequestedOutputs(independentSelectionsRef.current);
-        return false;
-      }
+  function setOutputMode(nextMode: OutputSelectionMode) {
+    if (nextMode === "fullPack") {
       independentSelectionsRef.current = requestedOutputs;
       setRequestedOutputs([...requestedOutputValues]);
-      return true;
-    });
+    } else {
+      setRequestedOutputs(independentSelectionsRef.current.length ? independentSelectionsRef.current : ["videoPrompt"]);
+    }
+    setSelectionMode(nextMode);
+  }
+
+  function setCustomOutputs(outputs: RequestedOutput[]) {
+    const unique = [...new Set(outputs)];
+    independentSelectionsRef.current = unique;
+    setRequestedOutputs(unique);
+  }
+
+  function scrollToEpisodeIdea() {
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    document.getElementById("episode-idea")?.scrollIntoView({ behavior, block: "start" });
   }
 
   function generateButtonLabel() {
-    if (fullPackSelected) return "Generate Full Production Pack";
+    if (selectionMode === "fullPack") return "Generate Full Production Pack";
     if (requestedOutputs.length === 0) return "Select at least one output";
     if (requestedOutputs.length > 2) return `Generate ${requestedOutputs.length} Selected Outputs`;
     const pair = requestedOutputs.join(",");
@@ -1125,7 +1149,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     setGeneratedOutputs(saved.generatedOutputs || requestedOutputValues.filter((output) =>
       fieldsForRequestedOutputs([output]).every((field) => Boolean(saved.pack[field]))));
     setRequestedOutputs(saved.requestedOutputs || requestedOutputValues);
-    setFullPackSelected((saved.generatedOutputs || []).length === requestedOutputValues.length);
+    setSelectionMode((saved.generatedOutputs || []).length === requestedOutputValues.length ? "fullPack" : "custom");
     setLegacyPack(null);
     setNotice("Saved pack loaded.");
     window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1372,8 +1396,45 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <button className={mode === "ai" ? "active" : ""} type="button" onClick={() => setMode("ai")}>AI Mode<small>OpenAI powered</small></button>
           </div>
 
-          <section className="form-section">
-            <div className="section-heading"><span>01</span><div><h2>Episode Idea</h2><p>Define the physical story before adding production settings.</p></div></div>
+          <section className="form-section output-picker compact-selector" id="choose-outputs" aria-labelledby="output-selector-title">
+            <div className="selector-header">
+              <div className="section-heading"><span>01</span><div><h2 id="output-selector-title">Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized production pack.</p></div></div>
+              <strong className="selected-count" aria-live="polite">{selectionMode === "fullPack" ? "7 outputs included" : `${requestedOutputs.length} output${requestedOutputs.length === 1 ? "" : "s"} selected`}</strong>
+            </div>
+            <div className="selection-mode" role="group" aria-label="Output selection mode">
+              <button type="button" aria-pressed={selectionMode === "custom"} className={selectionMode === "custom" ? "active" : ""} onClick={() => setOutputMode("custom")}>Custom Selection</button>
+              <button type="button" aria-pressed={selectionMode === "fullPack"} className={selectionMode === "fullPack" ? "active" : ""} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
+            </div>
+            {selectionMode === "custom" ? <>
+              <div className="selector-toolbar">
+                <button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select All</button>
+                <button type="button" onClick={() => setCustomOutputs([])}>Clear Selection</button>
+                <button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended Setup</button>
+              </div>
+              <div className="selection-grid">
+                {outputChoices.map((choice) => {
+                  const included = requestedOutputs.includes(choice.id);
+                  return <label className={`selection-card ${included ? "selected" : ""}`} key={choice.id} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); toggleRequestedOutput(choice.id); } }}>
+                    <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                    <span className="output-icon" aria-hidden="true">{choice.icon}</span>
+                    <span className="choice-copy"><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
+                    <span className="check-indicator" aria-hidden="true">{included ? "✓" : ""}</span>
+                  </label>;
+                })}
+              </div>
+            </> : <div className="full-pack-panel">
+              <span className="output-icon" aria-hidden="true">✓</span>
+              <div><strong>All production outputs included</strong><p>One synchronized generation containing every available output exactly once.</p><div className="included-chips">{outputChoices.map((choice) => <span key={choice.id}>{choice.short}</span>)}</div></div>
+              <button type="button" onClick={() => setOutputMode("custom")}>Customize Outputs</button>
+            </div>}
+            <div className="selection-summary">
+              <div>{requestedOutputs.length ? <><strong>{selectionMode === "fullPack" ? "Full Production Pack:" : `${requestedOutputs.length} selected:`}</strong> {outputChoices.filter((choice) => requestedOutputs.includes(choice.id)).map((choice) => choice.short).join(", ")}</> : <strong className="selection-warning">Select at least one output to continue.</strong>}</div>
+              <button type="button" onClick={scrollToEpisodeIdea}>Continue to Production Setup</button>
+            </div>
+          </section>
+
+          <section className="form-section" id="episode-idea">
+            <div className="section-heading"><span>02</span><div><h2>Episode Idea</h2><p>Define the physical story before adding production settings.</p></div></div>
             <div className="form-grid">
               <article className="creative-editor title-editor wide">
                 <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
@@ -1400,7 +1461,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           <section className="form-section">
-            <div className="section-heading"><span>02</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
+            <div className="section-heading"><span>03</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
             <div className="character-block">
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
@@ -1429,6 +1490,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </div></div>
             </div>
 
+            <div className="section-heading remaining-settings"><span>05</span><div><h2>Voice, Music, and Saved Settings</h2><p>Optional narration, synchronized audio, model guidance, presets, and saved productions.</p></div></div>
             <details className="advanced-panel">
               <summary>Character Library import and export <span>+</span></summary>
               <div className="advanced-content">
@@ -1443,7 +1505,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           <section className="form-section">
-            <div className="section-heading"><span>03</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
+            <div className="section-heading"><span>04</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
             <div className="form-grid">
               <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
               <label className="field"><span>AI video model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select>{form.videoModel === "Custom model" && <input value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
@@ -1518,38 +1580,18 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="form-section output-picker" id="choose-outputs">
-            <div className="section-heading"><span>04</span><div><h2>Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized pack.</p></div></div>
-            <div className="selection-grid">
-              {outputChoices.map((choice) => {
-                const included = fullPackSelected || requestedOutputs.includes(choice.id);
-                return <label className={`selection-card ${included ? "selected" : ""}`} key={choice.id}>
-                  <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
-                  <span><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
-                </label>;
-              })}
-              <label className={`selection-card full-pack ${fullPackSelected ? "selected" : ""}`}>
-                <input type="checkbox" checked={fullPackSelected} onChange={toggleFullPack} />
-                <span><strong>Full Production Pack</strong><small>Creates every available output once as one synchronized bundle.</small></span>
-              </label>
-            </div>
-            {!requestedOutputs.length && <p className="message error">Select at least one output to generate.</p>}
-            {pack && !fullPackSelected && <p className="sync-note">Generating this output separately will use the current production setup and existing generated content as continuity references.</p>}
-            {pack && <button type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: "smooth" })}>Generate More Outputs</button>}
-          </section>
-
           <section className="generate-section">
-            <div><span>04</span><h2>Generate Production Pack</h2><p>Creates the five simplified production outputs with one synchronized internal video schema.</p></div>
+            <div><span>06</span><h2>Generate Selected Outputs</h2><p>Generate only the outputs selected in Step 01.</p></div>
             <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
-            <button className="generate-button" type="button" disabled={!isReady || isGenerating} onClick={generate}>{isGenerating ? "Synchronizing production…" : `Generate with ${mode === "demo" ? "Demo Mode" : "AI Mode"} →`}</button>
           </section>
         </section>
 
         <section className="output-panel" ref={outputRef}>
           <div className="output-heading">
-            <div><span className="eyebrow">05 · GENERATED PRODUCTION PACK</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your synchronized pack will appear here."}</h2></div>
+            <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
             <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Pack</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
+          {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}
           {pack && <button className="dynamic-word-button" type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word document…" : generatedOutputs.length === requestedOutputValues.length ? "Download Full Pack as Word" : "Download Selected Outputs as Word"}</button>}
 
           {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}

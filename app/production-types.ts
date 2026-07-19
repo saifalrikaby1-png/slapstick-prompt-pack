@@ -57,6 +57,7 @@ export type ProductionForm = {
   additionalDirection: string;
   heroId: string;
   selectedCharacterIds: string[];
+  activeCharacterIds: string[];
   platform: string;
   customPlatform: string;
   videoModel: string;
@@ -90,6 +91,8 @@ export type ProductionForm = {
   audioMode: string;
   noMusic: boolean;
   soundEffectsStyle: string;
+  characterCartoonSounds: boolean;
+  characterCartoonSoundGuidance: string;
   includeCharacterBuildingPrompt: boolean;
   customModelGuidance: string;
 };
@@ -189,6 +192,7 @@ export const defaultProductionForm: ProductionForm = {
   additionalDirection: "",
   heroId: "builtin-biscuit",
   selectedCharacterIds: ["builtin-grumpy", "builtin-sneaky"],
+  activeCharacterIds: ["builtin-biscuit", "builtin-grumpy", "builtin-sneaky"],
   platform: "Social Media",
   customPlatform: "",
   videoModel: "Seedance",
@@ -222,6 +226,8 @@ export const defaultProductionForm: ProductionForm = {
   audioMode: "Native-audio mode",
   noMusic: false,
   soundEffectsStyle: "Clean synchronized cartoon Foley",
+  characterCartoonSounds: false,
+  characterCartoonSoundGuidance: "",
   includeCharacterBuildingPrompt: true,
   customModelGuidance: "",
 };

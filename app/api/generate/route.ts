@@ -11,6 +11,14 @@ type RequestBody = {
   action?: "generate" | "fix";
   form?: ProductionForm;
   characters?: CharacterProfile[];
+  activeCharacterIds?: string[];
+  activeCharacters?: Array<{
+    id: string;
+    name: string;
+    role: "Hero" | "Companion" | "Enemy";
+    fullIdentity: string;
+    description: string;
+  }>;
   pack?: ProductionPack;
   qualityFindings?: QualityFinding[];
 };
@@ -57,7 +65,7 @@ Return clean JSON matching the supplied schema exactly. Do not add markdown or e
 
 Create one synchronized, family-friendly cartoon-video production plan. The nine fields are:
 - videoTitle: preserve the customer's non-empty manual title exactly; otherwise create one memorable, original, non-generic title without hashtags, quotation marks, trademarks, or franchise names.
-- characterBuildingPrompt: a reusable, detailed identity-building prompt for the selected character, or a short explanation if disabled.
+- characterBuildingPrompt: one labeled subsection for every active character when enabled; return an empty string when disabled.
 - startFramePrompt: a production-ready still-image prompt with the selected start-frame ratio, full cast identity locks, composition, first-second hook, lighting, geography, and negative constraints.
 - endFramePrompt: a matching still-image prompt with the selected end-frame ratio, exact environment/identity continuity, hero's clear win, enemies receiving the harmless backfire, and a readable payoff.
 - videoLock: metadata and immutable production rules covering platform, model, ratio, duration, style, tone, motion level, cast, roles, object, setting, narration/voice, continuity, safety, and negative constraints.
@@ -73,6 +81,7 @@ Hard requirements:
 - Preserve the exact duration in every timing section; all ranges must align and cover it completely.
 - Include the selected platform and selected AI video model prominently in videoLock.
 - Use the supplied Character Library descriptions as authoritative. Introduce full character names once, then short names.
+- Only activeCharacters may appear. Never introduce an unchecked saved character. Use exact active names in both frames, the lock, and timeline.
 - Keep hero, enemy, companion, and supporting roles unambiguous. The hero must clearly win. Enemies must receive their own harmless trap/backfire.
 - Stable identity, face, species, colors, wardrobe, scale, anatomy, voices, movement style, and screen direction.
 - No duplicated characters, extra unrequested characters, extra limbs, distorted limbs, morphing faces, merged bodies, random props, sudden background changes, or unexplained objects appearing/disappearing.
@@ -80,6 +89,7 @@ Hard requirements:
 - No text, subtitles, logos, or watermarks unless expressly requested.
 - Follow voice layers exactly. No Spoken Dialogue is exclusive and means no spoken dialogue, narrator, lip-sync, or speech text; otherwise include only selected speaker layers and keep ownership unambiguous.
 - Keep music and SFX synchronized with visible action and duration.
+- If Character Cartoon Sounds is enabled, place concise nonverbal vocalizations inside soundEffects only. Assign each sound to an exact active character name and visible reaction. No understandable words, quotation-mark dialogue, random voices, or character vocalizations in musicPath.
 - Avoid contradictory, overloaded instructions. Prioritize polished, coherent, stable, zero-error continuity.
 - Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
 
@@ -111,6 +121,22 @@ export async function POST(request: Request) {
   if (!body.form || !Array.isArray(body.characters)) {
     return Response.json({ error: "The production form and character records are required." }, { status: 400 });
   }
+  const activeCharacters = body.activeCharacters;
+  const activeIds = body.activeCharacterIds;
+  if (!Array.isArray(activeCharacters) || !Array.isArray(activeIds) || activeCharacters.length < 1) {
+    return Response.json({ error: "At least one active character is required." }, { status: 400 });
+  }
+  const uniqueIds = new Set(activeCharacters.map((character) => character.id));
+  const validActiveCharacters = uniqueIds.size === activeCharacters.length &&
+    activeIds.length === activeCharacters.length &&
+    activeIds.every((id) => uniqueIds.has(id)) &&
+    activeCharacters.filter((character) => character.role === "Hero").length === 1 &&
+    activeCharacters.every((character) =>
+      character.id.trim() && character.name.trim() && character.fullIdentity.trim() &&
+      character.description.trim() && ["Hero", "Companion", "Enemy"].includes(character.role));
+  if (!validActiveCharacters) {
+    return Response.json({ error: "Active characters need unique IDs, valid roles, complete identity fields, and exactly one Hero." }, { status: 400 });
+  }
   if (action === "fix" && !completePack(body.pack)) {
     return Response.json({ error: "A complete current production pack is required for repair." }, { status: 400 });
   }
@@ -120,10 +146,12 @@ export async function POST(request: Request) {
         form: body.form,
         modelAdapter: selectedModelAdapter(body.form),
         characters: body.characters,
+        activeCharacterIds: activeIds,
+        activeCharacters,
         currentPack: body.pack,
         qualityFindings: body.qualityFindings || [],
       }
-    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters };
+    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters, activeCharacterIds: activeIds, activeCharacters };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {

@@ -176,6 +176,22 @@ main {
 .video-title-output h2 { margin: 6px 0 0; font-family: var(--font-fraunces), serif; font-size: 25px; }
 .video-title-output .copy-button { position: absolute; right: 15px; top: 17px; }
 .character-block + .character-block { margin-top: 12px; }
+.character-browser-nav {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(145deg, #fff, #f8f6ff);
+}
+.character-browser-nav button {
+  width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 10px;
+  background: white; color: var(--purple); font-size: 18px; cursor: pointer;
+}
+.character-browser-nav div { min-width: 0; display: grid; gap: 4px; text-align: center; }
+.character-browser-nav strong { overflow-wrap: anywhere; font-size: 12px; }
+.character-browser-nav small, .selection-count { color: var(--muted); font-size: 9px; }
+.browser-include { margin-top: 12px; }
+.selection-count { margin: 9px 0 0; }
+.selected-cast { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line); }
+.selected-cast > strong { font-size: 10px; }
+.helper-text { margin: -5px 0 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
 .mini-heading { margin-bottom: 13px; }
 .button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 12px; }
 .button-row button, .primary-small, .add-character-row button, .preset-row button,

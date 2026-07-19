@@ -230,6 +230,12 @@ ${report.findings.map((finding) =>
     `${finding.status.toUpperCase()} — ${finding.label}\n${finding.detail}`).join("\n\n")}`;
 }
 
+export function safeWordFilename(title: string, date = new Date()) {
+  const safeTitle = title.replace(/[<>:"/\\|?*\u0000-\u001F]/g, " ")
+    .replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "production-pack";
+  return `slapstick-prompt-pack-${safeTitle}-${date.toISOString().slice(0, 10)}.docx`.toLowerCase();
+}
+
 function CopyButton({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -278,7 +284,7 @@ export default function Home() {
   const [characters, setCharacters] = useState<CharacterProfile[]>(builtInCharacters);
   const [creativeAssets, setCreativeAssets] = useState<CreativeAsset[]>([]);
   const [draft, setDraft] = useState<CharacterProfile>(builtInCharacters[0]);
-  const [selectedSupportId, setSelectedSupportId] = useState("");
+  const [characterIndex, setCharacterIndex] = useState(0);
   const [presets, setPresets] = useState<ProjectPreset[]>([builtInPreset]);
   const [presetName, setPresetName] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState(builtInPreset.id);
@@ -303,9 +309,15 @@ export default function Home() {
       const storedCharacters = safeArray(localStorage.getItem(STORAGE.characters))
         .map(migrateCharacter)
         .filter((entry): entry is CharacterProfile => Boolean(entry));
-      setCharacters(mergeCharacterLibraries([], storedCharacters));
+      const mergedCharacters = mergeCharacterLibraries([], storedCharacters);
+      setCharacters(mergedCharacters);
       const storedForm = safeObject(localStorage.getItem(STORAGE.form));
-      if (storedForm) setForm(migrateForm(storedForm));
+      if (storedForm) {
+        const migrated = migrateForm(storedForm);
+        migrated.activeCharacterIds = [...new Set(migrated.activeCharacterIds)]
+          .filter((id) => mergedCharacters.some((profile) => profile.id === id));
+        setForm(migrated);
+      }
       const storedPresets = safeArray(localStorage.getItem(STORAGE.presets))
         .map((entry) => {
           if (!entry || typeof entry !== "object") return null;
@@ -355,12 +367,12 @@ export default function Home() {
     localStorage.setItem(STORAGE.creative, JSON.stringify(creativeAssets));
   }, [creativeAssets]);
 
-  const hero = characters.find((profile) => profile.id === form.heroId);
-  const selectedCharacters = form.selectedCharacterIds
+  const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
+  const productionCharacters = activeIds
     .map((id) => characters.find((profile) => profile.id === id))
-    .filter((entry): entry is CharacterProfile => Boolean(entry) && entry?.id !== hero?.id);
-  const productionCharacters = [hero, ...selectedCharacters]
     .filter((entry): entry is CharacterProfile => Boolean(entry));
+  const hero = productionCharacters.find((profile) => profile.role === "Hero");
+  const viewedCharacter = characters[characterIndex] || characters[0];
   const qualityReport = useMemo(
     () => pack ? inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets) : null,
     [pack, form, characters, savedPacks, creativeAssets],
@@ -375,16 +387,42 @@ export default function Home() {
     form.endingPayoff.trim() &&
     form.tones.length > 0 &&
     (form.platform !== "Custom" || form.customPlatform.trim()) &&
-    hero?.role === "Hero",
+    productionCharacters.length > 0 &&
+    productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
 
   function update<K extends keyof ProductionForm>(key: K, value: ProductionForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function sanitizeActiveText(value: string) {
+    const inactive = characters.filter((profile) => !activeIds.includes(profile.id));
+    let result = value;
+    inactive.forEach((profile) => {
+      const replacement = productionCharacters.find((active) => active.role === profile.role)?.shortName || hero?.shortName || "";
+      [profile.fullIdentity, profile.shortName].forEach((name) => {
+        result = result.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), replacement);
+      });
+      if (replacement) result = result.replace(new RegExp(`\\b${replacement}\\s+(?:and|&)\\s+${replacement}\\b`, "gi"), replacement);
+    });
+    return result.replace(/\s{2,}/g, " ").trim();
+  }
+
   function formForGeneration() {
-    if (form.additionalDirection.trim()) return form;
-    const { additionalDirection: _blankDirection, ...withoutBlankDirection } = form;
+    const sanitized = {
+      ...form,
+      activeCharacterIds: activeIds,
+      heroId: hero?.id || form.heroId,
+      selectedCharacterIds: productionCharacters.filter((profile) => profile.role !== "Hero").map((profile) => profile.id),
+      location: sanitizeActiveText(form.location),
+      importantObject: sanitizeActiveText(form.importantObject),
+      trapAction: sanitizeActiveText(form.trapAction),
+      endingPayoff: sanitizeActiveText(form.endingPayoff),
+      additionalDirection: sanitizeActiveText(form.additionalDirection),
+      characterCartoonSoundGuidance: sanitizeActiveText(form.characterCartoonSoundGuidance),
+    };
+    if (sanitized.additionalDirection.trim()) return sanitized;
+    const { additionalDirection: _blankDirection, ...withoutBlankDirection } = sanitized;
     void _blankDirection;
     return withoutBlankDirection;
   }
@@ -487,6 +525,34 @@ export default function Home() {
     update("voiceLayers", withoutSilent.includes(layer)
       ? withoutSilent.filter((item) => item !== layer)
       : [...withoutSilent, layer]);
+  }
+
+  function viewCharacter(index: number) {
+    if (!characters.length) return;
+    const next = (index + characters.length) % characters.length;
+    setCharacterIndex(next);
+    editCharacter(characters[next]);
+  }
+
+  function toggleActiveCharacter(id: string) {
+    const selected = activeIds.includes(id);
+    const next = selected ? activeIds.filter((entry) => entry !== id) : [...activeIds, id];
+    const nextCharacters = next.map((entry) => characters.find((profile) => profile.id === entry))
+      .filter((profile): profile is CharacterProfile => Boolean(profile));
+    if (!selected && characters.find((profile) => profile.id === id)?.role === "Hero" &&
+      nextCharacters.filter((profile) => profile.role === "Hero").length > 1) {
+      setError("Only one Hero may be selected for a production.");
+      return;
+    }
+    update("activeCharacterIds", next);
+    const nextHero = nextCharacters.find((profile) => profile.role === "Hero");
+    setForm((current) => ({
+      ...current,
+      activeCharacterIds: next,
+      heroId: nextHero?.id || current.heroId,
+      selectedCharacterIds: nextCharacters.filter((profile) => profile.role !== "Hero").map((profile) => profile.id),
+    }));
+    setError("");
   }
 
   async function suggestCreative(kind: CreativeAssetKind | "title", expand = false, collisionRetry = false) {
@@ -595,17 +661,6 @@ export default function Home() {
     update("selectedCharacterIds", form.selectedCharacterIds.filter((entry) => entry !== id));
   }
 
-  function addSelectedCharacter() {
-    if (!selectedSupportId || selectedSupportId === form.heroId ||
-      form.selectedCharacterIds.includes(selectedSupportId)) return;
-    update("selectedCharacterIds", [...form.selectedCharacterIds, selectedSupportId]);
-    setSelectedSupportId("");
-  }
-
-  function removeSelectedCharacter(id: string) {
-    update("selectedCharacterIds", form.selectedCharacterIds.filter((entry) => entry !== id));
-  }
-
   function editCharacter(profile: CharacterProfile) {
     setDraft({ ...profile, description: characterDescription(profile) });
   }
@@ -653,6 +708,7 @@ export default function Home() {
     }
     setCharacters((current) => current.filter((profile) => profile.id !== draft.id));
     update("selectedCharacterIds", form.selectedCharacterIds.filter((id) => id !== draft.id));
+    update("activeCharacterIds", activeIds.filter((id) => id !== draft.id));
     if (form.heroId === draft.id) update("heroId", "builtin-biscuit");
     setDraft(emptyCharacter);
     setNotice("Custom character deleted.");
@@ -750,7 +806,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
   async function generate() {
     if (!isReady) {
-      setError("Complete the location, object, main action, ending, and hero before generating.");
+      setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
     }
     setError("");
@@ -763,7 +819,15 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             const response = await fetch("/api/generate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "generate", form: formForGeneration(), characters: productionCharacters }),
+              body: JSON.stringify({
+                action: "generate",
+                form: formForGeneration(),
+                activeCharacterIds: activeIds,
+                activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
+                  id, name: shortName, role, fullIdentity, description,
+                })),
+                characters: productionCharacters,
+              }),
             });
             const data = await response.json() as ProductionPack & { error?: string };
             if (!response.ok) throw new Error(data.error || "AI Mode could not generate the production pack.");
@@ -791,6 +855,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         body: JSON.stringify({
           action: "fix",
           form: formForGeneration(),
+          activeCharacterIds: activeIds,
+          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
+            id, name: shortName, role, fullIdentity, description,
+          })),
           characters: productionCharacters,
           pack,
           qualityFindings: qualityReport.findings,
@@ -806,6 +874,16 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  function generateSoundProfiles() {
+    const profiles = productionCharacters.map((profile) => {
+      const savedVoice = characterDescription(profile).split("\n")
+        .find((line) => /voice profile|nonverbal sound profile/i.test(line));
+      return `${profile.shortName}: ${savedVoice?.split(":").slice(1).join(":").trim() || "species-appropriate gasps, effort sounds, reaction noises, and a brief happy or surprised vocalization"}. No understandable words.`;
+    }).join("\n");
+    update("characterCartoonSoundGuidance", profiles);
+    setNotice("Editable nonverbal sound profiles created for the checked characters only. Nothing was saved automatically.");
   }
 
   function savePreset() {
@@ -829,6 +907,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       : "builtin-biscuit";
     latest.selectedCharacterIds = latest.selectedCharacterIds
       .filter((id) => characters.some((entry) => entry.id === id) && id !== latest.heroId);
+    latest.activeCharacterIds = [...new Set(latest.activeCharacterIds)]
+      .filter((id) => characters.some((entry) => entry.id === id));
+    if (!latest.activeCharacterIds.includes(latest.heroId) &&
+      characters.some((entry) => entry.id === latest.heroId)) latest.activeCharacterIds.unshift(latest.heroId);
     (["location", "object", "action", "payoff"] as CreativeAssetKind[]).forEach((kind) => {
       const keys = creativeFields[kind];
       const asset = creativeAssets.find((item) => item.id === String(latest[keys.id]));
@@ -961,26 +1043,73 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     if (!pack || !qualityReport) return;
     setIsDownloading(true);
     try {
-      const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import("docx");
+      const exportForm = formForGeneration() as ProductionForm;
+      const { Document, Footer, HeadingLevel, Packer, PageBreak, PageNumber, Paragraph, TextRun } = await import("docx");
       const { saveAs } = await import("file-saver");
-      const sections = [
-        ["Video Title", pack.videoTitle],
-        ["Character-Building Prompt", pack.characterBuildingPrompt || "Disabled for this production."],
-        ["Start-Frame Image Prompt", pack.startFramePrompt],
-        ["End-Frame Image Prompt", pack.endFramePrompt],
-        ["All-in-One Video Production Prompt", completePrompt],
-        ["Quality-Control Report", qualityText(qualityReport)],
-      ];
+      const heading = (text: string, level: "Heading1" | "Heading2" = HeadingLevel.HEADING_1) => new Paragraph({ heading: level, text });
+      const paragraphLines = (value: string) => value.split("\n").filter((line) => line.trim())
+        .map((line) => new Paragraph({ text: line, spacing: { after: 100 } }));
+      const setting = (label: string, value: string) => new Paragraph({
+        bullet: { level: 0 },
+        children: [new TextRun({ text: `${label}: `, bold: true }), new TextRun(value)],
+      });
       const children = [
         new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun({ text: "Slapstick Prompt Pack", bold: true })] }),
-        new Paragraph(`Platform: ${selectedPlatform(form)} · Model: ${selectedModel(form)} · Duration: ${form.duration} seconds`),
+        new Paragraph({ heading: HeadingLevel.HEADING_2, text: pack.videoTitle }),
+        new Paragraph(`Generated: ${new Date().toLocaleString()}`),
+        setting("Generator mode", mode === "demo" ? "Demo" : "AI"),
+        setting("Selected model", selectedModel(form)),
+        setting("Duration", `${form.duration} seconds`),
+        setting("Video ratio", form.videoRatio),
+        setting("Start-frame ratio", form.startFrameRatio),
+        setting("End-frame ratio", form.endFrameRatio),
+        setting("Visual style", selectedStyle(form)),
+        setting("Selected tones", selectedTone(form)),
+        setting("Publishing target", selectedPlatform(form)),
+        new Paragraph({ children: [new PageBreak()] }),
+        heading("Selected Characters"),
       ];
-      sections.forEach(([title, value]) => {
-        children.push(new Paragraph({ heading: HeadingLevel.HEADING_1, text: title }));
-        value.split("\n").forEach((line) => children.push(new Paragraph(line)));
+      productionCharacters.forEach((profile) => {
+        children.push(heading(profile.fullIdentity, HeadingLevel.HEADING_2));
+        children.push(setting("Name", profile.shortName), setting("Role", profile.role), setting("Full identity", profile.fullIdentity));
+        children.push(...paragraphLines(sanitizeActiveText(characterDescription(profile))));
       });
-      const document = new Document({ creator: "Slapstick Prompt Pack", sections: [{ children }] });
-      saveAs(await Packer.toBlob(document), "Slapstick_Prompt_Pack_Production_Pack.docx");
+      children.push(new Paragraph({ children: [new PageBreak()] }), heading("Creative Setup"));
+      children.push(setting("Location", `${exportForm.locationName || "Location"} — ${exportForm.location}`));
+      children.push(setting("Important object", `${exportForm.objectName || "Object"} — ${exportForm.importantObject}`));
+      children.push(setting("Trap or main action", `${exportForm.actionName || "Action"} — ${exportForm.trapAction}`));
+      children.push(setting("Ending or payoff", `${exportForm.payoffName || "Payoff"} — ${exportForm.endingPayoff}`));
+      if (exportForm.additionalDirection?.trim()) children.push(setting("Additional Direction", exportForm.additionalDirection.trim()));
+      children.push(heading("Audio Setup"));
+      children.push(setting("Narration and spoken layers", form.voiceLayers.join(", ")));
+      children.push(setting("Character Cartoon Sounds", form.characterCartoonSounds ? "Enabled" : "Disabled"));
+      if (exportForm.characterCartoonSoundGuidance.trim()) children.push(setting("Character Cartoon Sound Guidance", exportForm.characterCartoonSoundGuidance.trim()));
+      children.push(setting("Music", form.noMusic ? "No music" : `${form.musicType}; ${form.musicMood}; ${form.musicIntensity}`));
+      children.push(setting("Sound effects", form.soundEffectsStyle), setting("Audio workflow", form.audioMode));
+      children.push(new Paragraph({ children: [new PageBreak()] }), heading("Generated Outputs"));
+      if (pack.characterBuildingPrompt) children.push(heading("1. Character-Building Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.characterBuildingPrompt));
+      children.push(heading("2. Start-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.startFramePrompt));
+      children.push(heading("3. End-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.endFramePrompt));
+      children.push(heading("4. All-in-One Video Production Prompt", HeadingLevel.HEADING_2), ...paragraphLines(completePrompt));
+      children.push(new Paragraph({ children: [new PageBreak()] }), heading("Quality-Control Report"));
+      children.push(new Paragraph({ children: [new TextRun({ text: `Overall score: ${qualityReport.score}/100`, bold: true })] }));
+      qualityReport.findings.forEach((finding) => children.push(new Paragraph({
+        bullet: { level: 0 },
+        children: [new TextRun({ text: `${finding.status} — ${finding.label}: `, bold: true }), new TextRun(finding.detail)],
+      })));
+      const document = new Document({
+        creator: "Slapstick Prompt Pack",
+        title: pack.videoTitle,
+        sections: [{
+          footers: { default: new Footer({ children: [new Paragraph({ alignment: "center", children: [new TextRun(`${pack.videoTitle} · Page `), new TextRun({ children: [PageNumber.CURRENT] })] })] }) },
+          children,
+        }],
+      });
+      saveAs(await Packer.toBlob(document), safeWordFilename(pack.videoTitle));
+      setNotice("Full production pack downloaded as an editable Word document.");
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The Word document could not be created.");
     } finally {
       setIsDownloading(false);
     }
@@ -1083,48 +1212,15 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           </section>
 
           <section className="form-section">
-            <div className="section-heading"><span>02</span><div><h2>Characters</h2><p>Use the latest saved descriptions and prevent duplicate episode selection.</p></div></div>
+            <div className="section-heading"><span>02</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
             <div className="character-block">
-              <div className="mini-heading"><h3>Hero Character</h3><p>Choose one saved hero, then review or improve the complete identity description.</p></div>
-              <label className="field"><span>Saved-character selector</span>
-                <select value={form.heroId} onChange={(event) => chooseHero(event.target.value)}>
-                  {characters.filter((profile) => profile.role === "Hero").map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName} · {profile.role}</option>)}
-                </select>
-              </label>
-              <div className="form-grid">
-                <label className="field"><span>Hero name</span><input disabled={Boolean(draft.builtIn)} value={draft.shortName} onChange={(event) => setDraft((current) => ({ ...current, shortName: event.target.value }))} /></label>
-                <label className="field"><span>Full identity</span><input disabled={Boolean(draft.builtIn)} value={draft.fullIdentity} onChange={(event) => setDraft((current) => ({ ...current, fullIdentity: event.target.value }))} /></label>
-                <label className="field wide"><span>Hero description</span><textarea disabled={Boolean(draft.builtIn)} className="character-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+              <div className="character-browser-nav">
+                <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
+                <div><strong>{viewedCharacter?.fullIdentity || "No saved characters"}</strong><small>Character {characters.length ? characterIndex + 1 : 0} of {characters.length}</small></div>
+                <button type="button" aria-label="Next character" onClick={() => viewCharacter(characterIndex + 1)}>→</button>
               </div>
-              <div className="button-row">
-                <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
-                <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(true)}>{draft.id ? "Update Character" : "Save Hero to Library"}</button>
-                <button type="button" onClick={() => newCharacter("Hero")}>New Hero</button>
-              </div>
-            </div>
-
-            <div className="character-block">
-              <div className="mini-heading"><h3>Enemies and Companions</h3><p>Select multiple characters, inspect their latest description, or remove them from this episode without deleting them.</p></div>
-              <div className="add-character-row">
-                <select aria-label="Saved supporting character" value={selectedSupportId} onChange={(event) => setSelectedSupportId(event.target.value)}>
-                  <option value="">Choose a saved character…</option>
-                  {characters.filter((profile) => profile.role !== "Hero" && profile.id !== form.heroId && !form.selectedCharacterIds.includes(profile.id))
-                    .map((profile) => <option value={profile.id} key={profile.id}>{profile.shortName} · {profile.role}</option>)}
-                </select>
-                <button type="button" onClick={addSelectedCharacter}>Add to episode</button>
-                <button type="button" onClick={() => newCharacter()}>+ New character</button>
-              </div>
-              <div className="character-chips">
-                {selectedCharacters.map((profile) => (
-                  <article className={draft.id === profile.id ? "selected" : ""} key={profile.id}>
-                    <button className="character-card-main" type="button" onClick={() => editCharacter(profile)}>
-                      <b>{profile.shortName}</b><small>{profile.role}</small>
-                    </button>
-                    <button className="remove-chip" type="button" aria-label={`Remove ${profile.shortName} from episode`} onClick={() => removeSelectedCharacter(profile.id)}>×</button>
-                  </article>
-                ))}
-                {!selectedCharacters.length && <p className="empty-note">No enemies or companions selected.</p>}
-              </div>
+              {viewedCharacter && <label className="toggle-field browser-include"><input type="checkbox" checked={activeIds.includes(viewedCharacter.id)} onChange={() => toggleActiveCharacter(viewedCharacter.id)} /><span>Include in This Video</span></label>}
+              <p className="selection-count">{characters.length} characters available · {productionCharacters.length} selected for this video</p>
               <div className="form-grid editor-grid">
                 <label className="field"><span>Character name</span><input disabled={Boolean(draft.builtIn)} value={draft.shortName} onChange={(event) => setDraft((current) => ({ ...current, shortName: event.target.value }))} /></label>
                 <label className="field"><span>Role</span><select disabled={Boolean(draft.builtIn)} value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value as CharacterRole }))}>{roles.map((role) => <option key={role}>{role}</option>)}</select></label>
@@ -1134,8 +1230,13 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               <div className="button-row">
                 <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
                 <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(false)}>{draft.id ? "Update Character" : "Save to Character Library"}</button>
+                <button type="button" onClick={() => newCharacter()}>Add New Character</button>
                 <button type="button" disabled={!draft.id || Boolean(draft.builtIn)} onClick={deleteCharacter}>Delete Custom Character</button>
               </div>
+              <div className="selected-cast"><strong>Selected for This Video</strong><div className="character-chips">
+                {productionCharacters.map((profile) => <article key={profile.id}><button className="character-card-main" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); }}><b>{profile.shortName}</b><small>{profile.role}</small></button><button className="remove-chip" type="button" aria-label={`Remove ${profile.shortName} from video`} onClick={() => toggleActiveCharacter(profile.id)}>×</button></article>)}
+                {!productionCharacters.length && <p className="empty-note">No characters selected.</p>}
+              </div></div>
             </div>
 
             <details className="advanced-panel">
@@ -1171,10 +1272,13 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               <div className="advanced-content">
                 <div className="form-grid">
                   <fieldset className="choice-field wide"><legend>Narration and voice layers</legend><div className="choice-grid">{voiceLayerOptions.map((layer) => <label key={layer}><input type="checkbox" checked={form.voiceLayers.includes(layer)} onChange={() => toggleVoiceLayer(layer)} /><span>{layer}</span></label>)}</div></fieldset>
+                  <label className="toggle-field wide"><input type="checkbox" checked={form.characterCartoonSounds} onChange={(event) => update("characterCartoonSounds", event.target.checked)} /><span>Character Cartoon Sounds</span></label>
+                  <p className="helper-text wide">Creates nonverbal character vocal sounds such as gasps, squeaks, grunts, giggles, yelps, huffs, chirps, effort sounds, and reaction noises. It does not create spoken words or dialogue.</p>
+                  {form.characterCartoonSounds && <div className="wide"><label className="field"><span>Character Cartoon Sound Guidance <i>optional</i></span><textarea value={form.characterCartoonSoundGuidance} onChange={(event) => update("characterCartoonSoundGuidance", event.target.value)} placeholder="Example: Give Biscuit quick cheerful squeaks and effort sounds, while Grumpy uses low irritated grunts and surprised yelps. No spoken words." /></label><div className="button-row"><button type="button" onClick={generateSoundProfiles} disabled={!productionCharacters.length}>Generate Sound Profiles with AI</button></div></div>}
                   {hasNarrator && <><label className="field wide"><span>Narrator guidance</span><textarea value={form.narratorGuidance} onChange={(event) => update("narratorGuidance", event.target.value)} /></label><label className="field wide"><span>Narration text</span><textarea value={form.narrationText} onChange={(event) => update("narrationText", event.target.value)} /></label></>}
                   {hasCharacterVoices && <><label className="field wide"><span>Character dialogue</span><textarea value={form.characterDialogue} onChange={(event) => update("characterDialogue", event.target.value)} /></label><label className="field wide"><span>Character voice guidance</span><textarea value={form.characterVoiceGuidance} onChange={(event) => update("characterVoiceGuidance", event.target.value)} /></label></>}
                   {!silentMode && <><label className="field"><span>Language</span><input value={form.language} onChange={(event) => update("language", event.target.value)} /></label><label className="field"><span>Vocal tone</span><input value={form.vocalTone} onChange={(event) => update("vocalTone", event.target.value)} /></label><label className="toggle-field"><input type="checkbox" checked={form.lipSyncRequired} onChange={(event) => update("lipSyncRequired", event.target.checked)} /><span>Lip-sync required</span></label></>}
-                  {silentMode && <div className="silent-lock wide">No-dialogue lock active: no spoken dialogue, narration, or lip-sync instructions will be generated.</div>}
+                  {silentMode && <div className="silent-lock wide">No Spoken Dialogue blocks understandable words, narration, and lip-sync. Nonverbal cartoon sounds, breaths, gasps, giggles, grunts, yelps, music, and environmental sound effects remain allowed.</div>}
                   <label className="field"><span>Music type</span><input disabled={form.noMusic} value={form.musicType} onChange={(event) => update("musicType", event.target.value)} /></label>
                   <label className="field"><span>Music mood</span><input disabled={form.noMusic} value={form.musicMood} onChange={(event) => update("musicMood", event.target.value)} /></label>
                   <label className="field"><span>Music intensity</span><select disabled={form.noMusic} value={form.musicIntensity} onChange={(event) => update("musicIntensity", event.target.value)}>{["Low", "Medium", "High"].map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -1231,7 +1335,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         <section className="output-panel" ref={outputRef}>
           <div className="output-heading">
             <div><span className="eyebrow">05 · GENERATED PRODUCTION PACK</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your synchronized pack will appear here."}</h2></div>
-            {pack && <div className="output-actions"><button type="button" onClick={saveCurrentPack}>Save Pack</button><button type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word…" : "Download Word"}</button></div>}
+            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Pack</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
 
           {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}

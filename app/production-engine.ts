@@ -166,6 +166,17 @@ export function characterDescription(profile: CharacterProfile) {
   ].join("\n");
 }
 
+export function buildCompactCharacterLock(profile: CharacterProfile) {
+  const lines = characterDescription(profile).split("\n");
+  const value = (label: string) => lines.find((line) =>
+    line.toLowerCase().startsWith(`${label.toLowerCase()}:`))?.split(":").slice(1).join(":").trim();
+  return `${profile.fullIdentity} — ${profile.role}. ${value("Appearance") || profile.appearanceLock || "Preserve saved appearance"}; ` +
+    `colors: ${value("Primary and secondary colors") || profile.colorLock || "preserve saved colors"}; ` +
+    `clothing/accessories: ${value("Clothing and accessories") || "preserve saved wardrobe"}; ` +
+    `relative scale: ${value("Scale and proportions") || profile.scaleLock || "preserve saved scale"}; ` +
+    `${value("Movement style") || profile.movementStyle || value("Personality") || profile.personalityLock || "preserve character-specific behavior"}.`;
+}
+
 export function migrateCharacter(value: unknown): CharacterProfile | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -204,6 +215,11 @@ export function migrateForm(value: unknown): ProductionForm {
   const selectedCharacterIds = Array.isArray(item.selectedCharacterIds)
     ? item.selectedCharacterIds.filter((entry): entry is string => typeof entry === "string")
     : [...defaultProductionForm.selectedCharacterIds];
+  const legacyActive = [stringValue(item.heroId, defaultProductionForm.heroId), ...selectedCharacterIds];
+  const activeCharacterIds = [...new Set(
+    (Array.isArray(item.activeCharacterIds) ? item.activeCharacterIds : legacyActive)
+      .filter((entry): entry is string => typeof entry === "string" && Boolean(entry)),
+  )];
   const migrated: ProductionForm = {
     ...defaultProductionForm,
     videoTitle: stringValue(item.videoTitle),
@@ -223,6 +239,7 @@ export function migrateForm(value: unknown): ProductionForm {
     additionalDirection: stringValue(item.additionalDirection, stringValue(item.notes)),
     heroId: stringValue(item.heroId, defaultProductionForm.heroId),
     selectedCharacterIds,
+    activeCharacterIds,
     platform: ["Social Media", "Custom"].includes(stringValue(item.platform))
       ? stringValue(item.platform)
       : "Social Media",
@@ -275,6 +292,8 @@ export function migrateForm(value: unknown): ProductionForm {
     audioMode: stringValue(item.audioMode, defaultProductionForm.audioMode),
     noMusic: boolValue(item.noMusic, stringValue(item.musicDirection) === "No Music"),
     soundEffectsStyle: stringValue(item.soundEffectsStyle, defaultProductionForm.soundEffectsStyle),
+    characterCartoonSounds: boolValue(item.characterCartoonSounds, false),
+    characterCartoonSoundGuidance: stringValue(item.characterCartoonSoundGuidance),
     includeCharacterBuildingPrompt: boolValue(item.includeCharacterBuildingPrompt, true),
     customModelGuidance: stringValue(item.customModelGuidance),
   };
@@ -365,15 +384,30 @@ export function generateDemoPack(
   form: ProductionForm,
   characters: CharacterProfile[],
 ): ProductionPack {
-  const hero = characters.find((profile) => profile.id === form.heroId);
-  const supporting = form.selectedCharacterIds
-    .map((id) => characters.find((profile) => profile.id === id))
-    .filter((profile): profile is CharacterProfile => Boolean(profile) && profile?.id !== hero?.id);
-  const cast = [hero, ...supporting].filter((profile): profile is CharacterProfile => Boolean(profile));
+  const rawActiveIds = form.activeCharacterIds || [form.heroId, ...form.selectedCharacterIds];
+  const activeIds = [...new Set(rawActiveIds)];
+  const cast = activeIds.map((id) => characters.find((profile) => profile.id === id))
+    .filter((profile): profile is CharacterProfile => Boolean(profile));
+  const hero = cast.find((profile) => profile.role === "Hero");
+  const supporting = cast.filter((profile) => profile.id !== hero?.id);
+  const uncheckedCharacters = characters.filter((profile) => !activeIds.includes(profile.id));
+  const escapePattern = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const removeUncheckedCharacters = (value: string) => {
+    let cleaned = value;
+    uncheckedCharacters.forEach((profile) => {
+      const replacement = cast.find((active) => active.role === profile.role)?.shortName || hero?.shortName || "";
+      [profile.fullIdentity, profile.shortName].filter(Boolean).forEach((name) => {
+        cleaned = cleaned.replace(new RegExp(`\\b${escapePattern(name)}\\b`, "gi"), replacement);
+      });
+      if (replacement) {
+        cleaned = cleaned.replace(new RegExp(`\\b${escapePattern(replacement)}\\s+(?:and|&)\\s+${escapePattern(replacement)}\\b`, "gi"), replacement);
+      }
+    });
+    return cleaned.replace(/\s{2,}/g, " ").trim();
+  };
   const castNames = cast.map((profile) => profile.fullIdentity).join("; ");
   const castRoles = cast.map((profile) => `${profile.shortName}: ${profile.role}`).join("; ");
-  const identities = cast.map((profile) =>
-    `${profile.fullIdentity} (${profile.role}) — ${profile.appearanceLock || "use the saved identity"} Colors: ${profile.colorLock || "preserve saved colors"} Scale: ${profile.scaleLock || "preserve saved scale"}`).join("\n");
+  const identities = removeUncheckedCharacters(cast.map(buildCompactCharacterLock).join("\n"));
   const duration = Math.max(5, Number(form.duration) || 15);
   const videoRatio = ratioLabel(form.videoRatio, form.videoCustomWidth, form.videoCustomHeight);
   const startRatio = ratioLabel(form.startFrameRatio, form.startCustomWidth, form.startCustomHeight);
@@ -386,10 +420,10 @@ export function generateDemoPack(
   const ranges = timelineRanges(duration);
   const heroName = hero?.shortName || "Hero";
   const others = supporting.map((profile) => profile.shortName).join(" and ") || "the supporting cast";
-  const location = stringValue(form.location, "a clean, readable cartoon environment");
-  const object = stringValue(form.importantObject, "the important story object");
-  const action = stringValue(form.trapAction, "a clear physical action");
-  const ending = stringValue(form.endingPayoff, `${heroName} completes the action and the scene resolves clearly`);
+  const location = removeUncheckedCharacters(stringValue(form.location, "a clean, readable cartoon environment"));
+  const object = removeUncheckedCharacters(stringValue(form.importantObject, "the important story object"));
+  const action = removeUncheckedCharacters(stringValue(form.trapAction, "a clear physical action"));
+  const ending = removeUncheckedCharacters(stringValue(form.endingPayoff, `${heroName} completes the action and the scene resolves clearly`));
   const cameraRule = form.motionLevel === "Safe"
     ? "locked camera axis with no meaningful camera move"
     : form.motionLevel === "Ambitious"
@@ -435,11 +469,17 @@ export function generateDemoPack(
         : index === ranges.length - 3
           ? `one medium-intensity directional impact from the visible result of ${action}`
           : `selective ${form.soundEffectsStyle.toLowerCase()} tied only to visible footsteps, prop motion, or contact`;
-    return `${rangeLabel(start, end)} — ${description}; match on-screen distance and direction; no random off-screen sound.`;
+    const vocal = form.characterCartoonSounds && cast.length
+      ? ` ${cast[index % cast.length].shortName}: one brief species-appropriate nonverbal ${index % 2 ? "reaction yelp" : "effort sound"} matched to the visible reaction; no understandable words.`
+      : "";
+    return `${rangeLabel(start, end)} — ${description}; match on-screen distance and direction; no random off-screen sound.${vocal}`;
   }).join("\n");
+  const cartoonSoundRule = form.characterCartoonSounds
+    ? ` Nonverbal character vocal sounds are allowed for checked characters only; exact-name ownership, visible-reaction synchronization, no off-screen unexplained voices, and no understandable words.${form.characterCartoonSoundGuidance.trim() ? ` Customer sound guidance: ${form.characterCartoonSoundGuidance.trim()}` : ""}`
+    : " Nonverbal character vocal sounds are not requested.";
   const narrationRule = form.voiceLayers.includes("No Spoken Dialogue")
-    ? "No spoken dialogue, no narration, and no lip-sync. Communicate through poses, expressions, music, and synchronized sound."
-    : `Voice layers: ${form.voiceLayers.join(", ")}. Language: ${form.language}. Vocal tone: ${form.vocalTone}. ${form.lipSyncRequired ? "Accurate lip-sync is required." : "Lip-sync is not required unless a selected speaker visibly speaks."} Narrator guidance: ${form.voiceLayers.includes("Narrator") ? form.narratorGuidance || "none" : "not enabled"}. Narration text: ${form.voiceLayers.includes("Narrator") ? form.narrationText || "none" : "not enabled"}. Character dialogue: ${form.voiceLayers.some((layer) => layer.includes("Voice")) ? form.characterDialogue || "none" : "not enabled"}. Character voice guidance: ${form.characterVoiceGuidance || "use the saved voice profiles."}`;
+    ? `No understandable spoken dialogue, no narration, and no lip-sync. Communicate through poses, expressions, music, and synchronized sound.${cartoonSoundRule}`
+    : `Voice layers: ${form.voiceLayers.join(", ")}. Language: ${form.language}. Vocal tone: ${form.vocalTone}. ${form.lipSyncRequired ? "Accurate lip-sync is required." : "Lip-sync is not required unless a selected speaker visibly speaks."} Narrator guidance: ${form.voiceLayers.includes("Narrator") ? form.narratorGuidance || "none" : "not enabled"}. Narration text: ${form.voiceLayers.includes("Narrator") ? form.narrationText || "none" : "not enabled"}. Character dialogue: ${form.voiceLayers.some((layer) => layer.includes("Voice")) ? form.characterDialogue || "none" : "not enabled"}. Character voice guidance: ${form.characterVoiceGuidance || "use the saved voice profiles."}.${cartoonSoundRule}`;
   const lock = `Model: ${model}
 Model adapter: ${adapter.displayName}
 Adapter structure: ${adapter.promptStructure}
@@ -453,6 +493,9 @@ Motion level: ${form.motionLevel}
 Exact character count: ${cast.length}
 Exact identities: ${castNames}
 Exact roles: ${castRoles}
+Concise identity locks:
+${identities}
+Selection rule: only these checked characters may appear. Do not include any unchecked saved character.
 Environment lock: ${location}; no unexplained location or background change.
 Important-object lock: ${object}; show every movement from its established start position to its final position.
 Reference continuity: follow the supplied start frame and complete the supplied end frame.
@@ -463,17 +506,19 @@ Adapter reference-frame policy: ${adapter.referenceFramePolicy}.
 Identity lock: preserve colors, clothing, accessories, scale, proportions, faces, species, and roles. No duplicate characters, extra characters, substitutions, role swapping, morphing, teleportation, sudden appearances, sudden disappearances, random objects, or broken physical cause and effect.
 Audio/voice rule: ${narrationRule}
 Adapter audio policy: ${adapter.audioPolicy}.${form.additionalDirection.trim() ? `\nCustomer direction: ${form.additionalDirection.trim()}` : ""}`;
-  const characterPrompts = cast.map((profile) => `### ${profile.shortName} — ${profile.role}
+  const characterPrompts = cast.map((profile, index) => `CHARACTER ${index + 1} — ${profile.fullIdentity.toUpperCase()}
+Role: ${profile.role}
 ${characterDescription(profile)}
 Create a full-body front view, full-body side view, optional back view, neutral pose, and compact expression set. Lock exact colors, clothing, accessories, proportions, relative scale, face, species, and silhouette. Clean background. Image ratio: ${startRatio}. Visual style: ${style}. One character in this subsection only; no extra character, no duplicate body parts, no cropped anatomy, no text, no logo, no watermark.`).join("\n\n");
+  const sanitizedCharacterPrompts = removeUncheckedCharacters(characterPrompts);
   const generatedTitle = form.videoTitle.trim() ||
     `${heroName} and the ${form.objectName.trim() || "Impossible Backfire"}`;
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
-  return {
+  const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
-    characterBuildingPrompt: form.includeCharacterBuildingPrompt ? characterPrompts : "",
+    characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",
     startFramePrompt: `Create the opening reference image in ${startRatio}, ${style}.
 
 EXACT CAST (${cast.length})
@@ -484,6 +529,9 @@ Scene: ${location}. Important object: ${object}, clearly visible in its starting
 Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Keep silhouettes separated and ${object} unobstructed. Establish exact screen direction, relative scale, spatial distance, initial poses, facial expressions, and object position. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
     endFramePrompt: `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference.
 
+EXACT CAST (${cast.length})
+${identities}
+
 Use exactly the same ${cast.length} characters and exactly the same environment, lighting direction, lens, perspective, camera height, colors, clothing, accessories, scale, proportions, camera axis, and object history. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Final result: ${ending}. ${heroName} finishes clearly safe in the resolved hero position with a readable final expression. ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a distinct resolved ${profile.role.toLowerCase()} pose and remains fully visible.`).join(" ")} The same ${object} is visible in its logical final position after ${action}. The positional change from the opening frame must be physically feasible.
 
 No missing characters, extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
@@ -491,8 +539,11 @@ No missing characters, extra characters, duplicate characters, newly appearing p
     videoTimeline: adaptedTimeline,
     musicPath: musicLines,
     soundEffects: sfxLines,
-    finalGenerationRule: `Follow the reference frames. Preserve exact character identities, roles, colors, clothing, proportions, scale, and exact character count. Preserve the chronological cause-and-effect order and complete the stated ending. Do not add, remove, duplicate, replace, transform, or teleport characters. Do not introduce random props, unexplained changes, sudden cuts, sudden appearances, or sudden disappearances.`,
+    finalGenerationRule: `Follow the reference frames. Only the ${cast.length} checked characters may appear: ${cast.map((profile) => profile.shortName).join(", ")}. Preserve exact identities, roles, colors, clothing, proportions, scale, exact character count, and correct sound ownership. Preserve chronological cause-and-effect and complete the ending. Do not add, remove, duplicate, replace, transform, or teleport characters. Do not introduce unchecked saved characters, random voices, unrequested speech, random props, unexplained changes, sudden cuts, sudden appearances, or sudden disappearances.${form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""}`,
   };
+  return Object.fromEntries(
+    Object.entries(generatedPack).map(([key, value]) => [key, removeUncheckedCharacters(value)]),
+  ) as ProductionPack;
 }
 
 function parseRanges(text: string) {
@@ -507,11 +558,12 @@ export function inspectProductionPack(
   savedTitles: string[] = [],
   creativeAssets: CreativeAsset[] = [],
 ): QualityReport {
-  const hero = characters.find((profile) => profile.id === form.heroId);
-  const supporting = form.selectedCharacterIds
-    .map((id) => characters.find((profile) => profile.id === id))
-    .filter((profile): profile is CharacterProfile => Boolean(profile) && profile?.id !== hero?.id);
-  const cast = [hero, ...supporting].filter((profile): profile is CharacterProfile => Boolean(profile));
+  const rawActiveIds = form.activeCharacterIds || [form.heroId, ...form.selectedCharacterIds];
+  const activeIds = [...new Set(rawActiveIds)];
+  const cast = activeIds.map((id) => characters.find((profile) => profile.id === id))
+    .filter((profile): profile is CharacterProfile => Boolean(profile));
+  const hero = cast.find((profile) => profile.role === "Hero");
+  const unchecked = characters.filter((profile) => !activeIds.includes(profile.id));
   const requiredVisuals = `${pack.startFramePrompt}\n${pack.endFramePrompt}\n${pack.videoLock}\n${pack.videoTimeline}`.toLowerCase();
   const all = Object.values(pack).join("\n").toLowerCase();
   const duration = Number(form.duration) || 15;
@@ -553,10 +605,21 @@ export function inspectProductionPack(
       return !asset || asset.description === description;
     }), "Selected saved assets must resolve to their latest descriptions."),
     finding("Exactly one valid hero", Boolean(hero && hero.role === "Hero" && cast.filter((profile) => profile.role === "Hero").length === 1), "The production must have exactly one main Hero."),
+    finding("At least one active character", cast.length > 0, "Select at least one character for this production."),
+    finding("Unique active character IDs", rawActiveIds.length === activeIds.length, "Remove duplicate active character IDs."),
     finding("Only valid character roles", cast.every((profile) => ["Hero", "Companion", "Enemy"].includes(profile.role)), "Active roles must be Hero, Companion, or Enemy."),
     finding("Every character has a description", cast.every((profile) => characterDescription(profile).length > 40), "Every active character needs a reusable description."),
     finding("All selected characters appear", cast.every((profile) =>
       requiredVisuals.includes(profile.shortName.toLowerCase())), "Every selected identity must appear in the frame and video instructions."),
+    finding("Unchecked characters are excluded", unchecked.every((profile) =>
+      !requiredVisuals.includes(profile.fullIdentity.toLowerCase()) &&
+      !requiredVisuals.includes(profile.shortName.toLowerCase())), "Unchecked saved characters must not appear in generated prompts."),
+    finding("Compact locks match both frames", cast.every((profile) => {
+      const identity = profile.fullIdentity.toLowerCase();
+      return pack.startFramePrompt.toLowerCase().includes(identity) && pack.endFramePrompt.toLowerCase().includes(identity);
+    }), "Every active full identity and compact lock must appear in both reference frames."),
+    finding("Exact names drive the timeline", cast.every((profile) =>
+      pack.videoTimeline.toLowerCase().includes(profile.shortName.toLowerCase())), "Use exact active character names in the timeline."),
     finding("Character count is consistent", pack.videoLock.toLowerCase().includes(`exact character count: ${cast.length}`), `Expected exactly ${cast.length} characters.`),
     finding("Duplicate-character prohibition", /no duplicate/.test(all), "The pack must explicitly forbid duplicates."),
     finding("Sudden-appearance prohibition", /no sudden appearances|sudden appearances/.test(all), "The pack must forbid sudden appearances."),
@@ -585,8 +648,15 @@ export function inspectProductionPack(
     finding("Model adapter is applied", all.includes(`model adapter: ${selectedModelAdapter(form).displayName.toLowerCase()}`) &&
       all.includes(selectedModelAdapter(form).cameraPolicy.toLowerCase()), "The selected model must materially control prompt structure and camera policy."),
     finding("Voice layers are compatible", form.voiceLayers.includes("No Spoken Dialogue")
-      ? form.voiceLayers.length === 1 && /no spoken dialogue/.test(all)
+      ? form.voiceLayers.length === 1 && /no understandable spoken|no spoken dialogue/.test(all)
       : !form.voiceLayers.includes("No Spoken Dialogue"), "No Spoken Dialogue cannot coexist with spoken layers."),
+    finding("Character Cartoon Sounds setting", form.characterCartoonSounds
+      ? cast.every((profile) => pack.soundEffects.toLowerCase().includes(profile.shortName.toLowerCase())) &&
+        /no understandable words/.test(`${pack.soundEffects} ${pack.videoLock}`.toLowerCase()) &&
+        !/["“][^"”]+["”]/.test(pack.soundEffects) &&
+        !/squeak|grunt|yelp|gasp|chuckle|nonverbal/.test(pack.musicPath.toLowerCase())
+      : !/character vocal sounds are allowed/.test(pack.videoLock.toLowerCase()),
+    "Assign nonverbal sounds only to exact active names, visible reactions, and SOUND EFFECTS; never Music Path or spoken quotation."),
     finding("Frame perspective continuity", /lens|perspective/.test(pack.startFramePrompt.toLowerCase()) &&
       /lens|perspective/.test(pack.endFramePrompt.toLowerCase()), "Start and end frames need compatible lens and perspective."),
     finding("Frame prompt length budget", startWords >= 100 && startWords <= 320 && endWords >= 100 && endWords <= 320, `Start frame: ${startWords} words; end frame: ${endWords} words.`, true),

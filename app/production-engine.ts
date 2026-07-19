@@ -108,9 +108,15 @@ export const modelPromptAdapters: Record<string, ModelPromptAdapter> = {
 
 export function selectedModelAdapter(form: ProductionForm) {
   const base = modelPromptAdapters[form.videoModel] || modelPromptAdapters["Generic model"];
+  const presenceAware = {
+    ...base,
+    motionPolicy: `${base.motionPolicy}; strict cast/object presence, no spawn/despawn, named action ownership, natural motion only, continuous position transitions`,
+    cameraPolicy: `${base.cameraPolicy}; preserve the exact active cast in continuous framing without crop-out or action-axis reversal`,
+    pacingPolicy: `${base.pacingPolicy}; selected tones apply from frame zero and Fast begins with named active movement at 0:00`,
+  };
   return form.videoModel === "Custom model"
-    ? { ...base, displayName: selectedModel(form), promptStructure: `${base.promptStructure}; ${form.customModelGuidance || "customer-defined model guidance not supplied"}` }
-    : base;
+    ? { ...presenceAware, displayName: selectedModel(form), promptStructure: `${base.promptStructure}; ${form.customModelGuidance || "customer-defined model guidance not supplied"}` }
+    : presenceAware;
 }
 
 export function selectedModel(form: ProductionForm) {
@@ -405,6 +411,49 @@ function airborneMotionRule(action: string) {
   return `If ${action} requires a jump, launch, bounce, fall, or thrown object, show the visible trigger, launch direction and force, one continuous gravity-driven arc, brief peak, descent, landing surface, impact absorption, follow-through, and complete settling; otherwise keep every character and object supported.`;
 }
 
+export interface CharacterVisibilityState {
+  characterId: string;
+  characterName: string;
+  presentAtStart: boolean;
+  visibleByDefault: boolean;
+  authorizedEntrance?: boolean;
+  authorizedExit?: boolean;
+  authorizedOcclusion?: boolean;
+  finalPresence: "visible" | "exited-by-request";
+}
+
+function visibilityLedger(cast: CharacterProfile[], additionalDirection: string): CharacterVisibilityState[] {
+  const direction = additionalDirection.toLowerCase();
+  return cast.map((profile) => {
+    const named = direction.includes(profile.shortName.toLowerCase());
+    const authorizedExit = named && /\b(exit|leave|runs? off|off-screen|trapdoor)\b/.test(direction);
+    const authorizedEntrance = named && /\b(enter|entrance|arrive|comes? in|reveal)\b/.test(direction);
+    const authorizedOcclusion = named && /\b(behind|hide|hidden|obstruct|occlusion)\b/.test(direction);
+    return {
+      characterId: profile.id,
+      characterName: profile.shortName,
+      presentAtStart: !authorizedEntrance,
+      visibleByDefault: !authorizedExit && !authorizedOcclusion,
+      authorizedEntrance,
+      authorizedExit,
+      authorizedOcclusion,
+      finalPresence: authorizedExit ? "exited-by-request" : "visible",
+    };
+  });
+}
+
+function presenceLock(ledger: CharacterVisibilityState[], object: string, additionalDirection: string) {
+  const exceptions = ledger.filter((state) => state.authorizedEntrance || state.authorizedExit || state.authorizedOcclusion);
+  const exceptionRule = exceptions.length
+    ? ` Customer-authorized visibility exception: ${exceptions.map((state) => `${state.characterName} must use a visible, timed, continuous path through a named edge, door, tunnel, or obstruction, with no teleportation or unexplained reappearance`).join("; ")}. Direction: ${additionalDirection.trim()}.`
+    : " No entrance, exit, occlusion, or off-screen movement is authorized.";
+  return `STRICT PRESENCE LOCK: All selected characters are visible and physically established in the opening frame and remain continuously present through the final frame. The exact character count never changes. No selected character may suddenly appear, disappear, spawn, vanish, duplicate, split, merge, transform, or be replaced. Only selected characters may appear. VISIBILITY LOCK: use one continuous wide or medium-wide composition that keeps every active character readable, grounded, and unobstructed; no accidental crop-out, reframing loss, or camera-caused disappearance. STRICT OBJECT PRESENCE LOCK: ${object} is the same identifiable, supported object from start to finish; it never appears from nowhere, disappears, duplicates, changes design, or moves without visible physical cause.${exceptionRule}`;
+}
+
+function naturalMotionLock() {
+  return "NATURAL MOVEMENT LOCK: Every named character or object performs only the planned action and reaction. Movement is purposeful, smooth, physically connected, and caused by the visible story event. No random gestures, twitching, dancing, spinning, jumping, sliding, pose snapping, unexplained reactions, decorative effects, or random camera movement. SMOOTH FACIAL-MOTION LOCK: eyes track the visible cause; facial features and posture transition together; no random mouth movement or unrelated expression swap.";
+}
+
 export function generateDemoPack(
   form: ProductionForm,
   characters: CharacterProfile[],
@@ -449,6 +498,8 @@ export function generateDemoPack(
   const object = removeUncheckedCharacters(stringValue(form.importantObject, "the important story object"));
   const action = removeUncheckedCharacters(stringValue(form.trapAction, "a clear physical action"));
   const ending = removeUncheckedCharacters(stringValue(form.endingPayoff, `${heroName} completes the action and the scene resolves clearly`));
+  const ledger = visibilityLedger(cast, form.additionalDirection);
+  const visibilityLock = presenceLock(ledger, object, form.additionalDirection);
   const cameraRule = form.motionLevel === "Safe"
     ? "locked camera axis with no meaningful camera move"
     : form.motionLevel === "Ambitious"
@@ -458,17 +509,17 @@ export function generateDemoPack(
     const end = ranges[index + 1];
     const actions = ranges.length === 5
       ? [
-          `${heroName} is already in a motion-ready grounded pose; within the first second the visual problem begins immediately as ${others} visibly anticipate ${action} around ${object}. Clear support contact, one dominant hook, and no static introduction.`,
-          `${others} apply the visible trigger to ${object}; ${heroName} plants, accelerates, and redirects the same action. Direction, force, facial reaction, and object path remain readable.`,
-          `Major middle escalation: the established action intensifies through one physically caused collision, reversal, or backfire. ${others} receive the harmless result while ${heroName} remains clearly safe; show follow-through and gravity-driven landing where relevant.`,
-          `${ending}. Every character reaches the final pose described by the end frame, visibly supported, with complete settling and one memorable reaction hold.`,
+          `At exactly 0:00, ${heroName} is already leaning toward ${object} in a grounded motion-ready pose while ${others} remain visible, planted, and track the same object with prepared expressions. ${object} visibly responds to the established setup within the first second; the camera holds a wide action view. First action owner, direction, cause, and first motion cue are explicit; no static introduction.`,
+          `${others} apply the visible trigger to ${object}; ${heroName} plants, accelerates, and redirects the same action in the established screen direction. ${object} follows one continuous path; every named character remains visible and their facial reaction follows the visible cause.`,
+          `Major middle escalation: ${object} reaches the established consequence through one physically caused collision, reversal, or backfire. ${others} receive the harmless result while ${heroName} remains clearly safe; show follow-through, gravity-driven landing where relevant, and the same cast positions transitioning into the next beat.`,
+          `${ending}. ${heroName} and ${others} remain visible in the final wide composition; every character reaches the final pose described by the end frame, visibly supported, with complete settling and one memorable reaction hold.`,
         ]
       : [
-          `${heroName} is already active in a grounded, motion-ready pose; the visual question is clear in the first second with no static introduction.`,
-          `${others} visibly initiate ${action}; ${object} moves from its established supported starting position under a clear force.`,
-          `${heroName} anticipates, plants, accelerates, and responds with one clear action; cause and effect remain continuous.`,
-          `Major middle escalation: the established action reaches a stronger physically caused consequence, with readable collision response, follow-through, and no cut.`,
-          `${ending}; hold a readable final reaction, fully settled support contact, and match the end frame.`,
+          `At exactly 0:00, ${heroName} is already active in a grounded, motion-ready pose; ${others} remain visible and track ${object}. The visual question is clear in the first second, with no static introduction or neutral opening.`,
+          `${others} visibly initiate ${action}; ${object} moves from its established supported starting position under a clear named force and continuous direction.`,
+          `${heroName} anticipates, plants, accelerates, and responds with one clear action; cause and effect remain continuous while all selected characters remain in the readable camera composition.`,
+          `Major middle escalation: ${object} reaches a stronger physically caused consequence, with readable collision response, follow-through, unchanged cast count, and no cut.`,
+          `${ending}; ${heroName} and ${others} hold readable final reactions with fully settled support contact and match the end frame.`,
         ];
     return `${rangeLabel(start, end)} — ${actions[index]}`;
   }).join("\n");
@@ -520,11 +571,18 @@ Motion level: ${form.motionLevel}
 Exact character count: ${cast.length}
 Exact identities: ${castNames}
 Exact roles: ${castRoles}
+Visibility ledger: ${ledger.map((state) => `${state.characterName}: start=${state.presentAtStart ? "visible" : "authorized entrance"}, default=${state.visibleByDefault ? "visible" : "authorized visibility exception"}, final=${state.finalPresence}`).join("; ")}
 Concise identity locks:
 ${identities}
 Selection rule: only these checked characters may appear. Do not include any unchecked saved character.
+${visibilityLock}
 Environment lock: ${location}; no unexplained location or background change.
 Important-object lock: ${object}; show every movement from its established start position to its final position.
+Object continuity lock: ${object} has one clear supported start position, moves only from a visible named force along a continuous path, and has one clear final supported position. No spawn, despawn, duplication, design drift, or unrequested transformation.
+Natural-motion lock: ${naturalMotionLock()}
+Action ownership lock: every timeline beat names the exact character or exact object that moves, its direction, visible cause, physical result, and transition to the next beat. No vague “someone”, “they”, or ownerless motion.
+Tone-from-zero lock: selected tones control the first visible frame at 0:00: opening pose, movement speed, expressions, camera, music, and sound have no neutral introductory period.
+${form.tones.includes("Fast") ? `FAST-AT-0:00 LOCK: at exactly 0:00 ${heroName} has already begun the first planned motion, ${object} is visibly responding or about to respond, ${others} are visibly tracking it, and the camera is already framed wide for the action. No static hold, fade-in, title card, delayed movement, or slow establishing shot.` : ""}
 Ground contact lock: ${physicalGroundingLock()}
 Object support lock: Every ordinary object is visibly supported, held, attached, or moved by an established on-screen force; no floating object or unexplained direction change.
 Gravity lock: ${airborneMotionRule(action)}
@@ -558,7 +616,7 @@ ${identities}
 
 Scene: ${location}. Important object: ${object}, clearly visible in its starting position near the central action area. ${heroName} starts foreground-center facing toward the object, in an alert ready pose with a focused, curious expression. ${supporting.map((profile, index) => `${profile.shortName} starts ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing ${heroName}, in a role-appropriate preparation pose with a readable expression.`).join(" ")}
 
-Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Keep silhouettes separated and ${object} unobstructed. Establish exact screen direction, relative scale, spatial distance, initial poses, facial expressions, and object position. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Physical start-state lock: all feet, paws, wheels, and resting objects maintain visible contact with supporting surfaces; natural contact shadows, believable weight, balanced poses, and nothing hovers or floats. ${heroName} visibly begins the opening hook, but no action is already completed. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
+Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Use a continuous wide or medium-wide action composition: every selected character is fully visible, unobstructed, and spatially separated; ${object} is unobstructed in its exact supported start position. Establish exact screen direction, relative scale, spatial distance, initial poses, eye direction, facial expressions, and the 0:00 motion cue. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Physical start-state lock: all feet, paws, wheels, and resting objects maintain visible contact with supporting surfaces; natural contact shadows, believable weight, balanced poses, and nothing hovers or floats. Tone from frame zero: ${toneRetentionDirection(form)}. ${heroName} visibly begins the opening hook, but no action is already completed. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
     endFramePrompt: `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference.
 
 EXACT CAST (${cast.length})
@@ -566,12 +624,12 @@ ${identities}
 
 Use exactly the same ${cast.length} characters and exactly the same environment, lighting direction, lens, perspective, camera height, colors, clothing, accessories, scale, proportions, camera axis, and object history. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Final result: ${ending}. ${heroName} finishes clearly safe in the resolved hero position with a readable final expression. ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a distinct resolved ${profile.role.toLowerCase()} pose and remains fully visible.`).join(" ")} The same ${object} is visible in its logical final position after ${action}. The positional change from the opening frame must be physically feasible.
 
-Physical final-state lock: every character is in a stable completed pose with clear ground or support contact; the important object is visibly supported in its logical final position; contact shadows, gravity, completed landing, impact absorption, follow-through, and settling are visible. No unresolved airborne character, floating prop, impossible balance, or frozen peak-of-jump ending. No missing characters, extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
+Physical final-state lock: every selected character remains visible in the same wide or medium-wide camera composition and is in a stable completed pose with clear ground or support contact; the same important object is visibly supported in its logical final position; contact shadows, gravity, completed landing, impact absorption, follow-through, and settling are visible. Preserve exact roles, cast count, screen direction, and final payoff expression. No unresolved airborne character, floating prop, impossible balance, frozen peak-of-jump ending, missing character, or camera-caused crop-out. No extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
     videoLock: lock,
     videoTimeline: adaptedTimeline,
     musicPath: musicLines,
     soundEffects: sfxLines,
-    finalGenerationRule: `Follow the reference frames. Only the ${cast.length} checked characters may appear: ${cast.map((profile) => profile.shortName).join(", ")}. Preserve exact identities, roles, colors, clothing, proportions, scale, exact character count, and correct sound ownership. Preserve chronological cause-and-effect, physical grounding, gravity, visible support, smooth anticipation-to-settling motion, one dominant readable beat at a time, and a completed ending. Do not add, remove, duplicate, replace, transform, teleport, hover, glide, or freeze characters. Do not introduce unchecked saved characters, random voices, unrequested speech, random props, unexplained changes, sudden cuts, sudden appearances, sudden disappearances, or broken collision physics.${form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""}`,
+    finalGenerationRule: `Follow the reference frames. Only the ${cast.length} checked characters may appear: ${cast.map((profile) => profile.shortName).join(", ")}. Keep every selected character and ${object} continuously present, visible, identifiable, and traceable from 0:00 through the settled final frame unless a customer-authorized path is explicitly shown. Preserve exact identities, roles, colors, clothing, proportions, scale, screen direction, exact character count, and correct sound ownership. Preserve chronological cause-and-effect, action ownership, physical grounding, gravity, visible support, tone from frame zero, smooth anticipation-to-settling motion, one dominant readable beat at a time, and a completed ending. Do not add, remove, duplicate, replace, transform, spawn, despawn, teleport, hover, glide, crop out, randomly gesture, spin, jump, or freeze characters. Do not introduce unchecked saved characters, random voices, unrequested speech, random props, unexplained changes, sudden cuts, sudden appearances, sudden disappearances, or broken collision physics.${form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""}`,
   };
   return Object.fromEntries(
     Object.entries(generatedPack).map(([key, value]) => [key, removeUncheckedCharacters(value)]),
@@ -646,6 +704,15 @@ export function inspectProductionPack(
     finding("Unchecked characters are excluded", unchecked.every((profile) =>
       !requiredVisuals.includes(profile.fullIdentity.toLowerCase()) &&
       !requiredVisuals.includes(profile.shortName.toLowerCase())), "Unchecked saved characters must not appear in generated prompts."),
+    finding("Strict cast presence lock", /strict presence lock/.test(pack.videoLock.toLowerCase()) && cast.every((profile) =>
+      pack.startFramePrompt.toLowerCase().includes(profile.shortName.toLowerCase()) && pack.endFramePrompt.toLowerCase().includes(profile.shortName.toLowerCase())), "All active characters must be present at both reference frames and locked through the video."),
+    finding("No spawn or despawn wording", !/\b(?:spawn|despawn|suddenly appears?|suddenly disappears?|vanishes?|reappears?)\b/.test(`${pack.videoTimeline}\n${pack.startFramePrompt}\n${pack.endFramePrompt}`.toLowerCase()) && /no selected character may suddenly appear, disappear, spawn, vanish/.test(pack.videoLock.toLowerCase()), "Remove spawn, vanish, sudden appearance, and unexplained reappearance wording."),
+    finding("Important object continuity", pack.startFramePrompt.toLowerCase().includes(form.importantObject.toLowerCase()) && pack.endFramePrompt.toLowerCase().includes(form.importantObject.toLowerCase()) && /object continuity lock/.test(pack.videoLock.toLowerCase()), "The important object needs visible start and final positions with a continuous path."),
+    finding("Action ownership and traceability", /action ownership lock/.test(pack.videoLock.toLowerCase()) && ranges.every((range) => range.start >= 0 && range.end > range.start) && /at exactly 0:00|0:00/.test(pack.videoTimeline.toLowerCase()), "Every beat must name an owner, cause, result, and transition from 0:00."),
+    finding("Natural-motion filter", /natural movement lock/.test(all) && /no random gestures/.test(all) && /no random.*spin/.test(all) && !/\brandomly\s+(?:spins?|jumps?|waves?|dances?|gestures?)\b/.test(pack.videoTimeline.toLowerCase()), "Explicitly prohibit random gestures, spinning, jumping, and unrelated movement."),
+    finding("Tone from frame zero", /tone-from-zero lock/.test(pack.videoLock.toLowerCase()) && form.tones.every((tone) => pack.startFramePrompt.toLowerCase().includes(tone.toLowerCase()) || pack.videoLock.toLowerCase().includes(tone.toLowerCase())), "Selected tones must control the start frame and first action at 0:00."),
+    finding("Fast begins at exactly 0:00", !form.tones.includes("Fast") || (/fast-at-0:00 lock/.test(pack.videoLock.toLowerCase()) && /at exactly 0:00/.test(pack.videoTimeline.toLowerCase())), "Fast tone needs named active movement at exactly 0:00 with no static opening."),
+    finding("Camera keeps active cast visible", /wide or medium-wide/.test(`${pack.startFramePrompt}\n${pack.endFramePrompt}\n${pack.videoLock}`.toLowerCase()) && /no accidental crop-out|camera-caused disappearance/.test(all), "Use a continuous wide or medium-wide view that does not lose active characters."),
     finding("Compact locks match both frames", cast.every((profile) => {
       const identity = profile.fullIdentity.toLowerCase();
       return pack.startFramePrompt.toLowerCase().includes(identity) && pack.endFramePrompt.toLowerCase().includes(identity);

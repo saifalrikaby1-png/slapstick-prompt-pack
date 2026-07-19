@@ -623,8 +623,12 @@ ${pack.finalGenerationRule}`;
 }
 
 export function visualVideoPrompt(pack: ProductionPack) {
+  const visualLock = pack.videoLock
+    .split("\n")
+    .filter((line) => !/^(Audio\/voice rule|Adapter audio policy):/i.test(line.trim()))
+    .join("\n");
   return `VIDEO LOCK
-${pack.videoLock}
+${visualLock}
 
 SECOND-BY-SECOND VIDEO ACTION
 ${pack.videoTimeline}

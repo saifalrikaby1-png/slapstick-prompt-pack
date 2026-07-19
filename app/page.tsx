@@ -499,14 +499,40 @@ export default function Home() {
     try {
       let result: { name?: string; description?: string; title?: string; error?: string };
       if (mode === "demo") {
-        const demo = {
-          location: { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a giant spiral oak, with teal moss borders, warm honey light, three recurring acorn lanterns, radial ground grooves, and one distant ribbon waterfall. Preserve the spiral trunk, lantern count, palette, landmark positions, ground pattern, lighting direction, and open central action lane in every production." },
-          object: { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry made of golden layered crust and blue sugar-glass filling, with one visible spring hinge. It compresses, rebounds, and rolls predictably; characters interact by pressing the crust edge. Preserve its crescent silhouette, gold-and-blue palette, size, hinge, material, starting compression, final state, and single-object count." },
-          action: { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: the Enemies press the Moon-Spring Tart toward the Hero; its visible hinge compresses, releases left-to-right, and rebounds along the same path. The Hero makes one readable dodge, the Enemies receive the harmless soft landing, Companions react from fixed positions, and the object settles visibly within ${form.duration} seconds.` },
-          payoff: { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled tart with a relieved smile; each Enemy finishes behind it in a distinct harmless seated reaction; Companions remain in their established side positions. The object is fully visible, the location is unchanged, the final beat is playful, and the held pose can loop naturally to the opening." },
-          title: { title: "The Moon-Spring Double Bounce" },
+        const demoCandidates = {
+          location: [
+            { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a giant spiral oak, with teal moss borders, warm honey light, three recurring acorn lanterns, radial ground grooves, and one distant ribbon waterfall. Preserve the spiral trunk, lantern count, palette, landmark positions, ground pattern, lighting direction, and open central action lane in every production." },
+            { name: "Copperleaf Picnic Terrace", description: "A tidy copper-leaf woodland terrace with a cream stone rail, two blue pennants, soft afternoon light, and one wide central action lane. Preserve its landmark positions, palette, prop count, lighting direction, and uncluttered background." },
+          ],
+          object: [
+            { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry made of golden layered crust and blue sugar-glass filling, with one visible spring hinge. It compresses, rebounds, and rolls predictably; characters interact by pressing the crust edge. Preserve its crescent silhouette, gold-and-blue palette, size, hinge, material, starting compression, final state, and single-object count." },
+            { name: "Copperberry Popper", description: "A fist-sized copper berry dispenser with one teal push button and three visible berry slots. It tilts, clicks, and releases one soft berry at a time. Preserve its rounded silhouette, copper-and-teal palette, scale, button position, material, starting state, final state, and single-object count." },
+          ],
+          action: [
+            { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: the Enemies press the Moon-Spring Tart toward the Hero; its visible hinge compresses, releases left-to-right, and rebounds along the same path. The Hero makes one readable dodge, the Enemies receive the harmless soft landing, Companions react from fixed positions, and the object settles visibly within ${form.duration} seconds.` },
+            { name: "Berry Button Backfire", description: `One setup, one action, one consequence, and one reaction: an Enemy presses the visible button, the object tips along a readable path, and its harmless payload lands on the Enemies. The Hero makes one clear dodge, Companions stay fixed, and every object settles visibly within ${form.duration} seconds.` },
+          ],
+          payoff: [
+            { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled tart with a relieved smile; each Enemy finishes behind it in a distinct harmless seated reaction; Companions remain in their established side positions. The object is fully visible, the location is unchanged, the final beat is playful, and the held pose can loop naturally to the opening." },
+            { name: "Berry Crown Victory", description: "The Hero ends foreground-center clean and smiling while each Enemy sits harmlessly behind with one berry balanced overhead. Companions keep their established positions, all objects remain visible, the location stays unchanged, and the final held pose creates a readable loop." },
+          ],
+          title: [
+            { title: "The Moon-Spring Double Bounce" },
+            { title: "The Copperberry Button Backfire" },
+            { title: "Biscuit and the One-Click Trouble Trap" },
+          ],
         };
-        result = demo[kind];
+        if (kind === "title") {
+          const candidates = demoCandidates.title;
+          const usedTitles = new Set(savedPacks.map((saved) => saved.title.toLowerCase().trim()));
+          result = candidates.find((candidate) => !usedTitles.has(candidate.title.toLowerCase())) || candidates[0];
+        } else {
+          const candidates = demoCandidates[kind];
+          const saved = creativeAssets.filter((asset) => asset.kind === kind);
+          result = form.allowPreviouslySavedObjects && kind === "object"
+            ? candidates[0]
+            : candidates.find((candidate) => !creativeCollision(candidate, saved)) || candidates[0];
+        }
       } else {
         const action = kind === "title"
           ? "generateVideoTitle"

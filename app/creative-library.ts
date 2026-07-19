@@ -8,6 +8,31 @@ export function normalizeCreativeIdentity(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function editDistance(left: string, right: string) {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    let diagonal = previous[0];
+    previous[0] = row;
+    for (let column = 1; column <= right.length; column += 1) {
+      const above = previous[column];
+      previous[column] = Math.min(
+        previous[column] + 1,
+        previous[column - 1] + 1,
+        diagonal + (left[row - 1] === right[column - 1] ? 0 : 1),
+      );
+      diagonal = above;
+    }
+  }
+  return previous[right.length];
+}
+
+function nearIdentity(left: string, right: string) {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const longest = Math.max(left.length, right.length);
+  return longest >= 5 && editDistance(left, right) <= Math.max(1, Math.floor(longest * 0.15));
+}
+
 export function migrateCreativeAsset(value: unknown): CreativeAsset | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
@@ -60,7 +85,7 @@ export function creativeCollision(candidate: Pick<CreativeAsset, "name" | "descr
   const name = normalizeCreativeIdentity(candidate.name);
   const keywords = new Set(normalizeCreativeIdentity(candidate.description).split(" ").filter((word) => word.length > 5));
   return saved.some((asset) => {
-    if (normalizeCreativeIdentity(asset.name) === name) return true;
+    if (nearIdentity(normalizeCreativeIdentity(asset.name), name)) return true;
     const other = new Set(normalizeCreativeIdentity(asset.description).split(" ").filter((word) => word.length > 5));
     const overlap = [...keywords].filter((word) => other.has(word)).length;
     return keywords.size >= 4 && overlap / keywords.size >= 0.6;

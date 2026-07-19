@@ -1,163 +1,122 @@
-const sectionKeys = [
-  "episodeTitle",
-  "startFrameImagePrompt",
-  "endFrameImagePrompt",
-  "mainVideoPrompt",
-  "selectedModelPrompt",
-  "alternativeModelPrompt",
-  "videoTimelineBySeconds",
-  "soundEffectsPlan",
-  "musicPlan",
-  "musicPathBySeconds",
-  "soundEffectsTimelineBySeconds",
-  "characterVocalLock",
-  "characterBibleUsed",
-  "qualitySummary",
-  "productionSafetyNotes",
-  "facebookCaption",
-  "instagramCaption",
-  "tiktokCaption",
-  "youtubeTitle",
-  "youtubeDescription",
-  "youtubeHashtags",
-  "pinnedComment",
-  "retentionChecklist",
-] as const;
+import {
+  CharacterProfile,
+  ProductionForm,
+  ProductionPack,
+  QualityFinding,
+  productionPackKeys,
+} from "../../production-types";
+import { buildAuthorizedSceneInventory, buildObjectStateLedger, selectedModelAdapter } from "../../production-engine";
 
-type FormPayload = {
-  hero: string;
-  enemies: string;
-  object: string;
-  trap: string;
-  duration: string;
-  ratio: string;
-  platform: string;
-  videoModel: string;
-  style: string;
-  tone: string;
-  musicDirection: string;
-  customMusic: string;
-  dialogueMode: string;
-  heroVocalStyle: string;
-  enemyVocalStyle: string;
-  narratorVocalStyle: string;
-  vocalLockNotes: string;
-  characterBible: string;
-  qualityControlEnabled: boolean;
-  qcPreventDuplication: boolean;
-  qcPreserveIdentity: boolean;
-  qcPreventObjectChanges: boolean;
-  qcPreventSuddenCuts: boolean;
-  qcEnforceRatio: boolean;
-  qcEnforceDuration: boolean;
-  qcStrongHook: boolean;
-  qcStrongPayoff: boolean;
-  qcVocalConsistency: boolean;
-  qcFamilyFriendly: boolean;
-  additionalQualityNotes: string;
-  notes: string;
+type RequestBody = {
+  action?: "generate" | "fix";
+  form?: ProductionForm;
+  characters?: CharacterProfile[];
+  activeCharacterIds?: string[];
+  activeCharacters?: Array<{
+    id: string;
+    name: string;
+    role: "Hero" | "Companion" | "Enemy";
+    fullIdentity: string;
+    description: string;
+  }>;
+  pack?: ProductionPack;
+  qualityFindings?: QualityFinding[];
 };
 
-const repairSectionKeys: Record<string, readonly (typeof sectionKeys)[number][]> = {
-  "start-frame": ["startFrameImagePrompt"],
-  "end-frame": ["endFrameImagePrompt"],
-  "main-video": ["mainVideoPrompt"],
-  "selected-model": ["selectedModelPrompt"],
-  "music-path": ["musicPathBySeconds"],
-  "sfx-timeline": ["soundEffectsTimelineBySeconds"],
-  captions: ["facebookCaption", "instagramCaption", "tiktokCaption"],
-  "youtube-metadata": ["youtubeTitle", "youtubeDescription", "youtubeHashtags"],
-};
-
-const variantKeys = [
-  "episodeTitle",
-  "startFrameImagePrompt",
-  "endFrameImagePrompt",
-  "mainVideoPrompt",
-  "selectedModelPrompt",
-  "videoTimelineBySeconds",
-  "musicPathBySeconds",
-  "soundEffectsTimelineBySeconds",
-  "captions",
-  "hashtags",
-  "pinnedComment",
-  "retentionChecklist",
-] as const;
-
-type OpenAIErrorPayload = {
+type OpenAIError = {
   error?: {
-    message?: string;
     type?: string;
-    code?: string | null;
+    code?: string;
+    message?: string;
     param?: string | null;
   };
 };
 
-function safeOpenAIError(status: number, error?: OpenAIErrorPayload["error"]) {
-  const code = error?.code?.toLowerCase() || "";
-  const type = error?.type?.toLowerCase() || "";
-  const message = error?.message?.toLowerCase() || "";
+const schema = {
+  type: "object",
+  additionalProperties: false,
+  properties: Object.fromEntries(productionPackKeys.map((key) => [key, { type: "string" }])),
+  required: productionPackKeys,
+};
 
-  if (status === 401 || code === "invalid_api_key" || type === "authentication_error") {
-    return {
-      errorType: "invalid_api_key",
-      error: "Invalid API key. Check OPENAI_API_KEY in .env.local.",
-    };
+function safeError(status: number, error?: OpenAIError["error"]) {
+  const code = `${error?.code || ""} ${error?.type || ""} ${error?.message || ""}`.toLowerCase();
+  if (status === 401 || code.includes("invalid_api_key")) {
+    return { errorType: "invalid_api_key", error: "Invalid API key. Check OPENAI_API_KEY in .env.local." };
   }
-
-  if (
-    status === 429 ||
-    code === "insufficient_quota" ||
-    type === "insufficient_quota" ||
-    message.includes("quota") ||
-    message.includes("billing")
-  ) {
-    return {
-      errorType: "insufficient_quota",
-      error: "Insufficient quota or billing is not active for this OpenAI API account.",
-    };
+  if (status === 429 && (code.includes("quota") || code.includes("billing"))) {
+    return { errorType: "insufficient_quota", error: "Insufficient quota or billing is not active for this API key." };
   }
-
-  if (
-    status === 404 ||
-    code === "model_not_found" ||
-    code === "invalid_model" ||
-    message.includes("model") && (message.includes("access") || message.includes("exist"))
-  ) {
-    return {
-      errorType: "model_not_available",
-      error: "The configured OpenAI model is not available for this API account.",
-    };
+  if (status === 404 || code.includes("model_not_found") || code.includes("model")) {
+    return { errorType: "model_unavailable", error: "The configured OpenAI model is not available for this API key." };
   }
-
-  return {
-    errorType: "api_request_failed",
-    error: "The OpenAI API request failed. Please try again.",
-  };
+  return { errorType: "api_request_failed", error: "OpenAI API request failed. Check the server logs for details." };
 }
 
-function isFormPayload(value: unknown): value is FormPayload {
+function completePack(value: unknown): value is ProductionPack {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Record<string, unknown>;
-  const standardFields = [
-    "hero", "enemies", "object", "trap", "duration", "ratio", "platform", "videoModel",
-    "style", "tone", "musicDirection", "customMusic", "dialogueMode", "heroVocalStyle",
-    "enemyVocalStyle", "narratorVocalStyle", "vocalLockNotes", "additionalQualityNotes", "notes",
-  ];
-  const qualityFlags = [
-    "qualityControlEnabled", "qcPreventDuplication", "qcPreserveIdentity", "qcPreventObjectChanges",
-    "qcPreventSuddenCuts", "qcEnforceRatio", "qcEnforceDuration", "qcStrongHook", "qcStrongPayoff",
-    "qcVocalConsistency", "qcFamilyFriendly",
-  ];
-  return standardFields.every((key) => typeof candidate[key] === "string" && candidate[key].length <= 1000) &&
-    qualityFlags.every((key) => typeof candidate[key] === "boolean") &&
-    typeof candidate.characterBible === "string" && candidate.characterBible.length <= 12000;
+  return productionPackKeys.every((key) => typeof candidate[key] === "string");
+}
+
+function generationInstructions(action: "generate" | "fix") {
+  return `You are the production intelligence engine for Slapstick Prompt Pack.
+Return clean JSON matching the supplied schema exactly. Do not add markdown or extra keys.
+
+Create one synchronized, family-friendly cartoon-video production plan. The nine fields are:
+- videoTitle: preserve the customer's non-empty manual title exactly; otherwise create one memorable, original, non-generic title without hashtags, quotation marks, trademarks, or franchise names.
+- characterBuildingPrompt: one labeled subsection for every active character when enabled; return an empty string when disabled.
+- startFramePrompt: a production-ready still-image prompt with the selected start-frame ratio, full cast identity locks, composition, first-second hook, lighting, geography, and negative constraints.
+- endFramePrompt: a matching still-image prompt with the selected end-frame ratio, exact environment/identity continuity, hero's clear win, enemies receiving the harmless backfire, and a readable payoff.
+- videoLock: metadata and immutable production rules covering platform, model, ratio, duration, style, tone, motion level, cast, roles, object, setting, narration/voice, continuity, safety, and negative constraints.
+- videoTimeline: non-overlapping second ranges covering exactly the selected duration. Begin visible action at 0:00 and end with a resolved, replayable payoff.
+- musicPath: ranges synchronized to the video timeline. Respect no-music mode; otherwise specify score, energy, rhythm, mix, and loop resolution.
+- soundEffects: ranges synchronized to visible actions only. Include mix guidance and never invent off-screen action.
+- finalGenerationRule: a concise final pass requiring the model to obey the locks and timelines as one continuous production.
+
+Hard requirements:
+- Preserve the exact selected video, start-frame, and end-frame ratios and custom dimensions where supplied.
+- Materially follow the selected model adapter, including its prompt structure, camera, motion, pacing, reference-frame, audio, and negative policies. Do not merely mention the model name.
+- Translate every selected tone into pacing, staging, expressions, camera behavior, motion, timing, music, or sound.
+- Preserve the exact duration in every timing section; all ranges must align and cover it completely.
+- Include the selected platform and selected AI video model prominently in videoLock.
+- Use the supplied Character Library descriptions as authoritative. Introduce full character names once, then short names.
+- Only activeCharacters may appear. Never introduce an unchecked saved character. Use exact active names in both frames, the lock, and timeline.
+- Keep hero, enemy, companion, and supporting roles unambiguous. The hero must clearly win. Enemies must receive their own harmless trap/backfire.
+- Stable identity, face, species, colors, wardrobe, scale, anatomy, voices, movement style, and screen direction.
+- No duplicated characters, extra unrequested characters, extra limbs, distorted limbs, morphing faces, merged bodies, random props, sudden background changes, or unexplained objects appearing/disappearing.
+- No sudden cuts unless expressly requested. Prefer one continuous shot with smooth, logical, causally readable movement.
+- No text, subtitles, logos, or watermarks unless expressly requested.
+- Follow voice layers exactly. No Spoken Dialogue is exclusive and means no spoken dialogue, narrator, lip-sync, or speech text; otherwise include only selected speaker layers and keep ownership unambiguous.
+- Keep music and SFX synchronized with visible action and duration.
+- Apply a PHYSICAL GROUNDING LOCK in videoLock: define a clear ground plane or support surface; all standing characters have visible contact; ordinary objects rest, are held, attached, or move only from a visible force; preserve believable weight, contact shadows, and gravity. Never use unexplained hovering, drifting, gliding, elevation changes, or floating props.
+- Apply a SMOOTH MOTION LOCK in videoLock: every important action has anticipation, acceleration, main movement, impact/change, follow-through, deceleration, and a settled final pose. No snapping, teleportation, gliding feet, frozen midair motion, instant reversal, collision intersection, or object passing through a body or surface.
+- When any jump, launch, bounce, fall, or thrown object is needed, explicitly state the visible trigger, direction, force, continuous gravity-driven arc, peak, descent, landing surface, impact absorption, follow-through, and settling. Do not add airborne motion otherwise.
+- Make the start frame physically grounded and motion-ready: visible support contact and shadows, no completed action, no floating props, and a readable action lane. Make the end frame physically resolved: final support contact, no unresolved airborne character or object, complete landing and settling, matching ground plane and camera perspective.
+- When Ultra Retention Mode is enabled, create an immediate first-frame visual hook, a meaningful active change within the first second and 0–3 seconds, one dominant readable event per beat, a physically caused major escalation around 50–65% of duration, and a completed final payoff occupying the last phase. Do not force frantic pacing for Calm or Emotional unless Fast, Energetic, or Chaotic slapstick is also selected.
+- Translate every selected tone into concrete pace, motion, camera, expression, music, and sound behavior. Fast must use ultra-fast readable pacing; Chaotic slapstick must remain controlled causal chaos; Calm must avoid inappropriate frantic motion.
+- When both Fast and Chaotic slapstick are selected, activate EXTREME FAST-CHAOTIC MOTION: at exactly 0:00 the hero is already in a visible physical action and the named object responds; no fade-in, static hold, title card, slow reveal, idle beat, or delayed trigger. Use compressed anticipation (at most 0.7 seconds), immediate powerful acceleration, short connected 0.4–1.2 second beats, instant readable reactions, a high-impact causal midpoint backfire around 45–60% of duration, and a short stable payoff. Avoid the words slowly, gradually, gently, calmly, long pause, slow reveal, lingering, waits, and remains still. Keep one continuous causal action chain and a wide action-ready camera; music and sound begin at 0:00 with the first physical event.
+- Add a strict presence and visibility lock: every active character is physically established and visible in the opening frame, remains continuously present and readable through the end frame, and retains the exact count, role, identity, and screen direction. Do not spawn, despawn, vanish, reappear, merge, split, substitute, transform, or accidentally crop out any selected character. Only allow a customer-explicit entrance, exit, obstruction, or off-screen movement when its timed continuous path, edge/surface, direction, return state, and final position are shown.
+- Add an object continuity lock: the important object has a visible supported starting position, moves only through a named visible force along a continuous path, remains identifiable, and has a visible final position. Never make it appear from nowhere, disappear, duplicate, or change design without a customer-requested complete visible transition.
+- Add a natural-motion and action-ownership lock: every timeline range begins at 0:00 and names the exact character or object owner, action, direction, visible cause, result, and transition. Prohibit random gestures, twitching, dancing, spinning, jumping, sliding, snapping, unrelated reactions, random background activity, decorative effects that hide the cast, and random camera movement.
+- Apply tone from frame zero: selected tones control the opening pose, first movement, camera, expression, music, and sound at exactly 0:00, with no neutral introduction. If Fast is selected, identify who is already moving, what object responds, direction, cause, expression, and wide camera state at exactly 0:00; no static hold, fade-in, title card, delayed motion, or slow reveal.
+- Keep a continuous wide or medium-wide camera composition whenever practical so active characters remain visible. No camera-caused disappearance, unexplained crop-out, action-axis reversal, sudden reframing, or empty/background-only shot.
+- Apply a CLOSED-WORLD CONTINUITY RULE: use only the supplied Authorized Scene Inventory—checked active characters, selected important object, named main-action components, fixed environment, and explicit customer-authorized exceptions. Never invent a new prop, creature, vehicle, decoration, particle source, foreground item, interactive background element, or effect source for hook, escalation, impact, audio, or payoff.
+- Include AUTHORIZED CAST, AUTHORIZED OBJECTS, FIXED ENVIRONMENT, FORBIDDEN ADDITIONS, SCENE INVENTORY LOCK, EXACT COUNT LOCK, and NO-SPAWN / NO-DESPAWN LOCK inside videoLock. Every timeline range inherits the exact entity state from the prior range; no scene reset, duplicate, replacement, object in two positions, new entity, or removed entity.
+- Respect object state ledgers: every authorized important object has a visible supported start position, one named force and continuous path, and a visible supported final position. No unauthorized object transformation, destruction, disappearing, or duplication.
+- Default to one continuous wide/medium-wide shot. No sudden cut, jump cut, cutaway, angle replacement, camera teleport, freeze frame, midair freeze, or static hold. A customer-authorized cut must state its exact time and preserve traceability; a tension hold remains living with subtle movement rather than freezing.
+- If Character Cartoon Sounds is enabled, place concise nonverbal vocalizations inside soundEffects only. Assign each sound to an exact active character name and visible reaction. No understandable words, quotation-mark dialogue, random voices, or character vocalizations in musicPath.
+- Avoid contradictory, overloaded instructions. Prioritize polished, coherent, stable, zero-error continuity.
+- Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
+
+${action === "fix"
+    ? "Repair task: review the current complete pack and quality findings. Return a complete synchronized replacement pack. Improve weak sections while preserving every selected setting, character lock, story fact, platform, model adapter, ratio, duration, tone, voice layer, audio choice, narration choice, manually written title, and already-strong section."
+    : "Generation task: build the complete synchronized pack from the supplied form and character records."}`;
 }
 
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
+  if (!apiKey?.trim()) {
     return Response.json(
       {
         errorType: "missing_api_key",
@@ -167,221 +126,53 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: unknown;
+  let body: RequestBody;
   try {
-    body = await request.json();
+    body = await request.json() as RequestBody;
   } catch {
-    return Response.json({ error: "The form data could not be read." }, { status: 400 });
+    return Response.json({ error: "The production request was not valid JSON." }, { status: 400 });
   }
 
-  const requestBody = body && typeof body === "object" ? body as Record<string, unknown> : {};
-  const action = requestBody.action === "fix" || requestBody.action === "regenerateSection" || requestBody.action === "generateVariants"
-    ? requestBody.action
-    : "generate";
-  const form: unknown = action === "generate" ? body : requestBody.form;
-  if (!isFormPayload(form) || !form.hero.trim() || !form.enemies.trim() || !form.object.trim() || !form.trap.trim()) {
-    return Response.json({ error: "Please complete all four story ingredients." }, { status: 400 });
+  const action = body.action === "fix" ? "fix" : "generate";
+  if (!body.form || !Array.isArray(body.characters)) {
+    return Response.json({ error: "The production form and character records are required." }, { status: 400 });
+  }
+  const activeCharacters = body.activeCharacters;
+  const activeIds = body.activeCharacterIds;
+  if (!Array.isArray(activeCharacters) || !Array.isArray(activeIds) || activeCharacters.length < 1) {
+    return Response.json({ error: "At least one active character is required." }, { status: 400 });
+  }
+  const uniqueIds = new Set(activeCharacters.map((character) => character.id));
+  const validActiveCharacters = uniqueIds.size === activeCharacters.length &&
+    activeIds.length === activeCharacters.length &&
+    activeIds.every((id) => uniqueIds.has(id)) &&
+    activeCharacters.filter((character) => character.role === "Hero").length === 1 &&
+    activeCharacters.every((character) =>
+      character.id.trim() && character.name.trim() && character.fullIdentity.trim() &&
+      character.description.trim() && ["Hero", "Companion", "Enemy"].includes(character.role));
+  if (!validActiveCharacters) {
+    return Response.json({ error: "Active characters need unique IDs, valid roles, complete identity fields, and exactly one Hero." }, { status: 400 });
+  }
+  if (action === "fix" && !completePack(body.pack)) {
+    return Response.json({ error: "A complete current production pack is required for repair." }, { status: 400 });
   }
 
-  const currentPack = requestBody.pack && typeof requestBody.pack === "object"
-    ? requestBody.pack as Record<string, unknown>
-    : null;
-  if (action !== "generate" && (!currentPack || !sectionKeys.every((key) => typeof currentPack[key] === "string"))) {
-    return Response.json({ error: "The current production pack could not be read." }, { status: 400 });
-  }
-  const selectedRepairKeys = action === "regenerateSection" && typeof requestBody.selectedSection === "string"
-    ? repairSectionKeys[requestBody.selectedSection]
-    : undefined;
-  if (action === "regenerateSection" && !selectedRepairKeys) {
-    return Response.json({ error: "Choose a valid section to regenerate." }, { status: 400 });
-  }
-  const outputKeys = action === "regenerateSection" ? [...selectedRepairKeys!] : [...sectionKeys];
-  const sectionSchema = {
-    type: "object",
-    properties: Object.fromEntries(outputKeys.map((key) => [key, { type: "string" }])),
-    required: outputKeys,
-    additionalProperties: false,
-  };
-  const variantSchema = {
-    type: "object",
-    properties: Object.fromEntries(variantKeys.map((key) => [key, { type: "string" }])),
-    required: [...variantKeys],
-    additionalProperties: false,
-  };
-  const schema = action === "generateVariants"
+  const inventoryCharacters = body.characters.filter((character) => activeIds.includes(character.id));
+  const authorizedSceneInventory = buildAuthorizedSceneInventory(body.form, inventoryCharacters);
+  const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
+  const input = action === "fix"
     ? {
-        type: "object",
-        properties: {
-          safeVersion: variantSchema,
-          viralVersion: variantSchema,
-          cinematicVersion: variantSchema,
-        },
-        required: ["safeVersion", "viralVersion", "cinematicVersion"],
-        additionalProperties: false,
+        form: body.form,
+        modelAdapter: selectedModelAdapter(body.form),
+        characters: body.characters,
+        activeCharacterIds: activeIds,
+        activeCharacters,
+        authorizedSceneInventory,
+        objectStateLedger,
+        currentPack: body.pack,
+        qualityFindings: body.qualityFindings || [],
       }
-    : sectionSchema;
-
-  const creativeBrief = {
-    hero: form.hero,
-    enemies: form.enemies,
-    "object or food": form.object,
-    "trap type": form.trap,
-    duration: form.duration,
-    "selected video ratio": form.ratio,
-    "target platform": form.platform,
-    "selected AI video model": form.videoModel,
-    "visual style": form.style,
-    tone: form.tone,
-    "music direction": form.musicDirection === "Custom"
-      ? form.customMusic || "Custom direction not supplied"
-      : form.musicDirection,
-    "dialogue mode": form.dialogueMode,
-    "hero vocal style": form.heroVocalStyle,
-    "enemy vocal style": form.enemyVocalStyle,
-    "narrator vocal style": form.narratorVocalStyle,
-    "vocal lock notes": form.vocalLockNotes,
-    "character library / brand bible": form.characterBible || "No saved character profiles matched this setup",
-    "prompt quality control": {
-      enabled: form.qualityControlEnabled,
-      "prevent character duplication": form.qcPreventDuplication,
-      "preserve character identity": form.qcPreserveIdentity,
-      "prevent sudden object changes": form.qcPreventObjectChanges,
-      "prevent sudden cuts": form.qcPreventSuddenCuts,
-      "enforce ratio consistency": form.qcEnforceRatio,
-      "enforce duration consistency": form.qcEnforceDuration,
-      "strong opening hook": form.qcStrongHook,
-      "strong ending payoff": form.qcStrongPayoff,
-      "dialogue and vocal consistency": form.qcVocalConsistency,
-      "family-friendly output": form.qcFamilyFriendly,
-      "additional quality notes": form.additionalQualityNotes || "None",
-    },
-    "extra notes": form.notes || "None",
-  };
-
-  const instructions = `You are the senior creative director for Slapstick Prompt Pack.
-Create a polished, immediately usable production pack for a family-friendly cartoon short.
-
-Non-negotiable rules:
-- Return content for every field in the supplied JSON schema and nothing outside the schema.
-- Keep everything funny, safe, and family-friendly.
-- Read the supplied "prompt quality control" settings before writing. When enabled, inject every enabled safeguard naturally into the relevant image, video, model-specific, music, sound, vocal, timeline, and retention sections. Do not claim a disabled optional safeguard was applied.
-- Keep instructions clear, non-contradictory, readable, and free of unnecessary overload.
-- qualitySummary must list which Prompt Quality Control safeguards were enabled and applied, plus any additional quality notes.
-- productionSafetyNotes must be a short dynamic creator checklist tailored to the selected platform, ratio, duration, model, music direction, dialogue mode, and vocal locks.
-- Begin mainVideoPrompt with this exact five-line metadata structure, populated from the brief:
-  Target platform: [target platform]
-  Selected AI video model: [selected AI video model]
-  Video ratio: [selected video ratio]
-  Video duration: [duration]
-  Visual style: [visual style]
-- After the metadata and music/dialogue lines, mainVideoPrompt must include a clearly labeled TIMING BLOCK with exact second ranges covering the full supplied duration.
-- The mainVideoPrompt must clearly name both the target platform and selected AI video model.
-- selectedModelPrompt must be optimized specifically for the selected AI video model and name that model clearly.
-- alternativeModelPrompt must choose and name a sensible different model, then optimize specifically for it.
-- Introduce the full character names once at the beginning of each standalone visual/video prompt, then use short first names.
-- Make visible action begin in the first second; no static setup.
-- The start-frame image prompt, end-frame image prompt, main video prompt, OpenArt prompt, and Higgsfield prompt must all explicitly state and follow the selected video ratio from the creative brief.
-- Keep the start frame, end frame, and main video visually consistent: same environment, lighting direction, character scale, colors, props, screen direction, and story geography.
-- For 9:16 vertical, use a vertical 9:16 composition, center characters and action for Reels/Shorts/TikTok, and preserve safe top and bottom framing.
-- For 16:9 horizontal, use a horizontal 16:9 cinematic composition with wider left-to-right staging and clear spatial relationships.
-- For 1:1 square, use a square 1:1 composition and keep the important characters and action centered.
-- For 4:5 portrait, use a portrait 4:5 composition with centered characters and safe framing near the top and bottom.
-- The hero must clearly and decisively win at the end.
-- The enemies must clearly receive their own harmless trap/backfire.
-- Use a single continuous shot for short slapstick videos unless the selected model or target platform clearly requires shot-based output.
-- AI video prompts must include: "no text, no subtitles, no logo, no watermark."
-- Follow the supplied dialogue mode exactly:
-  No dialogue = no spoken dialogue and no narrator; use action, expressions, sound effects, and music only.
-  Character dialogue = only characters speak; lock each character to the supplied vocal style.
-  Narrator only = only the narrator speaks; characters have no spoken dialogue.
-  Narrator + character dialogue = narrator and characters may speak, with clearly separated, consistent voices.
-- When voices are allowed, include the relevant hero, enemy, and narrator vocal styles plus the vocal lock notes naturally in every video prompt.
-- selectedModelPrompt and alternativeModelPrompt must include: "stable character identity, consistent colors, no extra characters, no duplicated characters, no morphing faces."
-- Treat continuity and error prevention as the highest priority. Keep character identity, colors, scale, wardrobe, appearance, environment, lighting direction, screen direction, and story geography stable.
-- Avoid duplicated or extra characters, morphing faces, distorted limbs, merged bodies, broken anatomy, random props, sudden background changes, sudden unusual events, and unexplained environment changes.
-- Never make an object appear or disappear unless its movement, arrival, or removal is clearly shown on screen.
-- Keep motion smooth, logical, and causally readable. Do not use sudden cuts unless the extra notes explicitly request shot-based editing.
-- Keep start-frame, video action, and end-frame story continuity exact and production-safe.
-- Include natural quality guidance such as: "high quality output, polished, coherent, stable, zero-error continuity."
-- Make start-frame and end-frame prompts cinematic, detailed, visually specific, and composition-aware.
-- Start-frame and end-frame prompts must name the target platform, selected AI video model, and selected ratio.
-- mainVideoPrompt, selectedModelPrompt, and alternativeModelPrompt must state the selected music direction.
-- soundEffectsPlan must coordinate its timing and mix with the selected music direction and only use sounds with clear visible sources.
-- musicPlan must provide a production-ready score structure, timing, instrumentation/mood guidance, mix relationship to sound effects and voices, and a loop-friendly ending.
-- If music direction is No Music, mainVideoPrompt, soundEffectsPlan, and musicPlan must clearly state there is no background music.
-- videoTimelineBySeconds must cover the exact duration with aligned, non-overlapping ranges and describe the visible action in each range.
-- musicPathBySeconds must use the same timing ranges as the video timeline and describe mood, intensity, rhythm, ending sting, and loop point. If No Music is selected, state no background music in every range.
-- soundEffectsTimelineBySeconds must use the same timing ranges as the video timeline and place only visible, motivated effects such as whoosh, boing, pop, crash, bounce, squeak, sparkle, soft impact, or comedy hit.
-- characterVocalLock must summarize dialogue mode, each supplied vocal style, the vocal lock notes, and exactly who is allowed to speak.
-- characterBibleUsed must summarize the matched hero and enemy identities, appearance locks, role locks, vocal locks, continuity rules, and negative rules from the supplied Character Library / Brand Bible.
-- When a Character Library / Brand Bible is supplied, copy its appearance locks into both image prompts; apply appearance, personality, movement, color, scale, and role locks in every video prompt; include vocal locks whenever dialogue or vocal reactions are enabled; and merge all negative rules into continuity constraints.
-- Character-library rules override generic visual assumptions but never override family safety. Keep hero and enemy roles unambiguous: the hero wins in hero-format slapstick, and enemies receive their own harmless backfire in trap/backfire stories.
-- Duration handling: treat "1 minute" as 60 seconds and unclear duration as 15 seconds. For 10–15 seconds use a tight second-by-second slapstick timeline; for 20–30 seconds allow a slightly longer hook, build-up, and payoff; for 45–60 seconds use three clear ranged beats: hook, build-up, payoff.
-- The video timeline, music path, sound-effects timeline, Main Video Prompt, start frame, and end frame must describe one synchronized production plan with matching actions and no timing contradictions.
-- Apply platform behavior:
-  Facebook Reels = fast hook, clear slapstick, replayable ending, comment/follow CTA.
-  Instagram Reels = clean visuals, expressive characters, bright shareable moment.
-  TikTok = instant chaos, fast comedy, strong first second.
-  YouTube Shorts = clear story, title potential, high-retention loop.
-  YouTube 16:9 Video = wider cinematic staging, slightly more story structure.
-  Facebook 16:9 Video = wider framing, clear family-friendly comedy.
-  Generic Social Video = universal prompt.
-- Apply model behavior:
-  OpenArt - Seedance = direct, clear, motion-focused, image-to-video friendly.
-  OpenArt - Kling = stronger physical motion, camera movement, action continuity.
-  OpenArt - Veo = cinematic, natural, descriptive, coherent motion.
-  Higgsfield = cinematic camera motion, action beats, subject consistency, slapstick timing.
-  Runway = concise, cinematic, shot-focused.
-  Google Flow / Veo = descriptive, cinematic, family-friendly, clear scene continuity.
-  PixVerse = simple, direct, visually clear.
-  Generic AI Video Model = universal and platform-neutral.
-- Make captions short, platform-native, naturally mention the character names, and include a follow call-to-action.
-- Make the YouTube hashtags strong and include #BiscuitTheSquirrel and #BiscuitAndTheTroubleCrew.
-- Make the retention checklist practical, line-separated, and specific to the supplied duration.
-- Strengthen the start-frame prompt with a visible first-frame hook, ratio-safe readable composition, clear focal point, and controlled background.
-- Strengthen the end-frame prompt with a clean payoff, resolved readable character positions, matching ratio, and exact visual continuity from the start.
-- Keep Main Video Prompt action causally clear and prevent sudden cuts, unexplained objects, or contradictory actions when those quality safeguards are enabled.
-- Model-specific prompts must reinforce stable identity, negative constraints, motion clarity, continuity, and controlled camera behavior appropriate to the selected model.
-- Sound effects must map only to visible action beats; music must fit the selected mood and resolve inside the exact duration.
-- Do not include markdown code fences.`;
-
-  const qualityReport = requestBody.qualityReport && typeof requestBody.qualityReport === "object"
-    ? requestBody.qualityReport
-    : null;
-  const actionInstructions = action === "generateVariants"
-    ? `${instructions}
-
-Three-variant task:
-- Return exactly safeVersion, viralVersion, and cinematicVersion in the supplied schema.
-- Each version must contain all requested variant fields and remain a complete, internally synchronized production direction.
-- Safe Version: lowest generation-error risk, simple motion, minimal scene complexity, locked camera axis, strongest continuity.
-- Viral Version: strongest first second, funnier family-friendly slapstick, clearer replayable ending, platform-native captions and engagement.
-- Cinematic Version: richer visuals, controlled cinematic camera language, polished lighting, depth, atmosphere, and animated-film feeling.
-- All three must preserve the supplied cast, Character Bible, roles, object, trap outcome, platform, model, ratio, exact duration, music direction, dialogue mode, and vocal locks.
-- All three must include no duplicated characters, no extra unrequested characters, no sudden cuts, no sudden objects appearing or disappearing, no sudden background changes, no morphing faces, no distorted limbs, no random props, stable identity/colors/scale, smooth motion, and exact start-video-end continuity.
-- Captions must combine short Facebook, Instagram, and TikTok copy with follow calls-to-action. Hashtags must be strong and searchable.`
-    : action === "fix"
-    ? `${instructions}
-
-Repair task:
-- Review the supplied current production pack and local quality report.
-- Return the complete pack in the full schema.
-- Improve only weak or inconsistent sections; preserve already strong content wherever possible.
-- Preserve every selected setting, character-library lock, ratio, platform, model, duration, music direction, dialogue mode, and vocal lock exactly.
-- Resolve all reported warnings without introducing new characters, props, cuts, branding, dialogue, or continuity changes.`
-    : action === "regenerateSection"
-      ? `${instructions}
-
-Targeted regeneration task:
-- Return only the fields present in the supplied JSON schema.
-- Regenerate only the requested section group.
-- Use the current production pack as continuity context and do not contradict any unchanged section.
-- Preserve every selected setting, character-library lock, ratio, platform, model, duration, music direction, dialogue mode, vocal lock, timeline, and story outcome exactly.
-- Keep names, action geography, start/end continuity, and timing synchronized with the unchanged pack.`
-      : instructions;
-  const input = action === "generate"
-    ? `Build the production pack from this creative brief:\n${JSON.stringify(creativeBrief, null, 2)}`
-    : `Creative brief:\n${JSON.stringify(creativeBrief, null, 2)}\n\nCurrent production pack:\n${JSON.stringify(currentPack, null, 2)}\n\nLocal quality report:\n${JSON.stringify(qualityReport, null, 2)}${action === "regenerateSection" ? `\n\nRequested section group: ${String(requestBody.selectedSection)}` : ""}`;
+    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -392,16 +183,12 @@ Targeted regeneration task:
       },
       body: JSON.stringify({
         model: "gpt-5.6-sol",
-        instructions: actionInstructions,
-        input,
+        instructions: generationInstructions(action),
+        input: JSON.stringify(input, null, 2),
         text: {
           format: {
             type: "json_schema",
-            name: action === "generateVariants"
-              ? "slapstick_prompt_pack_variants"
-              : action === "regenerateSection"
-                ? "slapstick_prompt_pack_section_update"
-                : "slapstick_prompt_pack",
+            name: "slapstick_prompt_pack",
             strict: true,
             schema,
           },
@@ -410,45 +197,35 @@ Targeted regeneration task:
       }),
     });
 
-    const data = await openAIResponse.json() as OpenAIErrorPayload & {
+    const data = await openAIResponse.json() as OpenAIError & {
       output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
     };
-
     if (!openAIResponse.ok) {
-      console.error("[Slapstick API] OpenAI response error", {
+      console.error("[Slapstick Prompt Pack] OpenAI error", {
         status: openAIResponse.status,
         type: data.error?.type || null,
         code: data.error?.code || null,
         param: data.error?.param || null,
-        message: data.error?.message || "No error message returned",
+        message: data.error?.message || "No message returned",
       });
-      return Response.json(safeOpenAIError(openAIResponse.status, data.error), { status: openAIResponse.status });
+      return Response.json(safeError(openAIResponse.status, data.error), { status: openAIResponse.status });
     }
 
     const outputText = data.output
       ?.flatMap((item) => item.content || [])
       .find((content) => content.type === "output_text")
       ?.text;
-
     if (!outputText) {
       return Response.json({ error: "AI Mode returned an empty production pack. Please try again." }, { status: 502 });
     }
 
-    const pack = JSON.parse(outputText) as Record<string, unknown>;
-    const variantsComplete = action !== "generateVariants" || ["safeVersion", "viralVersion", "cinematicVersion"].every((variantName) => {
-      const variant = pack[variantName];
-      return Boolean(variant && typeof variant === "object" && variantKeys.every((key) => typeof (variant as Record<string, unknown>)[key] === "string"));
-    });
-    if (!variantsComplete || action !== "generateVariants" && !outputKeys.every((key) => typeof pack[key] === "string")) {
+    const pack = JSON.parse(outputText) as unknown;
+    if (!completePack(pack)) {
       return Response.json({ error: "AI Mode returned an incomplete production pack. Please try again." }, { status: 502 });
     }
-
-    if (action === "generateVariants") return Response.json({ variants: pack });
-    if (action === "fix") return Response.json({ pack });
-    if (action === "regenerateSection") return Response.json({ updates: pack });
     return Response.json(pack);
   } catch (caught) {
-    console.error("[Slapstick API] Network/API request failed", caught);
+    console.error("[Slapstick Prompt Pack] Network/API request failed", caught);
     return Response.json(
       {
         errorType: "network_api_failure",

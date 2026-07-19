@@ -78,6 +78,7 @@ const emptyCharacter: CharacterProfile = {
   colorLock: "",
   scaleLock: "",
   vocalStyleLock: "",
+  nonverbalSoundProfile: "",
   movementStyle: "",
   continuityRules: "",
   negativeRules: "No duplication, species changes, color drift, extra limbs, morphing, substitutions, or role changes.",
@@ -109,6 +110,7 @@ Negative identity rules: do not duplicate Biscuit; no extra squirrels, color cha
     colorLock: "Warm orange, soft cream markings, brown eyes, dark cocoa nose; no color drift.",
     scaleLock: "Small and agile; shorter than Grumpy and Sneaky; stable proportions and tail volume.",
     vocalStyleLock: "Bright family-friendly energy with consistent non-verbal squeaks and playful reactions.",
+    nonverbalSoundProfile: "High, lively wordless reactions in short controlled bursts; light effort breaths, quick surprise reactions, and brief happy reactions. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Quick hops, tail-balanced jumps, light scampering, precise turns, and clean landings.",
     continuityRules: "Biscuit remains the same orange squirrel hero and clearly completes the ending payoff.",
     negativeRules: "No duplicates, extra squirrels, color changes, missing tail, morphing, extra limbs, random outfits, or role reversal.",
@@ -138,6 +140,7 @@ Negative identity rules: do not duplicate Grumpy; no extra hedgehogs, species ch
     colorLock: "Rich plum purple, lavender muzzle and belly, aubergine brows and nose.",
     scaleLock: "Wider and slightly taller than Biscuit; compact, weighty, and stable.",
     vocalStyleLock: "Low funny grumbles, effort huffs, and surprised squeaks.",
+    nonverbalSoundProfile: "Low-medium, weighty wordless reactions with short effort breaths, restrained frustration sounds, and brief impact reactions. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Stompy waddles, stubborn charges, short hops, and controlled rolling tumbles.",
     continuityRules: "Grumpy remains the same purple hedgehog enemy and receives the harmless consequence.",
     negativeRules: "No duplicates, extra hedgehogs, palette drift, missing quills, role swaps, morphing, or extra limbs.",
@@ -167,6 +170,7 @@ Negative identity rules: do not duplicate Sneaky; no extra chameleons, uncontrol
     colorLock: "Leaf green, pale mint, forest accents, amber eyes, and soft pink tongue.",
     scaleLock: "Tallest when extended; stable limb length, eye size, tail diameter, and body thickness.",
     vocalStyleLock: "Sly chuckles, tongue snaps, and startled chirps.",
+    nonverbalSoundProfile: "Medium, restrained wordless reactions with light breaths, quick surprise reactions, and brief frustration sounds. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Sneaky crawls, careful tiptoes, tongue snaps, camouflage pauses, and tail balancing.",
     continuityRules: "Sneaky remains the same green chameleon enemy and receives the harmless consequence.",
     negativeRules: "No duplicates, extra chameleons, color drift, missing tail, role swaps, morphing, or extra limbs.",
@@ -749,7 +753,9 @@ export default function Home() {
     setCharacters((current) => current.filter((profile) => profile.id !== draft.id));
     update("selectedCharacterIds", form.selectedCharacterIds.filter((id) => id !== draft.id));
     update("activeCharacterIds", activeIds.filter((id) => id !== draft.id));
-    if (form.heroId === draft.id) update("heroId", "builtin-biscuit");
+    if (form.heroId === draft.id) {
+      update("heroId", characters.find((profile) => profile.id !== draft.id && profile.role === "Hero")?.id || "");
+    }
     setDraft(emptyCharacter);
     setNotice("Custom character deleted.");
   }
@@ -820,6 +826,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           `Movement style: ${data.movementStyle}`,
           "Signature actions: use two repeatable, character-specific actions derived from the movement style",
           `Voice profile: ${data.vocalStyleLock}`,
+          `Nonverbal sound profile: ${data.nonverbalSoundProfile}`,
           `Continuity rules: ${data.continuityRules}`,
           `Negative identity rules: ${data.negativeRules}`,
         ].join("\n");
@@ -831,6 +838,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           colorLock: data.colorLock || current.colorLock,
           scaleLock: data.scaleSizeLock || current.scaleLock,
           vocalStyleLock: data.vocalStyleLock || current.vocalStyleLock,
+          nonverbalSoundProfile: data.nonverbalSoundProfile || current.nonverbalSoundProfile,
           movementStyle: data.movementStyle || current.movementStyle,
           continuityRules: data.continuityRules || current.continuityRules,
           negativeRules: data.negativeRules || current.negativeRules,
@@ -873,8 +881,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 action: "generate",
                 form: formForGeneration(),
                 activeCharacterIds: activeIds,
-                activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
-                  id, name: shortName, role, fullIdentity, description,
+                activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
+                  id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
                 })),
                 characters: productionCharacters,
                 requestedOutputs,
@@ -899,6 +907,55 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setError(caught instanceof Error ? caught.message : "Production-pack generation failed.");
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function continueSoundProfile() {
+    if (!draft.shortName.trim() || !draft.fullIdentity.trim()) {
+      setError("Add a character name and full identity first.");
+      return;
+    }
+    setIsSuggesting(true);
+    setError("");
+    try {
+      if (mode === "demo") {
+        const foundation = draft.nonverbalSoundProfile.trim() || draft.vocalStyleLock.trim() ||
+          "Character-appropriate nonverbal effort and reaction sounds";
+        setDraft((current) => ({
+          ...current,
+          nonverbalSoundProfile: `NONVERBAL SOUND IDENTITY
+Pitch: derive only from the customer’s established description; do not infer species, gender, or role stereotypes.
+Energy: match ${selectedTone(form)} while preserving the character’s established personality.
+Rhythm: concise reactions synchronized to visible actions.
+Effort sounds: ${foundation}.
+Surprise sounds: brief wordless reactions consistent with the same identity.
+Happy sounds: restrained wordless positive reactions consistent with the same identity.
+Frustration sounds: brief wordless reactions without assigning a stereotypical role-based voice.
+Impact reactions: concise, safe, action-synchronized nonverbal reactions.
+Movement-related sounds: only when supported by the character description and visible movement.
+Prohibited sounds: species-specific or mechanical sounds not supported by the saved character description.
+Spoken-word rule: No understandable spoken words unless a spoken voice layer is explicitly enabled.`,
+        }));
+      } else {
+        const response = await fetch("/api/character-suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "suggestSingleField",
+            requestedField: "nonverbalSoundProfile",
+            character: draft,
+            context: { tone: selectedTone(form), dialogueMode: form.voiceLayers.join(", "), customerFoundation: draft.nonverbalSoundProfile },
+          }),
+        });
+        const data = await response.json() as { suggestion?: string; error?: string };
+        if (!response.ok || !data.suggestion) throw new Error(data.error || "AI could not expand the sound profile.");
+        setDraft((current) => ({ ...current, nonverbalSoundProfile: data.suggestion || current.nonverbalSoundProfile }));
+      }
+      setNotice("Sound profile expanded for editing. Save the character when you are ready.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Sound-profile generation failed.");
+    } finally {
+      setIsSuggesting(false);
     }
   }
 
@@ -951,8 +1008,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           action: "fix",
           form: formForGeneration(),
           activeCharacterIds: activeIds,
-          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
-            id, name: shortName, role, fullIdentity, description,
+          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
+            id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
           })),
           characters: productionCharacters,
           pack: Object.fromEntries(Object.entries(pack).filter(([key]) =>
@@ -975,9 +1032,12 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
   function generateSoundProfiles() {
     const profiles = productionCharacters.map((profile) => {
-      const savedVoice = characterDescription(profile).split("\n")
+      const savedVoice = profile.nonverbalSoundProfile || characterDescription(profile).split("\n")
         .find((line) => /voice profile|nonverbal sound profile/i.test(line));
-      return `${profile.shortName}: ${savedVoice?.split(":").slice(1).join(":").trim() || "species-appropriate gasps, effort sounds, reaction noises, and a brief happy or surprised vocalization"}. No understandable words.`;
+      const identity = typeof savedVoice === "string"
+        ? savedVoice.includes(":") ? savedVoice.split(":").slice(1).join(":").trim() : savedVoice.trim()
+        : "";
+      return `${profile.shortName}: ${identity || "Short character-appropriate nonverbal effort and reaction sounds matching the established size, personality, movement, and emotional behavior"}. No understandable words.`;
     }).join("\n");
     update("characterCartoonSoundGuidance", profiles);
     setNotice("Editable nonverbal sound profiles created for the checked characters only. Nothing was saved automatically.");
@@ -1001,7 +1061,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     const latest = migrateForm(preset.form);
     latest.heroId = characters.some((entry) => entry.id === latest.heroId)
       ? latest.heroId
-      : "builtin-biscuit";
+      : characters.find((entry) => entry.role === "Hero")?.id || "";
     latest.selectedCharacterIds = latest.selectedCharacterIds
       .filter((id) => characters.some((entry) => entry.id === id) && id !== latest.heroId);
     latest.activeCharacterIds = [...new Set(latest.activeCharacterIds)]
@@ -1196,6 +1256,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         children.push(heading(profile.fullIdentity, HeadingLevel.HEADING_2));
         children.push(setting("Name", profile.shortName), setting("Role", profile.role), setting("Full identity", profile.fullIdentity));
         children.push(...paragraphLines(sanitizeActiveText(characterDescription(profile))));
+        children.push(setting("Nonverbal Sound Profile", profile.nonverbalSoundProfile || "Neutral character-appropriate nonverbal effort and reaction sounds; no understandable words."));
       });
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Creative Setup"));
       children.push(setting("Location", `${exportForm.locationName || "Location"} — ${exportForm.location}`));
@@ -1353,9 +1414,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <label className="field"><span>Role</span><select disabled={Boolean(draft.builtIn)} value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value as CharacterRole }))}>{roles.map((role) => <option key={role}>{role}</option>)}</select></label>
                 <label className="field wide"><span>Full identity</span><input disabled={Boolean(draft.builtIn)} value={draft.fullIdentity} onChange={(event) => setDraft((current) => ({ ...current, fullIdentity: event.target.value }))} /></label>
                 <label className="field wide"><span>Complete description</span><textarea disabled={Boolean(draft.builtIn)} className="character-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+                <label className="field wide"><span>Nonverbal Sound Profile</span><textarea disabled={Boolean(draft.builtIn)} value={draft.nonverbalSoundProfile} onChange={(event) => setDraft((current) => ({ ...current, nonverbalSoundProfile: event.target.value }))} placeholder="Medium-high, energetic nonverbal vocal style with short effort sounds, quick surprised gasps, soft happy reactions, and brief impact yelps. Keep all sounds wordless and consistent with the character’s size, personality, and movement." /><i>Write a profile, enter a short idea, or expand it with AI. Placeholder examples are never saved or generated automatically.</i></label>
               </div>
               <div className="button-row">
                 <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
+                <button type="button" onClick={continueSoundProfile} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Expanding…" : "Continue Sound Profile with AI"}</button>
                 <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(false)}>{draft.id ? "Update Character" : "Save to Character Library"}</button>
                 <button type="button" onClick={() => newCharacter()}>Add New Character</button>
                 <button type="button" disabled={!draft.id || Boolean(draft.builtIn)} onClick={deleteCharacter}>Delete Custom Character</button>
@@ -1402,8 +1465,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <div className="form-grid">
                   <fieldset className="choice-field wide"><legend>Narration and voice layers</legend><div className="choice-grid">{voiceLayerOptions.map((layer) => <label key={layer}><input type="checkbox" checked={form.voiceLayers.includes(layer)} onChange={() => toggleVoiceLayer(layer)} /><span>{layer}</span></label>)}</div></fieldset>
                   <label className="toggle-field wide"><input type="checkbox" checked={form.characterCartoonSounds} onChange={(event) => update("characterCartoonSounds", event.target.checked)} /><span>Character Cartoon Sounds</span></label>
-                  <p className="helper-text wide">Creates nonverbal character vocal sounds such as gasps, squeaks, grunts, giggles, yelps, huffs, chirps, effort sounds, and reaction noises. It does not create spoken words or dialogue.</p>
-                  {form.characterCartoonSounds && <div className="wide"><label className="field"><span>Character Cartoon Sound Guidance <i>optional</i></span><textarea value={form.characterCartoonSoundGuidance} onChange={(event) => update("characterCartoonSoundGuidance", event.target.value)} placeholder="Example: Give Biscuit quick cheerful squeaks and effort sounds, while Grumpy uses low irritated grunts and surprised yelps. No spoken words." /></label><div className="button-row"><button type="button" onClick={generateSoundProfiles} disabled={!productionCharacters.length}>Generate Sound Profiles with AI</button></div></div>}
+                  <p className="helper-text wide">Creates concise nonverbal effort and reaction sounds from each active character’s saved profile. It does not infer species sounds or create spoken dialogue.</p>
+                  {form.characterCartoonSounds && <div className="wide"><label className="field"><span>Temporary Sound Overrides <i>optional</i></span><textarea value={form.characterCartoonSoundGuidance} onChange={(event) => update("characterCartoonSoundGuidance", event.target.value)} placeholder="Character Name: low controlled mechanical hums, short effort sounds, brief alarm reactions, and a soft descending impact tone. No spoken words." /></label><div className="button-row"><button type="button" onClick={generateSoundProfiles} disabled={!productionCharacters.length}>Use Active Character Sound Profiles</button></div></div>}
                   {hasNarrator && <><label className="field wide"><span>Narrator guidance</span><textarea value={form.narratorGuidance} onChange={(event) => update("narratorGuidance", event.target.value)} /></label><label className="field wide"><span>Narration text</span><textarea value={form.narrationText} onChange={(event) => update("narrationText", event.target.value)} /></label></>}
                   {hasCharacterVoices && <><label className="field wide"><span>Character dialogue</span><textarea value={form.characterDialogue} onChange={(event) => update("characterDialogue", event.target.value)} /></label><label className="field wide"><span>Character voice guidance</span><textarea value={form.characterVoiceGuidance} onChange={(event) => update("characterVoiceGuidance", event.target.value)} /></label></>}
                   {!silentMode && <><label className="field"><span>Language</span><input value={form.language} onChange={(event) => update("language", event.target.value)} /></label><label className="field"><span>Vocal tone</span><input value={form.vocalTone} onChange={(event) => update("vocalTone", event.target.value)} /></label><label className="toggle-field"><input type="checkbox" checked={form.lipSyncRequired} onChange={(event) => update("lipSyncRequired", event.target.checked)} /><span>Lip-sync required</span></label></>}

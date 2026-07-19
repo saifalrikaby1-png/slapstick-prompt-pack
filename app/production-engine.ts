@@ -170,9 +170,62 @@ export function characterDescription(profile: CharacterProfile) {
     `Personality and facial-expression style: ${profile.personalityLock || "Keep expressions readable and role-consistent."}`,
     `Movement style and signature actions: ${profile.movementStyle || "Use smooth, character-specific motion."}`,
     `Voice profile: ${profile.vocalStyleLock || "Keep the voice profile consistent."}`,
+    `Nonverbal sound profile: ${profile.nonverbalSoundProfile || neutralNonverbalFallback}`,
     `Continuity rules: ${profile.continuityRules || "Preserve identity in every frame."}`,
     `Negative identity rules: ${profile.negativeRules || "No duplication, morphing, or role changes."}`,
   ].join("\n");
+}
+
+const neutralNonverbalFallback =
+  "Short character-appropriate nonverbal effort and reaction sounds, matching the character’s established size, personality, movement, and emotional behavior. No understandable words.";
+
+export function resolveCharacterAudioIdentity(
+  character: CharacterProfile,
+  temporaryOverride = "",
+) {
+  if (temporaryOverride.trim()) return temporaryOverride.trim();
+  if (character.nonverbalSoundProfile?.trim()) return character.nonverbalSoundProfile.trim();
+  const descriptionGuidance = characterDescription(character).split("\n")
+    .find((line) => /^(?:nonverbal sound profile|voice profile|voice guidance|vocal style):/i.test(line.trim()))
+    ?.split(":").slice(1).join(":").trim();
+  if (descriptionGuidance) return descriptionGuidance;
+  if (character.vocalStyleLock?.trim()) return character.vocalStyleLock.trim();
+  return neutralNonverbalFallback;
+}
+
+export function buildCharacterSoundInstructions({
+  activeCharacters,
+  timeRange,
+  visibleAction,
+  selectedTones,
+  noSpokenDialogue,
+  temporaryOverrides = {},
+}: {
+  activeCharacters: CharacterProfile[];
+  timeRange: string;
+  visibleAction: string;
+  selectedTones: string[];
+  noSpokenDialogue: boolean;
+  temporaryOverrides?: Record<string, string>;
+}) {
+  if (!activeCharacters.length) return "";
+  return activeCharacters.map((character) => {
+    const identity = resolveCharacterAudioIdentity(character, temporaryOverrides[character.id] || "");
+    return `${timeRange} — ${character.shortName}: when the visible action “${visibleAction}” produces a useful reaction, use one concise nonverbal reaction adapted from this identity: ${identity} ${noSpokenDialogue ? "No spoken words." : "Do not add speech unless an enabled voice layer assigns it."} Tone context: ${selectedTones.join(", ") || "customer-defined"}.`;
+  }).join("\n");
+}
+
+function parseTemporarySoundOverrides(value: string, cast: CharacterProfile[]) {
+  const overrides: Record<string, string> = {};
+  value.split("\n").forEach((line) => {
+    const separator = line.indexOf(":");
+    if (separator < 1) return;
+    const name = line.slice(0, separator).trim().toLowerCase();
+    const character = cast.find((profile) =>
+      profile.shortName.toLowerCase() === name || profile.fullIdentity.toLowerCase() === name);
+    if (character) overrides[character.id] = line.slice(separator + 1).trim();
+  });
+  return overrides;
 }
 
 export function buildCompactCharacterLock(profile: CharacterProfile) {
@@ -208,6 +261,7 @@ export function migrateCharacter(value: unknown): CharacterProfile | null {
     colorLock: stringValue(item.colorLock),
     scaleLock: stringValue(item.scaleLock),
     vocalStyleLock: stringValue(item.vocalStyleLock),
+    nonverbalSoundProfile: stringValue(item.nonverbalSoundProfile),
     movementStyle: stringValue(item.movementStyle),
     continuityRules: stringValue(item.continuityRules),
     negativeRules: stringValue(item.negativeRules),
@@ -648,6 +702,7 @@ export function generateDemoPack(
               : "build intensity gradually under the action";
         return `${rangeLabel(start, end)} — ${form.musicType}; ${form.musicMood} mood; ${form.musicIntensity} intensity; ${stage}.`;
       }).join("\n");
+  const temporarySoundOverrides = parseTemporarySoundOverrides(form.characterCartoonSoundGuidance, cast);
   const sfxLines = ranges.slice(0, -1).map((start, index) => {
     const end = ranges[index + 1];
     const description = index === 0
@@ -657,8 +712,17 @@ export function generateDemoPack(
         : index === ranges.length - 3
           ? `one medium-intensity directional impact from the visible result of ${action}`
           : `selective ${form.soundEffectsStyle.toLowerCase()} tied only to visible footsteps, prop motion, or contact`;
-    const vocal = form.characterCartoonSounds && cast.length
-      ? ` ${cast[index % cast.length].shortName}: one brief species-appropriate nonverbal ${index % 2 ? "reaction yelp" : "effort sound"} matched to the visible reaction; no understandable words.`
+    // Compatibility trace: cast[index % cast.length].shortName is the exact saved character-name owner.
+    const soundOwner = cast[index % cast.length];
+    const vocal = form.characterCartoonSounds && soundOwner
+      ? ` ${buildCharacterSoundInstructions({
+          activeCharacters: index === 0 ? cast : [soundOwner],
+          timeRange: rangeLabel(start, end),
+          visibleAction: description,
+          selectedTones: form.tones,
+          noSpokenDialogue: form.voiceLayers.includes("No Spoken Dialogue"),
+          temporaryOverrides: temporarySoundOverrides,
+        })}`
       : "";
     return `${rangeLabel(start, end)} — ${description}; match on-screen distance and direction; no random off-screen sound.${vocal}`;
   }).join("\n");
@@ -923,6 +987,18 @@ export function inspectProductionPack(
         !/squeak|grunt|yelp|gasp|chuckle|nonverbal/.test(pack.musicPath.toLowerCase())
       : !/character vocal sounds are allowed/.test(pack.videoLock.toLowerCase()),
     "Assign nonverbal sounds only to exact active names, visible reactions, and SOUND EFFECTS; never Music Path or spoken quotation."),
+    finding("Universal character sound ownership", !form.characterCartoonSounds || cast.every((profile) =>
+      pack.soundEffects.includes(profile.shortName) &&
+      !characters.filter((candidate) => !activeIds.includes(candidate.id))
+        .some((inactive) => pack.soundEffects.includes(inactive.shortName))), "Every character sound must use an exact active name; remove inactive or off-screen voice sources."),
+    finding("Saved sound identities are respected", !form.characterCartoonSounds || cast.every((profile) => {
+      const identity = resolveCharacterAudioIdentity(profile);
+      const distinctiveTerms = identity.toLowerCase().split(/\W+/).filter((word) => word.length > 6).slice(0, 3);
+      return distinctiveTerms.length === 0 || distinctiveTerms.some((term) => pack.soundEffects.toLowerCase().includes(term));
+    }), "Use each active character’s saved nonverbal sound profile or the neutral fallback; never transfer one character’s identity to another.", true),
+    finding("No unsupported species-sound stereotype", !/(?:bark|meow|roar)/i.test(pack.soundEffects) ||
+      cast.some((profile) => new RegExp("(?:bark|meow|roar)", "i").test(`${profile.description} ${profile.nonverbalSoundProfile}`)),
+    "Species-specific sounds require support in the same active character’s saved description or sound profile."),
     finding("Grounding and support lock", /physical grounding lock|ground contact lock/.test(all) && /support/.test(all) && /gravity/.test(all), "Include clear ground contact, object support, and gravity rules."),
     finding("No unexplained floating", !/\b(?:unexplained )?(?:character|object|prop)?\s*(?:hovers?|floats?|floating|drifts?)\b/.test(pack.videoTimeline.toLowerCase()) && /no unexplained hovering|nothing hovers/.test(all), "Remove floating language and keep the no-hovering constraint."),
     finding("Smooth motion phases", /anticipation/.test(all) && /accelerat/.test(all) && /follow-through/.test(all) && /settling/.test(all), "Define anticipation, acceleration, follow-through, and settling."),

@@ -21,6 +21,7 @@ type RequestBody = {
     role: "Hero" | "Companion" | "Enemy";
     fullIdentity: string;
     description: string;
+    nonverbalSoundProfile: string;
   }>;
   pack?: ProductionPack;
   qualityFindings?: QualityFinding[];
@@ -92,6 +93,8 @@ Hard requirements:
 - Preserve the exact duration in every timing section; all ranges must align and cover it completely.
 - Include the selected platform and selected AI video model prominently in videoLock.
 - Use the supplied Character Library descriptions as authoritative. Introduce full character names once, then short names.
+- Use only the supplied active character records. Never assume a built-in identity, species, appearance, voice, sound, movement, personality, pitch, or energy. Role controls story behavior only and never determines sound design.
+- For nonverbal sound effects, each active character’s nonverbalSoundProfile is the primary identity source. Preserve its pitch, rhythm, energy, and prohibited sounds; adapt it only to a visible timed action. When it is empty, use neutral character-appropriate effort and reaction sounds derived from the supplied description without inventing a species-specific sound.
 - Only activeCharacters may appear. Never introduce an unchecked saved character. Use exact active names in both frames, the lock, and timeline.
 - Keep hero, enemy, companion, and supporting roles unambiguous. The hero must clearly win. Enemies must receive their own harmless trap/backfire.
 - Stable identity, face, species, colors, wardrobe, scale, anatomy, voices, movement style, and screen direction.
@@ -117,6 +120,7 @@ Hard requirements:
 - Respect object state ledgers: every authorized important object has a visible supported start position, one named force and continuous path, and a visible supported final position. No unauthorized object transformation, destruction, disappearing, or duplication.
 - Default to one continuous wide/medium-wide shot. No sudden cut, jump cut, cutaway, angle replacement, camera teleport, freeze frame, midair freeze, or static hold. A customer-authorized cut must state its exact time and preserve traceability; a tension hold remains living with subtle movement rather than freezing.
 - If Character Cartoon Sounds is enabled, place concise nonverbal vocalizations inside soundEffects only. Assign each sound to an exact active character name and visible reaction. No understandable words, quotation-mark dialogue, random voices, or character vocalizations in musicPath.
+- Never use squeaks, growls, chirps, barks, meows, roars, tongue sounds, animal noises, mechanical sounds, or magical sounds unless that exact sound family is supported by the corresponding active character’s supplied description or nonverbalSoundProfile.
 - Avoid contradictory, overloaded instructions. Prioritize polished, coherent, stable, zero-error continuity.
 - Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
 
@@ -167,7 +171,8 @@ export async function POST(request: Request) {
     activeCharacters.filter((character) => character.role === "Hero").length === 1 &&
     activeCharacters.every((character) =>
       character.id.trim() && character.name.trim() && character.fullIdentity.trim() &&
-      character.description.trim() && ["Hero", "Companion", "Enemy"].includes(character.role));
+      character.description.trim() && typeof character.nonverbalSoundProfile === "string" &&
+      ["Hero", "Companion", "Enemy"].includes(character.role));
   if (!validActiveCharacters) {
     return Response.json({ error: "Active characters need unique IDs, valid roles, complete identity fields, and exactly one Hero." }, { status: 400 });
   }

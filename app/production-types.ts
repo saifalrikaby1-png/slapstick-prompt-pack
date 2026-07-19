@@ -34,6 +34,7 @@ export type CharacterProfile = {
   colorLock: string;
   scaleLock: string;
   vocalStyleLock: string;
+  nonverbalSoundProfile: string;
   movementStyle: string;
   continuityRules: string;
   negativeRules: string;

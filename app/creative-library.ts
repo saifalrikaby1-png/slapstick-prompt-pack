@@ -81,9 +81,9 @@ export function mergeCreativeAssets(current: CreativeAsset[], incoming: Creative
   return result;
 }
 
-export function creativeCollision(candidate: Pick<CreativeAsset, "name" | "description">, saved: CreativeAsset[]) {
-  const name = normalizeCreativeIdentity(candidate.name);
-  const keywords = new Set(normalizeCreativeIdentity(candidate.description).split(" ").filter((word) => word.length > 5));
+export function creativeCollision(candidate: { name?: string; description?: string }, saved: Array<Pick<CreativeAsset, "name" | "description">>) {
+  const name = normalizeCreativeIdentity(candidate.name || "");
+  const keywords = new Set(normalizeCreativeIdentity(candidate.description || "").split(" ").filter((word) => word.length > 5));
   return saved.some((asset) => {
     if (nearIdentity(normalizeCreativeIdentity(asset.name), name)) return true;
     const other = new Set(normalizeCreativeIdentity(asset.description).split(" ").filter((word) => word.length > 5));

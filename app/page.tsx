@@ -54,10 +54,16 @@ const STORAGE = {
   form: "slapstick-current-setup",
   creative: CREATIVE_LIBRARY_STORAGE_KEY,
   outputSelection: "slapstick-output-selection",
+  recentCreativeSuggestions: "slapstick-recent-creative-suggestions-v1",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 type OutputSelectionMode = "custom" | "fullPack";
+type CreativeSuggestionKind = CreativeAssetKind | "title";
+type CreativeSuggestion = { name?: string; description?: string; title?: string };
+type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
+const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
+const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: [], object: [], action: [], payoff: [] });
 
 const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
   { id: "videoTitle", icon: "T", title: "Ultra-Unique Video Title", short: "Video Title", description: "Original editable title for this production." },
@@ -320,7 +326,11 @@ export default function Home() {
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestingField, setSuggestingField] = useState<string>("");
+  const [suggestingFields, setSuggestingFields] = useState<Record<CreativeSuggestionKind, boolean>>({
+    title: false, location: false, object: false, action: false, payoff: false,
+  });
+  const activeCreativeRequests = useRef<Set<CreativeSuggestionKind>>(new Set());
+  const [recentSuggestions, setRecentSuggestions] = useState<RecentSuggestions>(emptyRecentSuggestions);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -358,6 +368,23 @@ export default function Home() {
         .filter((entry): entry is StoredPack => Boolean(entry)));
       const storedCreative = parseCreativeLibrary(localStorage.getItem(STORAGE.creative));
       setCreativeAssets(storedCreative);
+      const storedRecent = safeObject(sessionStorage.getItem(STORAGE.recentCreativeSuggestions));
+      if (storedRecent) {
+        const restored = emptyRecentSuggestions();
+        creativeSuggestionKinds.forEach((kind) => {
+          const values = storedRecent[kind];
+          if (Array.isArray(values)) restored[kind] = values
+            .filter((entry): entry is CreativeSuggestion => Boolean(entry && typeof entry === "object"))
+            .map((entry) => ({
+              name: typeof entry.name === "string" ? entry.name.slice(0, 100) : undefined,
+              description: typeof entry.description === "string" ? entry.description.slice(0, 4000) : undefined,
+              title: typeof entry.title === "string" ? entry.title.slice(0, 100) : undefined,
+            }))
+            .filter((entry) => Boolean(entry.title || entry.name))
+            .slice(-10);
+        });
+        setRecentSuggestions(restored);
+      }
       const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
       if (storedSelection) {
         const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
@@ -412,6 +439,10 @@ export default function Home() {
       requestedOutputs: selectionMode === "fullPack" ? independentSelectionsRef.current : requestedOutputs,
     }));
   }, [selectionMode, requestedOutputs]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    sessionStorage.setItem(STORAGE.recentCreativeSuggestions, JSON.stringify(recentSuggestions));
+  }, [recentSuggestions]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -621,94 +652,112 @@ export default function Home() {
     setError("");
   }
 
-  async function suggestCreative(kind: CreativeAssetKind | "title", expand = false, collisionRetry = false) {
-    setSuggestingField(kind);
+  function rememberSuggestion(kind: CreativeSuggestionKind, suggestion: CreativeSuggestion) {
+    setRecentSuggestions((current) => ({ ...current, [kind]: [...current[kind], suggestion].slice(-10) }));
+  }
+
+  function creativeExclusions(kind: CreativeSuggestionKind) {
+    const recent = recentSuggestions[kind].map(({ name, description, title }) => ({ name: title || name || "", description: description || "" }));
+    if (kind === "title") return [...savedPacks.map((saved) => ({ name: saved.title, description: "" })), ...recent];
+    const excludeSavedAssets = kind !== "object" || !form.allowPreviouslySavedObjects;
+    const saved = excludeSavedAssets ? creativeAssets.filter((asset) => asset.kind === kind).map(({ name, description }) => ({ name, description })) : [];
+    return [...saved, ...recent];
+  }
+
+  function duplicateSuggestion(kind: CreativeSuggestionKind, result: CreativeSuggestion) {
+    const exclusions = creativeExclusions(kind);
+    if (kind === "title") return exclusions.some((item) => normalizeCreativeIdentity(item.name) === normalizeCreativeIdentity(result.title || ""));
+    return creativeCollision({ name: result.name || "", description: result.description || "" }, exclusions);
+  }
+
+  function demoCreativeSuggestion(kind: CreativeSuggestionKind): CreativeSuggestion {
+    const demoCandidates: Record<CreativeSuggestionKind, CreativeSuggestion[]> = {
+      title: [
+        { title: "The Moon-Spring Double Bounce" }, { title: "The Copperberry Button Backfire" }, { title: "The Spiral Oak Switcheroo" }, { title: "The Teal Button Boomerang" }, { title: "Biscuit's Perfect Redirect" },
+      ],
+      location: [
+        { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a spiral oak, with teal moss borders, warm honey light, three acorn lanterns, radial ground grooves, and one clear central action lane. Keep each landmark, palette, and lighting direction stable." },
+        { name: "Copperleaf Picnic Terrace", description: "A tidy copper-leaf woodland terrace with a cream stone rail, two blue pennants, soft afternoon light, and one wide central action lane. Keep its landmark positions, palette, prop count, and uncluttered background stable." },
+        { name: "Mossbell Orchard Steps", description: "A gentle orchard amphitheater of mossy stone steps, one bell-shaped oak, berry-red leaf borders, and sunlit center paving. Keep the tier spacing, bell oak, colors, and open action lane unchanged." },
+        { name: "Twistroot Lantern Bridge", description: "A short curved bridge formed by one twistroot tree over a shallow sparkling stream, with four warm lantern pods and a broad central deck. Preserve the bridge shape, lantern count, stream direction, and safe staging area." },
+        { name: "Cloverclock Courtyard", description: "A bright clover-tiled courtyard with a single flower-clock landmark, soft green hedges, and a wide cream action circle. Preserve the clock position, tile pattern, hedge silhouettes, and daylight direction." },
+      ],
+      object: [
+        { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry with golden layered crust, blue sugar-glass filling, and one visible spring hinge. It compresses, rebounds, and rolls predictably. Preserve its crescent silhouette, gold-and-blue palette, scale, hinge, and single-object count." },
+        { name: "Copperberry Popper", description: "A fist-sized copper berry dispenser with one teal push button and three visible berry slots. It tilts, clicks, and releases one soft berry at a time. Preserve its rounded silhouette, copper-and-teal palette, button position, and single-object count." },
+        { name: "Acorn Whistle Wheel", description: "A small walnut-brown wheel with one cream whistle fin and a teal rim. It rolls only on the ground, chirps when spun, and stops against a visible surface. Preserve its compact scale, fin, palette, and single-object count." },
+        { name: "Jam-Jar Jumper", description: "A clear squat jam jar with a red lid and one soft rubber foot beneath it. It makes short predictable hops when pressed, then settles upright. Preserve its glass body, red lid, hop height, and single-object count." },
+        { name: "Pinecone Pinball", description: "A smooth polished pinecone ball with one gold band around its middle. It rolls along visible slopes and bounces once from a firm surface. Preserve its pine-brown texture, gold band, scale, and single-object count." },
+      ],
+      action: [
+        { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: an Enemy presses the visible object toward the Hero; it compresses, releases along one readable path, and returns harmlessly to the Enemy. The Hero makes one clear dodge and every active character remains visible through the settled result within ${form.duration} seconds.` },
+        { name: "Button Backfire", description: `One Enemy presses the important object's visible control; the object moves along a grounded path, the Hero redirects it with one precise action, and the harmless result returns to the Enemy. Keep the cast, location, and object unchanged and settled within ${form.duration} seconds.` },
+        { name: "Rolling Switcheroo", description: `An Enemy starts one grounded roll of the important object, the Hero sidesteps once and guides its momentum to a safe reversal, and the Enemy receives the playful consequence. Show the cause, direction, reaction, and final settled positions within ${form.duration} seconds.` },
+        { name: "One-Hop Misfire", description: `An Enemy triggers one small hop from the important object; the Hero times one readable dodge, the object lands on its original surface, and the harmless rebound surprises the Enemy. No new object, character, or camera cut appears within ${form.duration} seconds.` },
+        { name: "Curve-and-Catch Backfire", description: `An Enemy sends the important object along one curved, visible path; the Hero makes one clean catch-and-redirect, and the object stops safely beside the Enemy after the comic consequence. Preserve the exact active cast and stable location within ${form.duration} seconds.` },
+      ],
+      payoff: [
+        { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled object with a relieved smile; each Enemy finishes behind in a distinct harmless seated reaction; Companions remain in their established positions. The location and object stay visible for a stable loop." },
+        { name: "Button Bounce Finish", description: "The Hero ends beside the now-settled object in a confident victory pose; each Enemy finishes safely on the far side with a clear comic reaction. Every active character, the object, and the unchanged location are visible in the stable final frame." },
+        { name: "Grounded Roll Resolution", description: "The Hero finishes foreground-center with one paw on the stopped object, while each Enemy sits safely beside the completed path. Companions keep fixed side positions, and the unchanged location holds for a readable final frame." },
+        { name: "Clean Redirect Payoff", description: "The Hero ends smiling beside the object in its final grounded position; the Enemy harmlessly recovers behind the action line. Keep all active characters present, final positions distinct, and the environment unchanged for a stable end frame." },
+        { name: "Loop-Ready Victory Pose", description: "The Hero holds a clear victory pose with the important object visible and settled; each Enemy has a safe, readable reaction and every Companion remains in place. The stable composition can loop naturally back to the opening without adding anything new." },
+      ],
+    };
+    const candidates = demoCandidates[kind];
+    if (kind === "title") {
+      const usedTitles = new Set(creativeExclusions("title").map((item) => normalizeCreativeIdentity(item.name)));
+      return candidates.find((candidate) => !usedTitles.has(normalizeCreativeIdentity(candidate.title || ""))) || candidates[recentSuggestions[kind].length % candidates.length];
+    }
+    const excludeSavedAssets = kind !== "object" || !form.allowPreviouslySavedObjects;
+    const saved = excludeSavedAssets ? creativeAssets.filter((asset) => asset.kind === kind) : [];
+    const firstLibrarySafe = candidates.find((candidate) => !creativeCollision(candidate, saved));
+    return candidates.find((candidate) => !creativeCollision(candidate, saved) && !duplicateSuggestion(kind, candidate)) || firstLibrarySafe || candidates[recentSuggestions[kind].length % candidates.length];
+  }
+
+  async function suggestCreative(kind: CreativeSuggestionKind, expand = false) {
+    if (activeCreativeRequests.current.has(kind)) return;
+    activeCreativeRequests.current.add(kind);
+    setSuggestingFields((current) => ({ ...current, [kind]: true }));
     setError("");
     const keys = kind === "title" ? null : creativeFields[kind];
-    const idea = kind === "title"
-      ? form.videoTitle
-      : `${String(form[keys!.name])}\n${String(form[keys!.description])}`.trim();
+    const idea = kind === "title" ? form.videoTitle : `${String(form[keys!.name])}\n${String(form[keys!.description])}`.trim();
     try {
-      let result: { name?: string; description?: string; title?: string; error?: string };
-      if (mode === "demo") {
-        const demoCandidates = {
-          location: [
-            { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a giant spiral oak, with teal moss borders, warm honey light, three recurring acorn lanterns, radial ground grooves, and one distant ribbon waterfall. Preserve the spiral trunk, lantern count, palette, landmark positions, ground pattern, lighting direction, and open central action lane in every production." },
-            { name: "Copperleaf Picnic Terrace", description: "A tidy copper-leaf woodland terrace with a cream stone rail, two blue pennants, soft afternoon light, and one wide central action lane. Preserve its landmark positions, palette, prop count, lighting direction, and uncluttered background." },
-          ],
-          object: [
-            { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry made of golden layered crust and blue sugar-glass filling, with one visible spring hinge. It compresses, rebounds, and rolls predictably; characters interact by pressing the crust edge. Preserve its crescent silhouette, gold-and-blue palette, size, hinge, material, starting compression, final state, and single-object count." },
-            { name: "Copperberry Popper", description: "A fist-sized copper berry dispenser with one teal push button and three visible berry slots. It tilts, clicks, and releases one soft berry at a time. Preserve its rounded silhouette, copper-and-teal palette, scale, button position, material, starting state, final state, and single-object count." },
-          ],
-          action: [
-            { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: the Enemies press the Moon-Spring Tart toward the Hero; its visible hinge compresses, releases left-to-right, and rebounds along the same path. The Hero makes one readable dodge, the Enemies receive the harmless soft landing, Companions react from fixed positions, and the object settles visibly within ${form.duration} seconds.` },
-            { name: "Berry Button Backfire", description: `One setup, one action, one consequence, and one reaction: an Enemy presses the visible button, the object tips along a readable path, and its harmless payload lands on the Enemies. The Hero makes one clear dodge, Companions stay fixed, and every object settles visibly within ${form.duration} seconds.` },
-          ],
-          payoff: [
-            { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled tart with a relieved smile; each Enemy finishes behind it in a distinct harmless seated reaction; Companions remain in their established side positions. The object is fully visible, the location is unchanged, the final beat is playful, and the held pose can loop naturally to the opening." },
-            { name: "Berry Crown Victory", description: "The Hero ends foreground-center clean and smiling while each Enemy sits harmlessly behind with one berry balanced overhead. Companions keep their established positions, all objects remain visible, the location stays unchanged, and the final held pose creates a readable loop." },
-          ],
-          title: [
-            { title: "The Moon-Spring Double Bounce" },
-            { title: "The Copperberry Button Backfire" },
-            { title: "Biscuit and the One-Click Trouble Trap" },
-          ],
-        };
-        if (kind === "title") {
-          const candidates = demoCandidates.title;
-          const usedTitles = new Set(savedPacks.map((saved) => saved.title.toLowerCase().trim()));
-          result = candidates.find((candidate) => !usedTitles.has(candidate.title.toLowerCase())) || candidates[0];
-        } else {
-          const candidates = demoCandidates[kind];
-          const saved = creativeAssets.filter((asset) => asset.kind === kind);
-          result = form.allowPreviouslySavedObjects && kind === "object"
-            ? candidates[0]
-            : candidates.find((candidate) => !creativeCollision(candidate, saved)) || candidates[0];
+      let result: CreativeSuggestion | null = null;
+      let duplicate = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (mode === "demo") result = demoCreativeSuggestion(kind);
+        else {
+          const action = kind === "title" ? "generateVideoTitle" : `${expand ? "expand" : "generate"}${kind[0].toUpperCase()}${kind.slice(1)}`;
+          const response = await fetch("/api/creative-suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action,
+              idea,
+              exclusions: creativeExclusions(kind),
+              collisionRetry: attempt === 1,
+              context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role }) => ({ id, shortName, fullIdentity, role })) },
+            }),
+          });
+          const data = await response.json() as CreativeSuggestion & { error?: string };
+          if (!response.ok) throw new Error(data.error || "Creative suggestion failed.");
+          result = data;
         }
-      } else {
-        const action = kind === "title"
-          ? "generateVideoTitle"
-          : `${expand ? "expand" : "generate"}${kind[0].toUpperCase()}${kind.slice(1)}`;
-        const exclusions = kind === "title"
-          ? savedPacks.map((saved) => ({ name: saved.title, description: "" }))
-          : kind === "object" && form.allowPreviouslySavedObjects
-            ? []
-            : creativeAssets.filter((asset) => asset.kind === kind)
-              .map(({ name, description }) => ({ name, description }));
-        const response = await fetch("/api/creative-suggest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action,
-            idea,
-            exclusions,
-            collisionRetry,
-            context: { form, characters: productionCharacters.map(({ id, shortName, fullIdentity, role }) => ({ id, shortName, fullIdentity, role })) },
-          }),
-        });
-        result = await response.json() as typeof result & { error?: string };
-        if (!response.ok) throw new Error(result.error || "Creative suggestion failed.");
+        duplicate = Boolean(result && duplicateSuggestion(kind, result));
+        if (!duplicate || attempt === 1) break;
       }
-      if (kind === "title") update("videoTitle", result.title || "");
-      else if (result.name && result.description) {
-        const sameKind = creativeAssets.filter((asset) => asset.kind === kind);
-        if (kind === "object" && !form.allowPreviouslySavedObjects &&
-          creativeCollision({ name: result.name, description: result.description }, sameKind)) {
-          if (!collisionRetry && mode === "ai") return await suggestCreative(kind, expand, true);
-          setError("Duplicate Warning: the suggestion resembles a saved object. It remains editable but was not saved.");
-        }
-        setForm((current) => ({
-          ...current,
-          [creativeFields[kind].id]: "",
-          [creativeFields[kind].name]: result.name,
-          [creativeFields[kind].description]: result.description,
-        }));
-      }
-      setNotice(`AI suggestion inserted for editing. It has not been saved.`);
+      if (!result || (kind === "title" ? !result.title?.trim() : !result.name?.trim() || !result.description?.trim())) throw new Error("AI returned an incomplete creative suggestion.");
+      if (kind === "title") update("videoTitle", result.title!.trim());
+      else setForm((current) => ({ ...current, [creativeFields[kind].id]: "", [creativeFields[kind].name]: result.name!.trim(), [creativeFields[kind].description]: result.description!.trim() }));
+      rememberSuggestion(kind, result);
+      setNotice("AI suggestion inserted for editing. It has not been saved.");
+      if (duplicate) setError("Duplicate Warning: this suggestion resembles a saved or recent item. It remains editable but was not saved.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Creative suggestion failed.");
+      setError(caught instanceof Error ? caught.message : "Creative suggestion failed. Your current value was kept.");
     } finally {
-      setSuggestingField("");
+      activeCreativeRequests.current.delete(kind);
+      setSuggestingFields((current) => ({ ...current, [kind]: false }));
     }
   }
 
@@ -1356,8 +1405,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         </div>
         {kind === "object" && <label className="toggle-field"><input type="checkbox" checked={form.allowPreviouslySavedObjects} onChange={(event) => update("allowPreviouslySavedObjects", event.target.checked)} /><span>Allow Previously Saved Objects</span></label>}
         <div className="button-row">
-          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, false)}>{suggestingField === kind ? "Creating…" : `Generate ${label} with AI`}</button>
-          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, true)}>{`Continue and Improve ${label}`}</button>
+          <button type="button" disabled={suggestingFields[kind]} aria-busy={suggestingFields[kind]} onClick={() => suggestCreative(kind, false)}>{suggestingFields[kind] ? "Creating…" : `Generate ${label} with AI`}</button>
+          <button type="button" disabled={suggestingFields[kind]} onClick={() => suggestCreative(kind, true)}>{suggestingFields[kind] ? "Creating…" : `Continue and Improve ${label}`}</button>
           <button className="primary-small" type="button" onClick={() => saveCreativeAsset(kind)}>{selected ? `Update ${label}` : `Save ${label}`}</button>
           {kind === "location" && <button type="button" onClick={setSignatureLocation} disabled={!selectedId}>Set as Signature Location</button>}
           <button type="button" onClick={() => selectCreativeAsset(kind, "")}>Remove from current video</button>
@@ -1439,7 +1488,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <article className="creative-editor title-editor wide">
                 <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
                 <label className="field wide"><span>Video Title</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-                <div className="button-row"><button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative("title")}>{suggestingField === "title" ? "Creating…" : "Generate Ultra-Unique Title with AI"}</button></div>
+                <div className="button-row"><button type="button" disabled={suggestingFields.title} aria-busy={suggestingFields.title} onClick={() => suggestCreative("title")}>{suggestingFields.title ? "Creating…" : "Generate Ultra-Unique Title with AI"}</button></div>
               </article>
               {creativeEditor("location", "Location")}
               {creativeEditor("object", "Important Object")}

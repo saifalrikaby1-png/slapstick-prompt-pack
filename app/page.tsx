@@ -19,6 +19,8 @@ import {
 } from "./production-types";
 import {
   audioVideoPrompt,
+  buildAuthorizedSceneInventory,
+  buildObjectStateLedger,
   characterDescription,
   completeVideoPrompt,
   generateDemoPack,
@@ -1044,6 +1046,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     setIsDownloading(true);
     try {
       const exportForm = formForGeneration() as ProductionForm;
+      const authorizedSceneInventory = buildAuthorizedSceneInventory(exportForm, productionCharacters);
+      const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
       const { Document, Footer, HeadingLevel, Packer, PageBreak, PageNumber, Paragraph, TextRun } = await import("docx");
       const { saveAs } = await import("file-saver");
       const heading = (text: string, level: "Heading1" | "Heading2" = HeadingLevel.HEADING_1) => new Paragraph({ heading: level, text });
@@ -1073,6 +1077,16 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         setting("Natural motion and camera continuity", "Every beat has named action ownership and visible cause. Use one continuous cast-preserving camera path; no random motion, pose snapping, action-axis reversal, or camera-caused disappearance."),
         setting("Publishing target", selectedPlatform(form)),
         new Paragraph({ children: [new PageBreak()] }),
+        heading("Authorized Scene Inventory"),
+        setting("Exact selected characters", authorizedSceneInventory.characters.map((item) => `${item.name} (${item.role})`).join(", ")),
+        setting("Exact character count", String(authorizedSceneInventory.characters.length)),
+        setting("Exact authorized objects", objectStateLedger.map((item) => item.name).join(", ")),
+        setting("Exact important-object count", String(objectStateLedger.length)),
+        setting("Fixed environmental elements", authorizedSceneInventory.fixedEnvironmentElements.join(", ")),
+        setting("Authorized exceptions", [...authorizedSceneInventory.authorizedEntrances, ...authorizedSceneInventory.authorizedExits, ...authorizedSceneInventory.authorizedTransformations].join("; ") || "None"),
+        setting("Cuts allowed", authorizedSceneInventory.allowCuts ? "Yes" : "No"),
+        setting("Freeze allowed", "No, except a customer-requested effect; living tension holds only"),
+        setting("Magical floating allowed", authorizedSceneInventory.allowMagicalFloating ? "Yes, only with visible source and continuous traceability" : "No"),
         heading("Selected Characters"),
       ];
       productionCharacters.forEach((profile) => {

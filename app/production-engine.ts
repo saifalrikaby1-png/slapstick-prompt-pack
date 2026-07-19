@@ -422,6 +422,68 @@ export interface CharacterVisibilityState {
   finalPresence: "visible" | "exited-by-request";
 }
 
+export interface AuthorizedSceneInventory {
+  characters: Array<{ id: string; name: string; role: CharacterProfile["role"] }>;
+  importantObjects: Array<{ name: string; description: string }>;
+  actionObjects: Array<{ name: string; source: "trap" | "main-action" | "additional-direction" }>;
+  fixedEnvironmentElements: string[];
+  authorizedEntrances: string[];
+  authorizedExits: string[];
+  authorizedTransformations: string[];
+  allowCuts: boolean;
+  allowIntentionalTensionHold: boolean;
+  allowMagicalFloating: boolean;
+}
+
+export interface ObjectContinuityState {
+  name: string;
+  presentAtStart: boolean;
+  startPosition: string;
+  supportOrHolder: string;
+  currentState: string;
+  permittedMotion: string;
+  finalPosition: string;
+  presentAtEnd: boolean;
+}
+
+export function buildAuthorizedSceneInventory(form: ProductionForm, cast: CharacterProfile[]): AuthorizedSceneInventory {
+  const direction = form.additionalDirection.toLowerCase();
+  const action = form.trapAction.trim();
+  const locationElements = form.location.split(/[.;]/).map((value) => value.trim()).filter(Boolean).slice(0, 6);
+  return {
+    characters: cast.map((profile) => ({ id: profile.id, name: profile.shortName, role: profile.role })),
+    importantObjects: [{ name: form.importantObject.trim() || "important story object", description: form.importantObject.trim() || "Established selected object" }],
+    actionObjects: action ? [{ name: action, source: "trap" }] : [],
+    fixedEnvironmentElements: locationElements.length ? locationElements : [form.location.trim() || "established environment"],
+    authorizedEntrances: /\b(enter|entrance|arrive|reveal)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
+    authorizedExits: /\b(exit|leave|off-screen|trapdoor)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
+    authorizedTransformations: /\b(transform|break|destroy|collapse)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
+    allowCuts: /\b(cut|shot change|cutaway)\b/.test(direction),
+    allowIntentionalTensionHold: /\b(tension hold|living hold)\b/.test(direction),
+    allowMagicalFloating: /\b(magical floating|levitat)\b/.test(direction),
+  };
+}
+
+export function buildObjectStateLedger(inventory: AuthorizedSceneInventory): ObjectContinuityState[] {
+  return inventory.importantObjects.map((item) => ({
+    name: item.name,
+    presentAtStart: true,
+    startPosition: "visible supported starting position in the central action area",
+    supportOrHolder: "visible ground, platform, holder, or attachment",
+    currentState: "same identifiable authorized object",
+    permittedMotion: "only a visible named force and continuous physical path",
+    finalPosition: "visible supported final position in the resolved end frame",
+    presentAtEnd: true,
+  }));
+}
+
+function inventoryLock(inventory: AuthorizedSceneInventory, objects: ObjectContinuityState[]) {
+  const cast = inventory.characters.map((item) => `${item.name} (${item.role})`).join(", ");
+  const objectNames = inventory.importantObjects.map((item) => item.name).join(", ");
+  const actionObjects = inventory.actionObjects.map((item) => item.name).join(", ") || "none beyond the named main action";
+  return `CLOSED-WORLD CONTINUITY RULE: The production contains only explicitly authorized characters, objects, action components, and fixed environmental elements. Nothing may duplicate, appear from nowhere, disappear, vanish, spawn, despawn, transform, be replaced, reset, float, teleport, glide, freeze, or move unusually unless explicitly customer-authorized. AUTHORIZED CAST: ${cast}. AUTHORIZED OBJECTS: exactly ${objects.length} important object instance(s): ${objectNames}; action components: ${actionObjects}. FIXED ENVIRONMENT: ${inventory.fixedEnvironmentElements.join(", ")}. FORBIDDEN ADDITIONS: any character, creature, object, prop, tool, vehicle, decoration, particle source, foreground item, interactive background item, or visual-effect source not listed above. SCENE INVENTORY LOCK: no new prop may be invented for hook, escalation, reaction, impact, sound, or payoff. EXACT COUNT LOCK: exactly ${inventory.characters.length} characters and exactly ${objects.length} important object instance(s); no clones, background duplicates, reflections acting as duplicates, substitutes, or one object in two positions. NO-SPAWN / NO-DESPAWN LOCK: every range inherits the final position, visibility, identity, orientation, and physical state of every authorized entity from the preceding range; no scene reset.`;
+}
+
 function visibilityLedger(cast: CharacterProfile[], additionalDirection: string): CharacterVisibilityState[] {
   const direction = additionalDirection.toLowerCase();
   return cast.map((profile) => {
@@ -500,6 +562,9 @@ export function generateDemoPack(
   const ending = removeUncheckedCharacters(stringValue(form.endingPayoff, `${heroName} completes the action and the scene resolves clearly`));
   const ledger = visibilityLedger(cast, form.additionalDirection);
   const visibilityLock = presenceLock(ledger, object, form.additionalDirection);
+  const sceneInventory = buildAuthorizedSceneInventory(form, cast);
+  const objectLedger = buildObjectStateLedger(sceneInventory);
+  const closedWorldLock = inventoryLock(sceneInventory, objectLedger);
   const cameraRule = form.motionLevel === "Safe"
     ? "locked camera axis with no meaningful camera move"
     : form.motionLevel === "Ambitious"
@@ -576,9 +641,11 @@ Concise identity locks:
 ${identities}
 Selection rule: only these checked characters may appear. Do not include any unchecked saved character.
 ${visibilityLock}
+${closedWorldLock}
 Environment lock: ${location}; no unexplained location or background change.
 Important-object lock: ${object}; show every movement from its established start position to its final position.
 Object continuity lock: ${object} has one clear supported start position, moves only from a visible named force along a continuous path, and has one clear final supported position. No spawn, despawn, duplication, design drift, or unrequested transformation.
+Object state ledger: ${objectLedger.map((state) => `${state.name}: start=${state.startPosition}; support=${state.supportOrHolder}; motion=${state.permittedMotion}; final=${state.finalPosition}`).join(" | ")}
 Natural-motion lock: ${naturalMotionLock()}
 Action ownership lock: every timeline beat names the exact character or exact object that moves, its direction, visible cause, physical result, and transition to the next beat. No vague “someone”, “they”, or ownerless motion.
 Tone-from-zero lock: selected tones control the first visible frame at 0:00: opening pose, movement speed, expressions, camera, music, and sound have no neutral introductory period.
@@ -590,6 +657,8 @@ Smooth motion lock: ${smoothMotionLock()}
 Retention lock: Open with visible action in the first second, use one dominant readable visual event per beat, create the major middle escalation around 50–65% of the duration, then reserve the ending for consequence, settled payoff, and a loop-ready final pose.
 Reference continuity: follow the supplied start frame and complete the supplied end frame.
 Camera rule: ${cameraRule}; no sudden cuts unless explicitly requested.
+Cut and freeze rule: ${sceneInventory.allowCuts ? "Customer-authorized cuts must state an exact time and preserve complete inventory continuity." : "One continuous shot only; no sudden scene cut, jump cut, cutaway, angle replacement, reaction-shot cut, empty-scene cut, or camera teleport."} ${sceneInventory.allowIntentionalTensionHold ? "Use a living tension hold with breathing, eye tracking, posture tension, or object vibration; never a frozen frame." : "No freeze frame, midair freeze, long static hold, or motion stop without deceleration."}
+Magical floating rule: ${sceneInventory.allowMagicalFloating ? "Only the explicitly customer-authorized magical effect may float, with visible source and complete traceability; ordinary characters remain grounded." : "No magical floating is authorized; all objects and characters obey normal support and gravity."}
 Adapter camera policy: ${adapter.cameraPolicy}.
 Adapter motion policy: ${adapter.motionPolicy}.
 Adapter reference-frame policy: ${adapter.referenceFramePolicy}.
@@ -616,7 +685,7 @@ ${identities}
 
 Scene: ${location}. Important object: ${object}, clearly visible in its starting position near the central action area. ${heroName} starts foreground-center facing toward the object, in an alert ready pose with a focused, curious expression. ${supporting.map((profile, index) => `${profile.shortName} starts ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing ${heroName}, in a role-appropriate preparation pose with a readable expression.`).join(" ")}
 
-Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Use a continuous wide or medium-wide action composition: every selected character is fully visible, unobstructed, and spatially separated; ${object} is unobstructed in its exact supported start position. Establish exact screen direction, relative scale, spatial distance, initial poses, eye direction, facial expressions, and the 0:00 motion cue. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Physical start-state lock: all feet, paws, wheels, and resting objects maintain visible contact with supporting surfaces; natural contact shadows, believable weight, balanced poses, and nothing hovers or floats. Tone from frame zero: ${toneRetentionDirection(form)}. ${heroName} visibly begins the opening hook, but no action is already completed. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
+Lighting and camera: clean cinematic key light, stable color response, readable depth, matching lens and perspective, and a composition suited to ${platform}. Use a continuous wide or medium-wide action composition: every selected character is fully visible, unobstructed, and spatially separated; ${object} is unobstructed in its exact supported start position. Establish exact screen direction, relative scale, spatial distance, initial poses, eye direction, facial expressions, and the 0:00 motion cue. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Identity, color, clothing, accessory, scale, and proportion locks are mandatory. Physical start-state lock: all feet, paws, wheels, and resting objects maintain visible contact with supporting surfaces; natural contact shadows, believable weight, balanced poses, and nothing hovers or floats. The start frame establishes the complete authorized scene inventory: ${sceneInventory.characters.map((item) => item.name).join(", ")}; exactly ${objectLedger.length} important object instance(s), ${objectLedger.map((item) => item.name).join(", ")}; fixed environment only. Nothing new may be introduced later: no hidden duplicate, unrelated foreground item, extra interactive background object, or unauthorized effect source. Tone from frame zero: ${toneRetentionDirection(form)}. ${heroName} visibly begins the opening hook, but no action is already completed. Exactly these characters only; no duplicates, no extra characters, no future action, no newly appearing props, no text, no logo, no watermark.`,
     endFramePrompt: `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference.
 
 EXACT CAST (${cast.length})
@@ -624,7 +693,7 @@ ${identities}
 
 Use exactly the same ${cast.length} characters and exactly the same environment, lighting direction, lens, perspective, camera height, colors, clothing, accessories, scale, proportions, camera axis, and object history. Model-aware frame strategy for ${adapter.displayName}: ${adapter.referenceFramePolicy}. Final result: ${ending}. ${heroName} finishes clearly safe in the resolved hero position with a readable final expression. ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a distinct resolved ${profile.role.toLowerCase()} pose and remains fully visible.`).join(" ")} The same ${object} is visible in its logical final position after ${action}. The positional change from the opening frame must be physically feasible.
 
-Physical final-state lock: every selected character remains visible in the same wide or medium-wide camera composition and is in a stable completed pose with clear ground or support contact; the same important object is visibly supported in its logical final position; contact shadows, gravity, completed landing, impact absorption, follow-through, and settling are visible. Preserve exact roles, cast count, screen direction, and final payoff expression. No unresolved airborne character, floating prop, impossible balance, frozen peak-of-jump ending, missing character, or camera-caused crop-out. No extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
+Physical final-state lock: every selected character remains visible in the same wide or medium-wide camera composition and is in a stable completed pose with clear ground or support contact; the same ${object} remains visibly supported in its logical final position. Preserve exact authorized inventory, object count, roles, cast count, screen direction, and final payoff expression. Every authorized character and object remains visible unless a customer-authorized visible exit, destruction, or transformation was completed. Contact shadows, gravity, completed landing, impact absorption, follow-through, and settling are visible. No unresolved airborne character, floating prop, impossible balance, frozen peak-of-jump ending, missing character, missing object, new item, duplicate item, unexplained destruction, or camera-caused crop-out. No extra characters, duplicate characters, newly appearing props, substitutions, role changes, color drift, clothing changes, scale changes, morphing, text, logo, or watermark.`,
     videoLock: lock,
     videoTimeline: adaptedTimeline,
     musicPath: musicLines,
@@ -682,6 +751,8 @@ export function inspectProductionPack(
   const endWords = words(pack.endFramePrompt);
   const completeWords = words(completeVideoPrompt(pack));
   const adapter = selectedModelAdapter(form);
+  const inventory = buildAuthorizedSceneInventory(form, cast);
+  const objectStates = buildObjectStateLedger(inventory);
   const findings: QualityFinding[] = [
     finding("Video title exists", pack.videoTitle.trim().length >= 3, "Add a clear original video title."),
     finding("Video title is original in saved history", !savedTitles.some((title) =>
@@ -720,6 +791,12 @@ export function inspectProductionPack(
     finding("Exact names drive the timeline", cast.every((profile) =>
       pack.videoTimeline.toLowerCase().includes(profile.shortName.toLowerCase())), "Use exact active character names in the timeline."),
     finding("Character count is consistent", pack.videoLock.toLowerCase().includes(`exact character count: ${cast.length}`), `Expected exactly ${cast.length} characters.`),
+    finding("Closed-world scene inventory", /closed-world continuity rule/.test(pack.videoLock.toLowerCase()) && /authorized cast:/.test(pack.videoLock.toLowerCase()) && /authorized objects:/.test(pack.videoLock.toLowerCase()), "List the exact cast, objects, fixed environment, and forbidden additions."),
+    finding("Exact inventory counts", /exact count lock/.test(pack.videoLock.toLowerCase()) && pack.videoLock.toLowerCase().includes(`exactly ${cast.length} characters`) && pack.videoLock.toLowerCase().includes(`exactly ${objectStates.length} important object`), "State exact active-character and important-object counts."),
+    finding("No unauthorized scene entity", !/\b(?:new prop|extra prop|mysterious item|new obstacle|unauthorized object)\b/.test(`${pack.startFramePrompt}\n${pack.endFramePrompt}\n${pack.videoTimeline}`.toLowerCase()), "FAILED — Unauthorized scene entity introduced. Use only the authorized inventory."),
+    finding("Object state ledger is complete", objectStates.every((state) => pack.videoLock.includes(state.name) && /start=|starting position/.test(pack.videoLock) && /final=|final position/.test(pack.videoLock)), "Every important object needs start position, support/cause, continuous path, and final position."),
+    finding("No scene reset between ranges", /no scene reset/.test(pack.videoLock.toLowerCase()) && /transition/.test(pack.videoTimeline.toLowerCase()), "Each range must inherit the previous range’s entity state with no reset."),
+    finding("No sudden cuts or freezes", /one continuous shot only|no sudden cuts/.test(pack.videoLock.toLowerCase()) && /no freeze frame|living tension hold/.test(pack.videoLock.toLowerCase()), "Prohibit cuts and freezes unless customer-authorized with continuity."),
     finding("Duplicate-character prohibition", /no duplicate/.test(all), "The pack must explicitly forbid duplicates."),
     finding("Sudden-appearance prohibition", /no sudden appearances|sudden appearances/.test(all), "The pack must forbid sudden appearances."),
     finding("Sudden-disappearance prohibition", /no sudden disappearances|sudden disappearances/.test(all), "The pack must forbid sudden disappearances."),

@@ -5,7 +5,7 @@ import {
   QualityFinding,
   productionPackKeys,
 } from "../../production-types";
-import { selectedModelAdapter } from "../../production-engine";
+import { buildAuthorizedSceneInventory, buildObjectStateLedger, selectedModelAdapter } from "../../production-engine";
 
 type RequestBody = {
   action?: "generate" | "fix";
@@ -100,6 +100,10 @@ Hard requirements:
 - Add a natural-motion and action-ownership lock: every timeline range begins at 0:00 and names the exact character or object owner, action, direction, visible cause, result, and transition. Prohibit random gestures, twitching, dancing, spinning, jumping, sliding, snapping, unrelated reactions, random background activity, decorative effects that hide the cast, and random camera movement.
 - Apply tone from frame zero: selected tones control the opening pose, first movement, camera, expression, music, and sound at exactly 0:00, with no neutral introduction. If Fast is selected, identify who is already moving, what object responds, direction, cause, expression, and wide camera state at exactly 0:00; no static hold, fade-in, title card, delayed motion, or slow reveal.
 - Keep a continuous wide or medium-wide camera composition whenever practical so active characters remain visible. No camera-caused disappearance, unexplained crop-out, action-axis reversal, sudden reframing, or empty/background-only shot.
+- Apply a CLOSED-WORLD CONTINUITY RULE: use only the supplied Authorized Scene Inventory—checked active characters, selected important object, named main-action components, fixed environment, and explicit customer-authorized exceptions. Never invent a new prop, creature, vehicle, decoration, particle source, foreground item, interactive background element, or effect source for hook, escalation, impact, audio, or payoff.
+- Include AUTHORIZED CAST, AUTHORIZED OBJECTS, FIXED ENVIRONMENT, FORBIDDEN ADDITIONS, SCENE INVENTORY LOCK, EXACT COUNT LOCK, and NO-SPAWN / NO-DESPAWN LOCK inside videoLock. Every timeline range inherits the exact entity state from the prior range; no scene reset, duplicate, replacement, object in two positions, new entity, or removed entity.
+- Respect object state ledgers: every authorized important object has a visible supported start position, one named force and continuous path, and a visible supported final position. No unauthorized object transformation, destruction, disappearing, or duplication.
+- Default to one continuous wide/medium-wide shot. No sudden cut, jump cut, cutaway, angle replacement, camera teleport, freeze frame, midair freeze, or static hold. A customer-authorized cut must state its exact time and preserve traceability; a tension hold remains living with subtle movement rather than freezing.
 - If Character Cartoon Sounds is enabled, place concise nonverbal vocalizations inside soundEffects only. Assign each sound to an exact active character name and visible reaction. No understandable words, quotation-mark dialogue, random voices, or character vocalizations in musicPath.
 - Avoid contradictory, overloaded instructions. Prioritize polished, coherent, stable, zero-error continuity.
 - Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
@@ -152,6 +156,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "A complete current production pack is required for repair." }, { status: 400 });
   }
 
+  const inventoryCharacters = body.characters.filter((character) => activeIds.includes(character.id));
+  const authorizedSceneInventory = buildAuthorizedSceneInventory(body.form, inventoryCharacters);
+  const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
   const input = action === "fix"
     ? {
         form: body.form,
@@ -159,10 +166,12 @@ export async function POST(request: Request) {
         characters: body.characters,
         activeCharacterIds: activeIds,
         activeCharacters,
+        authorizedSceneInventory,
+        objectStateLedger,
         currentPack: body.pack,
         qualityFindings: body.qualityFindings || [],
       }
-    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters, activeCharacterIds: activeIds, activeCharacters };
+    : { form: body.form, modelAdapter: selectedModelAdapter(body.form), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {

@@ -353,6 +353,9 @@ export default function Home() {
   const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
   const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
   const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
+  const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
+  const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
+  const [ideaDescriptionsExpanded, setIdeaDescriptionsExpanded] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1592,7 +1595,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
   function completeIdeaField(kind: CreativeAssetKind, label: string) {
     const keys = creativeFields[kind];
-    return <div className="complete-idea-field" key={kind}><label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.name]: event.target.value }))} /></label><label className="field wide"><span>{label} description</span><textarea value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.description]: event.target.value }))} /></label></div>;
+    return <div className="complete-idea-field" key={kind}><label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.name]: event.target.value }))} /></label><label className="field wide"><span>{label} description</span><textarea className={ideaDescriptionsExpanded ? "expanded-description" : "compact-description"} value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.description]: event.target.value }))} /></label></div>;
   }
 
   return (
@@ -1619,6 +1622,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       </section>
 
       <div className="workspace">
+        <nav className="workflow-nav" aria-label="Production workflow"><a href="#choose-outputs">Outputs</a><a href="#episode-idea">Video Idea</a><a href="#characters">Characters</a><a href="#production-setup">Setup</a><a href="#generate-review">Generate</a><a href="/library">Library</a></nav>
         <section className="setup-panel">
           <div className="mode-switch" aria-label="Generator mode">
             <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
@@ -1664,7 +1668,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="form-section complete-video-idea" id="episode-idea">
             <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
-            <div className="selection-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>AI Generate</button></div>
+            <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
             <div className="form-grid">
               {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
               <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
@@ -1672,6 +1676,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               {completeIdeaField("object", "Important Object")}
               {completeIdeaField("action", "Action or Trap")}
               {completeIdeaField("payoff", "Ending or Payoff")}
+              <button type="button" className="description-toggle wide" aria-expanded={ideaDescriptionsExpanded} onClick={() => setIdeaDescriptionsExpanded((current) => !current)}>{ideaDescriptionsExpanded ? "Collapse descriptions" : "Expand descriptions"}</button>
               <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
               <details className="advanced-panel wide">
                 <summary>Creative Library import and export <span>+</span></summary>
@@ -1687,9 +1692,10 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </div>
           </section>
 
-          <section className="form-section">
+          <section className="form-section" id="characters">
             <div className="section-heading"><span>03</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
-            <div className="character-block">
+            <div className="character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
+            <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
                 <div><strong>{viewedCharacter?.fullIdentity || "No saved characters"}</strong><small>Character {characters.length ? characterIndex + 1 : 0} of {characters.length}</small></div>
@@ -1715,9 +1721,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 {productionCharacters.map((profile) => <article key={profile.id}><button className="character-card-main" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); }}><b>{profile.shortName}</b><small>{profile.role}</small></button><button className="remove-chip" type="button" aria-label={`Remove ${profile.shortName} from video`} onClick={() => toggleActiveCharacter(profile.id)}>×</button></article>)}
                 {!productionCharacters.length && <p className="empty-note">No characters selected.</p>}
               </div></div>
-            </div>
+            </details>
 
-            <div className="section-heading remaining-settings"><span>05</span><div><h2>Voice, Music, and Saved Settings</h2><p>Optional narration, synchronized audio, model guidance, presets, and saved productions.</p></div></div>
             <details className="advanced-panel">
               <summary>Character Library import and export <span>+</span></summary>
               <div className="advanced-content">
@@ -1731,8 +1736,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </details>
           </section>
 
-          <section className="form-section">
+          <section className="form-section" id="production-setup">
             <div className="section-heading"><span>04</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
+            <div className="production-tabs" role="tablist" aria-label="Production settings">{(["core", "motion", "audio", "advanced"] as const).map((tab) => <button key={tab} type="button" role="tab" aria-selected={productionTab === tab} className={productionTab === tab ? "active" : ""} onClick={() => setProductionTab(tab)}>{tab}</button>)}</div>
             <div className="form-grid">
               <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
               <label className="field"><span>AI video model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select>{form.videoModel === "Custom model" && <input value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
@@ -1807,8 +1813,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="generate-section">
-            <div><span>06</span><h2>Generate Selected Outputs</h2><p>Generate only the outputs selected in Step 01.</p></div>
+          <section className="generate-section sticky-generation-bar" id="generate-review">
+            <div><span>05</span><h2>Generate and Review</h2><p>{requestedOutputs.length} outputs · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
             <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
           </section>
         </section>

@@ -841,7 +841,9 @@ export default function Home() {
     const payoff = payoffs[Math.floor(index / 343) % payoffs.length];
     const edition = index + 1;
     return {
-      videoTitle: `${object}: The ${mechanic.replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+      // A short episode title is derived from the physical mechanism, never a
+      // reusable colon subtitle with a renamed prop.
+      videoTitle: `Biscuit’s ${mechanic.replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
       location: { name: setting, description: `A family-friendly fixed setting called ${setting}, with one clear central action lane, stable landmarks, grounded surfaces, and no unrequested background activity.` },
       importantObject: { name: object, description: `One visible ${object} with a stable silhouette, clear physical support, predictable motion, and a single continuous final position.` },
       actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using a visible ${mechanic}; the Hero makes one readable response, the object follows a continuous grounded path, and the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
@@ -898,7 +900,7 @@ export default function Home() {
         ...recentFingerprints.map((name) => ({ name, description: "creative fingerprint" })),
       ].slice(-60);
       let idea: CompleteIdea | null = null;
-      for (let attempt = 0; attempt < (creativeMode === "demo" ? 500 : 5); attempt += 1) {
+      for (let attempt = 0; attempt < (creativeMode === "demo" ? 2000 : 10); attempt += 1) {
         if (creativeMode === "demo") {
           idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex + attempt);
         } else {
@@ -1813,15 +1815,15 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
               </div>
             </details>
+            <section className="generate-section setup-generation" aria-labelledby="setup-generation-title">
+              <div><span>05</span><h2 id="setup-generation-title">Generation Summary</h2><p>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
+              <button className="generate-button selectable-generate" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
+            </section>
           </section>
 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="generate-section sticky-generation-bar" id="generate-review">
-            <div><span>05</span><h2>Generate and Review</h2><p>{requestedOutputs.length} outputs · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
-            <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
-          </section>
         </section>
 
         <section className="output-panel" ref={outputRef}>

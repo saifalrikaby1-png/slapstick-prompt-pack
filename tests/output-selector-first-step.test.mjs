@@ -11,8 +11,11 @@ test("output selector is the single first workflow step", () => {
   assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
   assert.match(page, /<span>04<\/span>[\s\S]{0,100}Production Setup/);
-  assert.match(page, /<span>05<\/span>[\s\S]{0,120}Voice, Music, and Saved Settings/);
-  assert.match(page, /<span>06<\/span>[\s\S]{0,100}Generate Selected Outputs/);
+  assert.doesNotMatch(page, /Voice, Music, and Saved Settings/);
+  assert.match(page, /Advanced Settings.*narration, voices, music, and sound/);
+  assert.match(page, /Project Presets and Saved Packs/);
+  assert.match(page, /workflow-tab-setup/);
+  assert.match(page, /Generation Summary[\s\S]{0,600}Generate \$\{requestedOutputs\.length\} Selected Outputs/);
   assert.equal((page.match(/id="choose-outputs"/g) || []).length, 1);
 });
 

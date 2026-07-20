@@ -15,7 +15,7 @@ test("renders the approved five-output workflow in Demo and AI modes", async () 
     "Include in This Video",
     "Selected for This Video",
     "Production Setup",
-    "Generate Selected Outputs",
+    "Generation Summary",
     "Character-Building Prompt",
     "Start-Frame Image Prompt",
     "End-Frame Image Prompt",

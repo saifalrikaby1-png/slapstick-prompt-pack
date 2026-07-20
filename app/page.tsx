@@ -46,7 +46,7 @@ import {
   normalizeCreativeIdentity,
   parseCreativeLibrary,
 } from "./creative-library";
-import { CompleteIdeaRegistryEntry, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
+import { CompleteIdeaRegistryEntry, actionSignatureHash, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -852,7 +852,7 @@ export default function Home() {
 
   function registryEntry(idea: CompleteIdea): CompleteIdeaRegistryEntry {
     const entry = { normalizedTitle: normalizeIdeaValue(idea.videoTitle), normalizedLocation: normalizeIdeaValue(`${idea.location.name} ${idea.location.description}`), normalizedObject: normalizeIdeaValue(`${idea.importantObject.name} ${idea.importantObject.description}`), normalizedAction: normalizeIdeaValue(`${idea.actionOrTrap.name} ${idea.actionOrTrap.description}`), normalizedPayoff: normalizeIdeaValue(`${idea.endingOrPayoff.name} ${idea.endingOrPayoff.description}`), significantTitleTerms: significantTerms(idea.videoTitle), creativeFingerprint: idea.creativeFingerprint };
-    return { ...entry, conceptHash: conceptHash(entry), createdAt: new Date().toISOString() };
+    return { ...entry, conceptHash: conceptHash(entry), actionSignatureHash: actionSignatureHash(entry), createdAt: new Date().toISOString() };
   }
 
   function savedProjectRegistryEntries(): CompleteIdeaRegistryEntry[] {
@@ -1625,7 +1625,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
       <div className="workspace">
         <nav className="workflow-nav" role="tablist" aria-label="Production workflow">
-          {(["outputs", "videoIdea", "characters", "setup", "generate"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "generate" && pack ? <small>Ready</small> : null}</button>)}
+          {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
           <a href="/library" role="tab" aria-selected="false">Library</a>
         </nav>
         <section className="setup-panel">
@@ -1818,13 +1818,13 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="generate-section sticky-generation-bar" id="generate-review" role="tabpanel" aria-labelledby="workflow-tab-generate" hidden={activeWorkflowTab !== "generate"}>
+          <section className="generate-section sticky-generation-bar" id="generate-review">
             <div><span>05</span><h2>Generate and Review</h2><p>{requestedOutputs.length} outputs · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
             <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
           </section>
         </section>
 
-        <section className="output-panel" ref={outputRef} hidden={activeWorkflowTab !== "generate"}>
+        <section className="output-panel" ref={outputRef}>
           <div className="output-heading">
             <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
             <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>

@@ -344,6 +344,7 @@ export default function Home() {
   const [recentFingerprints, setRecentFingerprints] = useState<string[]>([]);
   const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
   const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
+  const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -802,6 +803,26 @@ export default function Home() {
     return Boolean(form.videoTitle.trim() || form.location.trim() || form.importantObject.trim() || form.trapAction.trim() || form.endingPayoff.trim());
   }
 
+  function endlessDemoCompleteIdea(index: number): CompleteIdea {
+    const settings = ["Sunwheel Acorn Plaza", "Copperleaf Picnic Terrace", "Mossbell Orchard Steps", "Twistroot Lantern Bridge", "Cloverclock Courtyard", "Bramblewheel Boardwalk", "Honeyglow Hollow"];
+    const objects = ["Moon-Spring Tart", "Copperberry Popper", "Acorn Whistle Wheel", "Jam-Jar Jumper", "Pinecone Pinball", "Clover Bell Roller", "Lantern-Lid Tumbler"];
+    const mechanics = ["spring rebound", "button backfire", "grounded rolling redirect", "one-hop misfire", "curve-and-catch reversal", "tilt-and-return ricochet", "safe wobble rebound"];
+    const payoffs = ["clear catch victory", "button bounce finish", "grounded roll resolution", "clean redirect payoff", "loop-ready victory pose", "safe seated recovery", "settled center-frame win"];
+    const setting = settings[index % settings.length];
+    const object = objects[Math.floor(index / 7) % objects.length];
+    const mechanic = mechanics[Math.floor(index / 49) % mechanics.length];
+    const payoff = payoffs[Math.floor(index / 343) % payoffs.length];
+    const edition = index + 1;
+    return {
+      videoTitle: `${object}: The ${mechanic.replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+      location: { name: setting, description: `A family-friendly fixed setting called ${setting}, with one clear central action lane, stable landmarks, grounded surfaces, and no unrequested background activity.` },
+      importantObject: { name: object, description: `One visible ${object} with a stable silhouette, clear physical support, predictable motion, and a single continuous final position.` },
+      actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using a visible ${mechanic}; the Hero makes one readable response, the object follows a continuous grounded path, and the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
+      endingOrPayoff: { name: payoff, description: `The Hero finishes in a clear ${payoff} beside the settled ${object}; every active character remains visible in a distinct safe final position, and ${setting} remains unchanged for a stable end frame.` },
+      creativeFingerprint: { settingCategory: `${setting}-${Math.floor(index / 7)}`, objectCategory: `${object}-${Math.floor(index / 49)}`, actionMechanic: `${mechanic}-${Math.floor(index / 343)}`, escalationPattern: `causal-${edition}`, payoffPattern: `${payoff}-${Math.floor(index / 2401)}` },
+    };
+  }
+
   async function generateCompleteIdea() {
     if (isGeneratingCompleteIdea) return;
     if (hasCompleteIdea() && !window.confirm("This will replace the current title, location, important object, action or trap, and ending or payoff.")) return;
@@ -820,12 +841,7 @@ export default function Home() {
       let idea: CompleteIdea | null = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
         if (mode === "demo") {
-          const location = demoCreativeSuggestion("location");
-          const importantObject = demoCreativeSuggestion("object");
-          const actionOrTrap = demoCreativeSuggestion("action");
-          const endingOrPayoff = demoCreativeSuggestion("payoff");
-          const title = demoCreativeSuggestion("title");
-          idea = { videoTitle: title.title || "Original Slapstick Idea", location: location as Required<CreativeSuggestion>, importantObject: importantObject as Required<CreativeSuggestion>, actionOrTrap: actionOrTrap as Required<CreativeSuggestion>, endingOrPayoff: endingOrPayoff as Required<CreativeSuggestion>, creativeFingerprint: { settingCategory: location.name || "setting", objectCategory: importantObject.name || "object", actionMechanic: actionOrTrap.name || "action", escalationPattern: "causal backfire", payoffPattern: endingOrPayoff.name || "payoff" } } as CompleteIdea;
+          idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex);
         } else {
           const response = await fetch("/api/creative-suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generateCompleteIdea", idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
           const data = await response.json() as CompleteIdea & { error?: string };
@@ -838,6 +854,7 @@ export default function Home() {
           setIdeaUndoSnapshot(snapshot);
           setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
           setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
+          if (mode === "demo") setDemoCompleteIdeaIndex((current) => current + 1);
           rememberSuggestion("title", { title: idea!.videoTitle });
           rememberSuggestion("location", idea!.location);
           rememberSuggestion("object", idea!.importantObject);

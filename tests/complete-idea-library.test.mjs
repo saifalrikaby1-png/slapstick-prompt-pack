@@ -24,3 +24,12 @@ test("credit-ready action map and local prompt library are explicit", () => {
   assert.match(library, /localStorage/);
   assert.match(library, /Open and Continue Editing/);
 });
+
+test("complete idea generation remains available beyond five requests", () => {
+  assert.match(page, /function endlessDemoCompleteIdea\(index: number\)/);
+  assert.match(page, /demoCompleteIdeaIndex/);
+  assert.match(page, /setDemoCompleteIdeaIndex\(\(current\) => current \+ 1\)/);
+  assert.match(page, /\[\.\.\.current, fingerprint\]\.slice\(-20\)/);
+  assert.match(page, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
+  assert.doesNotMatch(page, /maxGenerations|generationCount|remainingGenerations|attempts >= 5/);
+});

@@ -55,6 +55,7 @@ const STORAGE = {
   creative: CREATIVE_LIBRARY_STORAGE_KEY,
   outputSelection: "slapstick-output-selection",
   recentCreativeSuggestions: "slapstick-recent-creative-suggestions-v1",
+  recentCreativeFingerprints: "slapstick-recent-creative-fingerprints-v1",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
@@ -62,6 +63,15 @@ type OutputSelectionMode = "custom" | "fullPack";
 type CreativeSuggestionKind = CreativeAssetKind | "title";
 type CreativeSuggestion = { name?: string; description?: string; title?: string };
 type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
+type CompleteIdea = {
+  videoTitle: string;
+  location: { name: string; description: string };
+  importantObject: { name: string; description: string };
+  actionOrTrap: { name: string; description: string };
+  endingOrPayoff: { name: string; description: string };
+  creativeFingerprint: { settingCategory: string; objectCategory: string; actionMechanic: string; escalationPattern: string; payoffPattern: string };
+};
+type IdeaSnapshot = Pick<ProductionForm, "videoTitle" | "locationAssetId" | "locationName" | "location" | "objectAssetId" | "objectName" | "importantObject" | "actionAssetId" | "actionName" | "trapAction" | "payoffAssetId" | "payoffName" | "endingPayoff">;
 const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
 const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: [], object: [], action: [], payoff: [] });
 
@@ -331,6 +341,9 @@ export default function Home() {
   });
   const activeCreativeRequests = useRef<Set<CreativeSuggestionKind>>(new Set());
   const [recentSuggestions, setRecentSuggestions] = useState<RecentSuggestions>(emptyRecentSuggestions);
+  const [recentFingerprints, setRecentFingerprints] = useState<string[]>([]);
+  const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
+  const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -366,6 +379,17 @@ export default function Home() {
       setSavedPacks(safeArray(localStorage.getItem(STORAGE.packs))
         .map(migrateStoredPack)
         .filter((entry): entry is StoredPack => Boolean(entry)));
+      const libraryProject = migrateStoredPack(safeObject(localStorage.getItem("slapstick-library-open-project")));
+      if (libraryProject?.schemaVersion === 2) {
+        const restoredCharacters = mergeCharacterLibraries(mergedCharacters, libraryProject.characterProfiles);
+        setCharacters(restoredCharacters);
+        setForm(migrateForm(libraryProject.form));
+        setPack(libraryProject.pack as ProductionPack);
+        setGeneratedOutputs(libraryProject.generatedOutputs || requestedOutputValues);
+        setRequestedOutputs(libraryProject.requestedOutputs || requestedOutputValues);
+        setNotice("Prompt Library project restored for editing.");
+        localStorage.removeItem("slapstick-library-open-project");
+      }
       const storedCreative = parseCreativeLibrary(localStorage.getItem(STORAGE.creative));
       setCreativeAssets(storedCreative);
       const storedRecent = safeObject(sessionStorage.getItem(STORAGE.recentCreativeSuggestions));
@@ -385,6 +409,10 @@ export default function Home() {
         });
         setRecentSuggestions(restored);
       }
+      const storedFingerprints = safeArray(sessionStorage.getItem(STORAGE.recentCreativeFingerprints))
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.slice(0, 400)).slice(-20);
+      setRecentFingerprints(storedFingerprints);
       const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
       if (storedSelection) {
         const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
@@ -443,6 +471,10 @@ export default function Home() {
     if (!hydratedRef.current) return;
     sessionStorage.setItem(STORAGE.recentCreativeSuggestions, JSON.stringify(recentSuggestions));
   }, [recentSuggestions]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    sessionStorage.setItem(STORAGE.recentCreativeFingerprints, JSON.stringify(recentFingerprints));
+  }, [recentFingerprints]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -759,6 +791,75 @@ export default function Home() {
       activeCreativeRequests.current.delete(kind);
       setSuggestingFields((current) => ({ ...current, [kind]: false }));
     }
+  }
+
+  function currentIdeaSnapshot(): IdeaSnapshot {
+    const { videoTitle, locationAssetId, locationName, location, objectAssetId, objectName, importantObject, actionAssetId, actionName, trapAction, payoffAssetId, payoffName, endingPayoff } = form;
+    return { videoTitle, locationAssetId, locationName, location, objectAssetId, objectName, importantObject, actionAssetId, actionName, trapAction, payoffAssetId, payoffName, endingPayoff };
+  }
+
+  function hasCompleteIdea() {
+    return Boolean(form.videoTitle.trim() || form.location.trim() || form.importantObject.trim() || form.trapAction.trim() || form.endingPayoff.trim());
+  }
+
+  async function generateCompleteIdea() {
+    if (isGeneratingCompleteIdea) return;
+    if (hasCompleteIdea() && !window.confirm("This will replace the current title, location, important object, action or trap, and ending or payoff.")) return;
+    setIsGeneratingCompleteIdea(true);
+    setError("");
+    const snapshot = currentIdeaSnapshot();
+    try {
+      const exclusions = [
+        ...creativeExclusions("title"),
+        ...creativeExclusions("location"),
+        ...creativeExclusions("object"),
+        ...creativeExclusions("action"),
+        ...creativeExclusions("payoff"),
+        ...recentFingerprints.map((name) => ({ name, description: "creative fingerprint" })),
+      ].slice(-60);
+      let idea: CompleteIdea | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (mode === "demo") {
+          const location = demoCreativeSuggestion("location");
+          const importantObject = demoCreativeSuggestion("object");
+          const actionOrTrap = demoCreativeSuggestion("action");
+          const endingOrPayoff = demoCreativeSuggestion("payoff");
+          const title = demoCreativeSuggestion("title");
+          idea = { videoTitle: title.title || "Original Slapstick Idea", location: location as Required<CreativeSuggestion>, importantObject: importantObject as Required<CreativeSuggestion>, actionOrTrap: actionOrTrap as Required<CreativeSuggestion>, endingOrPayoff: endingOrPayoff as Required<CreativeSuggestion>, creativeFingerprint: { settingCategory: location.name || "setting", objectCategory: importantObject.name || "object", actionMechanic: actionOrTrap.name || "action", escalationPattern: "causal backfire", payoffPattern: endingOrPayoff.name || "payoff" } } as CompleteIdea;
+        } else {
+          const response = await fetch("/api/creative-suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generateCompleteIdea", idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
+          const data = await response.json() as CompleteIdea & { error?: string };
+          if (!response.ok) throw new Error(data.error || "Complete idea generation failed.");
+          idea = data;
+        }
+        const fingerprint = idea ? Object.values(idea.creativeFingerprint).map(normalizeCreativeIdentity).join("|") : "";
+        const duplicate = !idea || recentFingerprints.includes(fingerprint) || creativeExclusions("title").some((item) => normalizeCreativeIdentity(item.name) === normalizeCreativeIdentity(idea!.videoTitle));
+        if (!duplicate) {
+          setIdeaUndoSnapshot(snapshot);
+          setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
+          setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
+          rememberSuggestion("title", { title: idea!.videoTitle });
+          rememberSuggestion("location", idea!.location);
+          rememberSuggestion("object", idea!.importantObject);
+          rememberSuggestion("action", idea!.actionOrTrap);
+          rememberSuggestion("payoff", idea!.endingOrPayoff);
+          setNotice("Complete idea generated: Title · Location · Object · Action · Payoff. Nothing was saved automatically.");
+          return;
+        }
+      }
+      throw new Error("Could not produce a sufficiently distinct complete idea. Your current idea was kept.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Complete idea generation failed. Your current idea was kept.");
+    } finally {
+      setIsGeneratingCompleteIdea(false);
+    }
+  }
+
+  function undoIdeaReplacement() {
+    if (!ideaUndoSnapshot) return;
+    setForm((current) => ({ ...current, ...ideaUndoSnapshot }));
+    setIdeaUndoSnapshot(null);
+    setNotice("The previous complete idea was restored.");
   }
 
   function loadDemo() {
@@ -1405,7 +1506,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         </div>
         {kind === "object" && <label className="toggle-field"><input type="checkbox" checked={form.allowPreviouslySavedObjects} onChange={(event) => update("allowPreviouslySavedObjects", event.target.checked)} /><span>Allow Previously Saved Objects</span></label>}
         <div className="button-row">
-          <button type="button" disabled={suggestingFields[kind]} aria-busy={suggestingFields[kind]} onClick={() => suggestCreative(kind, false)}>{suggestingFields[kind] ? "Creating…" : `Generate ${label} with AI`}</button>
+          <button type="button" disabled={suggestingFields[kind]} aria-busy={suggestingFields[kind]} onClick={() => suggestCreative(kind, false)}>{suggestingFields[kind] ? "Creating…" : `Regenerate ${label}`}</button>
           <button type="button" disabled={suggestingFields[kind]} onClick={() => suggestCreative(kind, true)}>{suggestingFields[kind] ? "Creating…" : `Continue and Improve ${label}`}</button>
           <button className="primary-small" type="button" onClick={() => saveCreativeAsset(kind)}>{selected ? `Update ${label}` : `Save ${label}`}</button>
           {kind === "location" && <button type="button" onClick={setSignatureLocation} disabled={!selectedId}>Set as Signature Location</button>}
@@ -1427,6 +1528,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           <span />
           {mode === "demo" ? "Demo Mode · local" : "AI Mode · server secured"}
         </div>
+        <a className="library-link" href="/library">My Prompt Library</a>
       </header>
 
       <section className="hero" id="top">
@@ -1488,7 +1590,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <article className="creative-editor title-editor wide">
                 <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
                 <label className="field wide"><span>Video Title</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-                <div className="button-row"><button type="button" disabled={suggestingFields.title} aria-busy={suggestingFields.title} onClick={() => suggestCreative("title")}>{suggestingFields.title ? "Creating…" : "Generate Ultra-Unique Title with AI"}</button></div>
+                <div className="button-row"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button><button type="button" disabled={suggestingFields.title} aria-busy={suggestingFields.title} onClick={() => suggestCreative("title")}>{suggestingFields.title ? "Creating…" : "Regenerate Title"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div>
               </article>
               {creativeEditor("location", "Location")}
               {creativeEditor("object", "Important Object")}
@@ -1638,7 +1740,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <section className="output-panel" ref={outputRef}>
           <div className="output-heading">
             <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
-            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Pack</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
+            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
           {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}
           {pack && <button className="dynamic-word-button" type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word document…" : generatedOutputs.length === requestedOutputValues.length ? "Download Full Pack as Word" : "Download Selected Outputs as Word"}</button>}

@@ -24,8 +24,8 @@ test("each creative control has independent loading and duplicate-request protec
 
 test("new title, location, object, action, and payoff suggestions are repeatable and editable", () => {
   for (const kind of ["title", "location", "object", "action", "payoff"]) assert.match(page, new RegExp(`demoCandidates[\\s\\S]*${kind}:`));
-  assert.match(page, /Generate Ultra-Unique Title with AI/);
-  assert.match(page, /Generate \$\{label\} with AI/);
+  assert.match(page, /Generate Complete Video Idea/);
+  assert.match(page, /Regenerate \$\{label\}/);
   for (const kind of ["location", "object", "action", "payoff"]) assert.match(page, new RegExp(`creativeEditor\\("${kind}"`));
   assert.match(page, /\[creativeFields\[kind\]\.description\]: result\.description!\.trim\(\)/);
   assert.match(page, /update\("videoTitle", result\.title!\.trim\(\)\)/);

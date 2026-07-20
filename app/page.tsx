@@ -66,6 +66,7 @@ const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 type OutputSelectionMode = "custom" | "fullPack";
 type CreativeGenerationMode = "ai" | "demo";
 type IdeaCreationMethod = "manual" | "ai";
+type WorkflowTab = "outputs" | "videoIdea" | "characters" | "setup" | "generate" | "library";
 type CreativeSuggestionKind = CreativeAssetKind | "title";
 type CreativeSuggestion = { name?: string; description?: string; title?: string };
 type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
@@ -356,6 +357,7 @@ export default function Home() {
   const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
   const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
   const [ideaDescriptionsExpanded, setIdeaDescriptionsExpanded] = useState(false);
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("outputs");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1622,14 +1624,17 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       </section>
 
       <div className="workspace">
-        <nav className="workflow-nav" aria-label="Production workflow"><a href="#choose-outputs">Outputs</a><a href="#episode-idea">Video Idea</a><a href="#characters">Characters</a><a href="#production-setup">Setup</a><a href="#generate-review">Generate</a><a href="/library">Library</a></nav>
+        <nav className="workflow-nav" role="tablist" aria-label="Production workflow">
+          {(["outputs", "videoIdea", "characters", "setup", "generate"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "generate" && pack ? <small>Ready</small> : null}</button>)}
+          <a href="/library" role="tab" aria-selected="false">Library</a>
+        </nav>
         <section className="setup-panel">
           <div className="mode-switch" aria-label="Generator mode">
             <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
             <button className={mode === "ai" ? "active" : ""} type="button" onClick={() => setMode("ai")}>AI Mode<small>OpenAI powered</small></button>
           </div>
 
-          <section className="form-section output-picker compact-selector" id="choose-outputs" aria-labelledby="output-selector-title">
+          <section className="form-section output-picker compact-selector" id="choose-outputs" role="tabpanel" aria-labelledby="workflow-tab-outputs" hidden={activeWorkflowTab !== "outputs"}>
             <div className="selector-header">
               <div className="section-heading"><span>01</span><div><h2 id="output-selector-title">Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized production pack.</p></div></div>
               <strong className="selected-count" aria-live="polite">{selectionMode === "fullPack" ? "7 outputs included" : `${requestedOutputs.length} output${requestedOutputs.length === 1 ? "" : "s"} selected`}</strong>
@@ -1666,7 +1671,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </div>
           </section>
 
-          <section className="form-section complete-video-idea" id="episode-idea">
+          <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
             <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
             <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
             <div className="form-grid">
@@ -1692,7 +1697,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </div>
           </section>
 
-          <section className="form-section" id="characters">
+          <section className="form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
             <div className="section-heading"><span>03</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
             <div className="character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
             <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
@@ -1736,7 +1741,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </details>
           </section>
 
-          <section className="form-section" id="production-setup">
+          <section className="form-section" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <div className="section-heading"><span>04</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
             <div className="production-tabs" role="tablist" aria-label="Production settings">{(["core", "motion", "audio", "advanced"] as const).map((tab) => <button key={tab} type="button" role="tab" aria-selected={productionTab === tab} className={productionTab === tab ? "active" : ""} onClick={() => setProductionTab(tab)}>{tab}</button>)}</div>
             <div className="form-grid">
@@ -1813,13 +1818,13 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="generate-section sticky-generation-bar" id="generate-review">
+          <section className="generate-section sticky-generation-bar" id="generate-review" role="tabpanel" aria-labelledby="workflow-tab-generate" hidden={activeWorkflowTab !== "generate"}>
             <div><span>05</span><h2>Generate and Review</h2><p>{requestedOutputs.length} outputs · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
             <button className="generate-button selectable-generate" type="button" disabled={!isReady || !requestedOutputs.length || isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `${generateButtonLabel()} →`}</button>
           </section>
         </section>
 
-        <section className="output-panel" ref={outputRef}>
+        <section className="output-panel" ref={outputRef} hidden={activeWorkflowTab !== "generate"}>
           <div className="output-heading">
             <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
             <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>

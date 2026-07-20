@@ -4,6 +4,7 @@ const fields = [
   "colorLock",
   "scaleSizeLock",
   "vocalStyleLock",
+  "nonverbalSoundProfile",
   "movementStyle",
   "continuityRules",
   "negativeRules",
@@ -93,13 +94,13 @@ Field guidance:
 - personalityLock: behavior, emotion, motivation, relationships, role, and reaction style.
 - colorLock: precise palette and marking guidance that prevents color drift.
 - scaleSizeLock: relative size, proportions, signature-feature volume, and framing consistency.
-- vocalStyleLock: obey dialogue mode. For No dialogue, begin exactly: "No spoken dialogue. Use only non-verbal expressive cartoon reactions such as gasps, squeaks, chuckles, or playful sounds if needed."
+- vocalStyleLock: follow only the supplied character description and customer guidance; do not infer pitch, gender, species, accent, or personality from role.
+- nonverbalSoundProfile: produce a readable NONVERBAL SOUND IDENTITY covering pitch, energy, rhythm, effort, surprise, happy, frustration, impact, movement-related sounds, prohibited sounds, and the spoken-word rule. Preserve customer-written details. Do not infer a species the customer did not provide. Do not assign stereotypical Hero, Companion, or Enemy sounds. Do not use species-specific, mechanical, or magical sounds unless supported by the supplied identity or description.
 - movementStyle: species- and personality-specific movement, anticipation, weight, arcs, and recovery.
 - continuityRules: lock the character across start frame, video action, end frame, and future episodes.
 - negativeRules: a direct negative prompt block forbidding duplication, species/color/scale/face/role changes, extra limbs, distorted anatomy, morphing, random outfits, and merging.
 
-For an enemy, keep the character distinct, mischievous and family-friendly; never change the enemy into the hero.
-For a hero, maintain a charming, readable heroic identity and consistent winning role.`;
+Role controls story behavior and continuity only; it never determines pitch, vocal depth, gender, species, personality, or sound type.`;
   const input = action === "suggestSingleField"
     ? `Suggest only ${String(requestedField)} for this character:\n${JSON.stringify({ character, context }, null, 2)}`
     : `Generate the complete eight-field character bible:\n${JSON.stringify({ character, context }, null, 2)}`;

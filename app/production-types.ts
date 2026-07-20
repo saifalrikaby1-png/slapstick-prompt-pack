@@ -34,6 +34,7 @@ export type CharacterProfile = {
   colorLock: string;
   scaleLock: string;
   vocalStyleLock: string;
+  nonverbalSoundProfile: string;
   movementStyle: string;
   continuityRules: string;
   negativeRules: string;
@@ -110,6 +111,39 @@ export type ProductionPack = {
   finalGenerationRule: string;
 };
 
+export type RequestedOutput =
+  | "videoTitle"
+  | "characterBuildingPrompt"
+  | "startFramePrompt"
+  | "endFramePrompt"
+  | "videoPrompt"
+  | "musicPath"
+  | "soundEffects";
+
+export type PartialProductionPack = Partial<ProductionPack>;
+
+export const requestedOutputValues: RequestedOutput[] = [
+  "videoTitle",
+  "characterBuildingPrompt",
+  "startFramePrompt",
+  "endFramePrompt",
+  "videoPrompt",
+  "musicPath",
+  "soundEffects",
+];
+
+export function fieldsForRequestedOutputs(outputs: RequestedOutput[]): (keyof ProductionPack)[] {
+  const fields: (keyof ProductionPack)[] = [];
+  const add = (...keys: (keyof ProductionPack)[]) => keys.forEach((key) => {
+    if (!fields.includes(key)) fields.push(key);
+  });
+  outputs.forEach((output) => {
+    if (output === "videoPrompt") add("videoLock", "videoTimeline", "finalGenerationRule");
+    else add(output);
+  });
+  return fields;
+}
+
 export type QualityStatus = "Passed" | "Warning" | "Failed";
 
 export type QualityFinding = {
@@ -140,8 +174,11 @@ export type SavedProductionPack = {
   duration: string;
   form: ProductionForm;
   characterProfiles: CharacterProfile[];
-  pack: ProductionPack;
+  pack: PartialProductionPack;
   qualityReport: QualityReport;
+  requestedOutputs?: RequestedOutput[];
+  generatedOutputs?: RequestedOutput[];
+  packStatus?: "Partial Pack" | "Complete Pack" | "Legacy Pack";
 };
 
 export type LegacyPackItem = {

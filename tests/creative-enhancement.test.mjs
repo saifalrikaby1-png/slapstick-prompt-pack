@@ -47,7 +47,7 @@ check("22. character-building covers all active characters", engine, /const char
 check("23. disabled character-building output is hidden", page, /pack\.characterBuildingPrompt && <article/);
 check("24. compatible voice layers are multi-select", types, /voiceLayers: VoiceLayer\[\]/);
 check("25. No Spoken Dialogue is exclusive", page, /update\("voiceLayers", form\.voiceLayers\.includes\(layer\) \? \["Hero Voice"\] : \["No Spoken Dialogue"\]\)/);
-check("26. ultra-unique video title is supported", page, /Generate Ultra-Unique Title with AI/);
+check("26. complete connected video idea is supported", page, /Generate Complete Video Idea/);
 check("27. saved titles are used as exclusions", page, /savedPacks\.map\(\(saved\) => \(\{ name: saved\.title/);
 test("28. supported models have materially distinct adapters", () => {
   for (const model of ["Seedance", "Kling", "Google Flow / Veo", "Runway", "Higgsfield", "PixVerse", "Hailuo / MiniMax", "Generic model"]) {

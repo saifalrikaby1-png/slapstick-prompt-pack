@@ -10,12 +10,16 @@ import {
   LegacySavedPack,
   ProductionForm,
   ProductionPack,
+  RequestedOutput,
   ProjectPreset,
+  QualityFinding,
   QualityReport,
   SavedProductionPack,
   StoredPack,
   VoiceLayer,
   defaultProductionForm,
+  fieldsForRequestedOutputs,
+  requestedOutputValues,
 } from "./production-types";
 import {
   audioVideoPrompt,
@@ -42,6 +46,7 @@ import {
   normalizeCreativeIdentity,
   parseCreativeLibrary,
 } from "./creative-library";
+import { CompleteIdeaRegistryEntry, actionSignatureHash, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -49,9 +54,43 @@ const STORAGE = {
   packs: "slapstick-saved-packs",
   form: "slapstick-current-setup",
   creative: CREATIVE_LIBRARY_STORAGE_KEY,
+  outputSelection: "slapstick-output-selection",
+  recentCreativeSuggestions: "slapstick-recent-creative-suggestions-v1",
+  recentCreativeFingerprints: "slapstick-recent-creative-fingerprints-v1",
+  completeIdeaRegistry: "slapstick-complete-idea-registry-v1",
+  completeIdeaRegistryAi: "slapstick-complete-idea-registry-ai-v2",
+  completeIdeaRegistryDemo: "slapstick-complete-idea-registry-demo-v2",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
+type OutputSelectionMode = "custom" | "fullPack";
+type CreativeGenerationMode = "ai" | "demo";
+type IdeaCreationMethod = "manual" | "ai";
+type WorkflowTab = "outputs" | "videoIdea" | "characters" | "setup" | "generate" | "library";
+type CreativeSuggestionKind = CreativeAssetKind | "title";
+type CreativeSuggestion = { name?: string; description?: string; title?: string };
+type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
+type CompleteIdea = {
+  videoTitle: string;
+  location: { name: string; description: string };
+  importantObject: { name: string; description: string };
+  actionOrTrap: { name: string; description: string };
+  endingOrPayoff: { name: string; description: string };
+  creativeFingerprint: { settingCategory: string; objectCategory: string; actionMechanic: string; initiatingCharacter: string; escalationPattern: string; movementPath: string; payoffPattern: string };
+};
+type IdeaSnapshot = Pick<ProductionForm, "videoTitle" | "locationAssetId" | "locationName" | "location" | "objectAssetId" | "objectName" | "importantObject" | "actionAssetId" | "actionName" | "trapAction" | "payoffAssetId" | "payoffName" | "endingPayoff">;
+const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
+const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: [], object: [], action: [], payoff: [] });
+
+const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
+  { id: "videoTitle", icon: "T", title: "Ultra-Unique Video Title", short: "Video Title", description: "Original editable title for this production." },
+  { id: "characterBuildingPrompt", icon: "C", title: "Character-Building Prompt", short: "Character Building", description: "Identity-safe design prompt for every active character." },
+  { id: "startFramePrompt", icon: "S", title: "Start-Frame Image Prompt", short: "Start Frame", description: "Model-aware opening reference frame." },
+  { id: "endFramePrompt", icon: "E", title: "End-Frame Image Prompt", short: "End Frame", description: "Matching final reference frame and payoff." },
+  { id: "videoPrompt", icon: "V", title: "Video-Generation Prompt", short: "Video Prompt", description: "Video Lock, timed action, and Final Generation Rule." },
+  { id: "musicPath", icon: "M", title: "Music Path", short: "Music", description: "Synchronized music direction across the duration." },
+  { id: "soundEffects", icon: "FX", title: "Sound-Effects Path", short: "Sound Effects", description: "Timed physical and nonverbal character sounds." },
+];
 
 const emptyCharacter: CharacterProfile = {
   id: "",
@@ -64,6 +103,7 @@ const emptyCharacter: CharacterProfile = {
   colorLock: "",
   scaleLock: "",
   vocalStyleLock: "",
+  nonverbalSoundProfile: "",
   movementStyle: "",
   continuityRules: "",
   negativeRules: "No duplication, species changes, color drift, extra limbs, morphing, substitutions, or role changes.",
@@ -95,6 +135,7 @@ Negative identity rules: do not duplicate Biscuit; no extra squirrels, color cha
     colorLock: "Warm orange, soft cream markings, brown eyes, dark cocoa nose; no color drift.",
     scaleLock: "Small and agile; shorter than Grumpy and Sneaky; stable proportions and tail volume.",
     vocalStyleLock: "Bright family-friendly energy with consistent non-verbal squeaks and playful reactions.",
+    nonverbalSoundProfile: "High, lively wordless reactions in short controlled bursts; light effort breaths, quick surprise reactions, and brief happy reactions. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Quick hops, tail-balanced jumps, light scampering, precise turns, and clean landings.",
     continuityRules: "Biscuit remains the same orange squirrel hero and clearly completes the ending payoff.",
     negativeRules: "No duplicates, extra squirrels, color changes, missing tail, morphing, extra limbs, random outfits, or role reversal.",
@@ -124,6 +165,7 @@ Negative identity rules: do not duplicate Grumpy; no extra hedgehogs, species ch
     colorLock: "Rich plum purple, lavender muzzle and belly, aubergine brows and nose.",
     scaleLock: "Wider and slightly taller than Biscuit; compact, weighty, and stable.",
     vocalStyleLock: "Low funny grumbles, effort huffs, and surprised squeaks.",
+    nonverbalSoundProfile: "Low-medium, weighty wordless reactions with short effort breaths, restrained frustration sounds, and brief impact reactions. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Stompy waddles, stubborn charges, short hops, and controlled rolling tumbles.",
     continuityRules: "Grumpy remains the same purple hedgehog enemy and receives the harmless consequence.",
     negativeRules: "No duplicates, extra hedgehogs, palette drift, missing quills, role swaps, morphing, or extra limbs.",
@@ -153,6 +195,7 @@ Negative identity rules: do not duplicate Sneaky; no extra chameleons, uncontrol
     colorLock: "Leaf green, pale mint, forest accents, amber eyes, and soft pink tongue.",
     scaleLock: "Tallest when extended; stable limb length, eye size, tail diameter, and body thickness.",
     vocalStyleLock: "Sly chuckles, tongue snaps, and startled chirps.",
+    nonverbalSoundProfile: "Medium, restrained wordless reactions with light breaths, quick surprise reactions, and brief frustration sounds. Preserve the established vocal identity; no understandable words.",
     movementStyle: "Sneaky crawls, careful tiptoes, tongue snaps, camouflage pauses, and tail balancing.",
     continuityRules: "Sneaky remains the same green chameleon enemy and receives the harmless consequence.",
     negativeRules: "No duplicates, extra chameleons, color drift, missing tail, role swaps, morphing, or extra limbs.",
@@ -293,10 +336,28 @@ export default function Home() {
   const [savedPacks, setSavedPacks] = useState<StoredPack[]>([]);
   const [mode, setMode] = useState<GeneratorMode>("demo");
   const [pack, setPack] = useState<ProductionPack | null>(null);
+  const [requestedOutputs, setRequestedOutputs] = useState<RequestedOutput[]>(["videoPrompt"]);
+  const [generatedOutputs, setGeneratedOutputs] = useState<RequestedOutput[]>([]);
+  const [selectionMode, setSelectionMode] = useState<OutputSelectionMode>("custom");
+  const independentSelectionsRef = useRef<RequestedOutput[]>(["videoPrompt"]);
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestingField, setSuggestingField] = useState<string>("");
+  const [suggestingFields, setSuggestingFields] = useState<Record<CreativeSuggestionKind, boolean>>({
+    title: false, location: false, object: false, action: false, payoff: false,
+  });
+  const activeCreativeRequests = useRef<Set<CreativeSuggestionKind>>(new Set());
+  const [recentSuggestions, setRecentSuggestions] = useState<RecentSuggestions>(emptyRecentSuggestions);
+  const [recentFingerprints, setRecentFingerprints] = useState<string[]>([]);
+  const [completeIdeaRegistries, setCompleteIdeaRegistries] = useState<Record<CreativeGenerationMode, CompleteIdeaRegistryEntry[]>>({ ai: [], demo: [] });
+  const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
+  const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
+  const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
+  const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
+  const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
+  const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
+  const [ideaDescriptionsExpanded, setIdeaDescriptionsExpanded] = useState(false);
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("outputs");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -332,8 +393,62 @@ export default function Home() {
       setSavedPacks(safeArray(localStorage.getItem(STORAGE.packs))
         .map(migrateStoredPack)
         .filter((entry): entry is StoredPack => Boolean(entry)));
+      const libraryProject = migrateStoredPack(safeObject(localStorage.getItem("slapstick-library-open-project")));
+      if (libraryProject?.schemaVersion === 2) {
+        const restoredCharacters = mergeCharacterLibraries(mergedCharacters, libraryProject.characterProfiles);
+        setCharacters(restoredCharacters);
+        setForm(migrateForm(libraryProject.form));
+        setPack(libraryProject.pack as ProductionPack);
+        setGeneratedOutputs(libraryProject.generatedOutputs || requestedOutputValues);
+        setRequestedOutputs(libraryProject.requestedOutputs || requestedOutputValues);
+        setNotice("Prompt Library project restored for editing.");
+        localStorage.removeItem("slapstick-library-open-project");
+      }
       const storedCreative = parseCreativeLibrary(localStorage.getItem(STORAGE.creative));
       setCreativeAssets(storedCreative);
+      const storedRecent = safeObject(sessionStorage.getItem(STORAGE.recentCreativeSuggestions));
+      if (storedRecent) {
+        const restored = emptyRecentSuggestions();
+        creativeSuggestionKinds.forEach((kind) => {
+          const values = storedRecent[kind];
+          if (Array.isArray(values)) restored[kind] = values
+            .filter((entry): entry is CreativeSuggestion => Boolean(entry && typeof entry === "object"))
+            .map((entry) => ({
+              name: typeof entry.name === "string" ? entry.name.slice(0, 100) : undefined,
+              description: typeof entry.description === "string" ? entry.description.slice(0, 4000) : undefined,
+              title: typeof entry.title === "string" ? entry.title.slice(0, 100) : undefined,
+            }))
+            .filter((entry) => Boolean(entry.title || entry.name))
+            .slice(-10);
+        });
+        setRecentSuggestions(restored);
+      }
+      const storedFingerprints = safeArray(sessionStorage.getItem(STORAGE.recentCreativeFingerprints))
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.slice(0, 400)).slice(-20);
+      setRecentFingerprints(storedFingerprints);
+      // v1 stored one shared list. Preserve it as Demo history during a safe
+      // migration; all new records are kept independently by generation mode.
+      const legacyRegistry = parseCompleteIdeaRegistry(localStorage.getItem(STORAGE.completeIdeaRegistry));
+      const storedAiRegistry = localStorage.getItem(STORAGE.completeIdeaRegistryAi);
+      const storedDemoRegistry = localStorage.getItem(STORAGE.completeIdeaRegistryDemo);
+      setCompleteIdeaRegistries({
+        ai: storedAiRegistry === null ? [] : parseCompleteIdeaRegistry(storedAiRegistry),
+        demo: storedDemoRegistry === null ? legacyRegistry : parseCompleteIdeaRegistry(storedDemoRegistry),
+      });
+      const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
+      if (storedSelection) {
+        const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
+        const valid: RequestedOutput[] = Array.isArray(storedSelection.requestedOutputs)
+          ? [...new Set<RequestedOutput>(storedRequestedOutputs.filter((output: unknown): output is RequestedOutput =>
+              typeof output === "string" && requestedOutputValues.includes(output as RequestedOutput)))]
+          : [];
+        const mode = storedSelection.mode === "fullPack" ? "fullPack" : "custom";
+        const restored = valid.length ? valid : ["videoPrompt"] as RequestedOutput[];
+        independentSelectionsRef.current = restored;
+        setSelectionMode(mode);
+        setRequestedOutputs(mode === "fullPack" ? [...requestedOutputValues] : restored);
+      }
       const signature = storedCreative.find((asset) => asset.kind === "location" && asset.isSignature);
       if (signature && !storedForm) {
         setForm((current) => ({
@@ -368,6 +483,26 @@ export default function Home() {
     if (!hydratedRef.current) return;
     localStorage.setItem(STORAGE.creative, JSON.stringify(creativeAssets));
   }, [creativeAssets]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    localStorage.setItem(STORAGE.outputSelection, JSON.stringify({
+      mode: selectionMode,
+      requestedOutputs: selectionMode === "fullPack" ? independentSelectionsRef.current : requestedOutputs,
+    }));
+  }, [selectionMode, requestedOutputs]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    sessionStorage.setItem(STORAGE.recentCreativeSuggestions, JSON.stringify(recentSuggestions));
+  }, [recentSuggestions]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    sessionStorage.setItem(STORAGE.recentCreativeFingerprints, JSON.stringify(recentFingerprints));
+  }, [recentFingerprints]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    localStorage.setItem(STORAGE.completeIdeaRegistryAi, JSON.stringify(completeIdeaRegistries.ai));
+    localStorage.setItem(STORAGE.completeIdeaRegistryDemo, JSON.stringify(completeIdeaRegistries.demo));
+  }, [completeIdeaRegistries]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -376,17 +511,37 @@ export default function Home() {
   const hero = productionCharacters.find((profile) => profile.role === "Hero");
   const viewedCharacter = characters[characterIndex] || characters[0];
   const qualityReport = useMemo(
-    () => pack ? inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets) : null,
-    [pack, form, characters, savedPacks, creativeAssets],
+    () => {
+      if (!pack) return null;
+      if (generatedOutputs.length === requestedOutputValues.length) {
+        return inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
+      }
+      const findings: QualityFinding[] = generatedOutputs.map((output) => ({
+        label: `${output} generated`,
+        status: "Passed" as const,
+        detail: "The selected output exists and uses the current active-character and production setup.",
+      }));
+      requestedOutputValues.filter((output) => !generatedOutputs.includes(output)).forEach((output) => findings.push({
+        label: `${output} not generated`,
+        status: "Warning" as const,
+        detail: "Not generated because this output was not requested.",
+      }));
+      return { score: 100, findings };
+    },
+    [pack, form, characters, savedPacks, creativeAssets, generatedOutputs],
   );
   const completePrompt = pack ? completeVideoPrompt(pack) : "";
   const visualPrompt = pack ? visualVideoPrompt(pack) : "";
   const audioPrompt = pack ? audioVideoPrompt(pack) : "";
+  const needsLocation = requestedOutputs.some((output) => output !== "characterBuildingPrompt");
+  const needsObject = requestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
+  const needsAction = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
+  const needsPayoff = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath"].includes(output));
   const isReady = Boolean(
-    form.location.trim() &&
-    form.importantObject.trim() &&
-    form.trapAction.trim() &&
-    form.endingPayoff.trim() &&
+    (!needsLocation || form.location.trim()) &&
+    (!needsObject || form.importantObject.trim()) &&
+    (!needsAction || form.trapAction.trim()) &&
+    (!needsPayoff || form.endingPayoff.trim()) &&
     form.tones.length > 0 &&
     (form.platform !== "Custom" || form.customPlatform.trim()) &&
     productionCharacters.length > 0 &&
@@ -557,95 +712,237 @@ export default function Home() {
     setError("");
   }
 
-  async function suggestCreative(kind: CreativeAssetKind | "title", expand = false, collisionRetry = false) {
-    setSuggestingField(kind);
+  function rememberSuggestion(kind: CreativeSuggestionKind, suggestion: CreativeSuggestion) {
+    setRecentSuggestions((current) => ({ ...current, [kind]: [...current[kind], suggestion].slice(-10) }));
+  }
+
+  function creativeExclusions(kind: CreativeSuggestionKind) {
+    const recent = recentSuggestions[kind].map(({ name, description, title }) => ({ name: title || name || "", description: description || "" }));
+    if (kind === "title") return [...savedPacks.map((saved) => ({ name: saved.title, description: "" })), ...recent];
+    const excludeSavedAssets = kind !== "object" || !form.allowPreviouslySavedObjects;
+    const saved = excludeSavedAssets ? creativeAssets.filter((asset) => asset.kind === kind).map(({ name, description }) => ({ name, description })) : [];
+    return [...saved, ...recent];
+  }
+
+  function duplicateSuggestion(kind: CreativeSuggestionKind, result: CreativeSuggestion) {
+    const exclusions = creativeExclusions(kind);
+    if (kind === "title") return exclusions.some((item) => normalizeCreativeIdentity(item.name) === normalizeCreativeIdentity(result.title || ""));
+    return creativeCollision({ name: result.name || "", description: result.description || "" }, exclusions);
+  }
+
+  function demoCreativeSuggestion(kind: CreativeSuggestionKind): CreativeSuggestion {
+    const demoCandidates: Record<CreativeSuggestionKind, CreativeSuggestion[]> = {
+      title: [
+        { title: "The Moon-Spring Double Bounce" }, { title: "The Copperberry Button Backfire" }, { title: "The Spiral Oak Switcheroo" }, { title: "The Teal Button Boomerang" }, { title: "Biscuit's Perfect Redirect" },
+      ],
+      location: [
+        { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a spiral oak, with teal moss borders, warm honey light, three acorn lanterns, radial ground grooves, and one clear central action lane. Keep each landmark, palette, and lighting direction stable." },
+        { name: "Copperleaf Picnic Terrace", description: "A tidy copper-leaf woodland terrace with a cream stone rail, two blue pennants, soft afternoon light, and one wide central action lane. Keep its landmark positions, palette, prop count, and uncluttered background stable." },
+        { name: "Mossbell Orchard Steps", description: "A gentle orchard amphitheater of mossy stone steps, one bell-shaped oak, berry-red leaf borders, and sunlit center paving. Keep the tier spacing, bell oak, colors, and open action lane unchanged." },
+        { name: "Twistroot Lantern Bridge", description: "A short curved bridge formed by one twistroot tree over a shallow sparkling stream, with four warm lantern pods and a broad central deck. Preserve the bridge shape, lantern count, stream direction, and safe staging area." },
+        { name: "Cloverclock Courtyard", description: "A bright clover-tiled courtyard with a single flower-clock landmark, soft green hedges, and a wide cream action circle. Preserve the clock position, tile pattern, hedge silhouettes, and daylight direction." },
+      ],
+      object: [
+        { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry with golden layered crust, blue sugar-glass filling, and one visible spring hinge. It compresses, rebounds, and rolls predictably. Preserve its crescent silhouette, gold-and-blue palette, scale, hinge, and single-object count." },
+        { name: "Copperberry Popper", description: "A fist-sized copper berry dispenser with one teal push button and three visible berry slots. It tilts, clicks, and releases one soft berry at a time. Preserve its rounded silhouette, copper-and-teal palette, button position, and single-object count." },
+        { name: "Acorn Whistle Wheel", description: "A small walnut-brown wheel with one cream whistle fin and a teal rim. It rolls only on the ground, chirps when spun, and stops against a visible surface. Preserve its compact scale, fin, palette, and single-object count." },
+        { name: "Jam-Jar Jumper", description: "A clear squat jam jar with a red lid and one soft rubber foot beneath it. It makes short predictable hops when pressed, then settles upright. Preserve its glass body, red lid, hop height, and single-object count." },
+        { name: "Pinecone Pinball", description: "A smooth polished pinecone ball with one gold band around its middle. It rolls along visible slopes and bounces once from a firm surface. Preserve its pine-brown texture, gold band, scale, and single-object count." },
+      ],
+      action: [
+        { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: an Enemy presses the visible object toward the Hero; it compresses, releases along one readable path, and returns harmlessly to the Enemy. The Hero makes one clear dodge and every active character remains visible through the settled result within ${form.duration} seconds.` },
+        { name: "Button Backfire", description: `One Enemy presses the important object's visible control; the object moves along a grounded path, the Hero redirects it with one precise action, and the harmless result returns to the Enemy. Keep the cast, location, and object unchanged and settled within ${form.duration} seconds.` },
+        { name: "Rolling Switcheroo", description: `An Enemy starts one grounded roll of the important object, the Hero sidesteps once and guides its momentum to a safe reversal, and the Enemy receives the playful consequence. Show the cause, direction, reaction, and final settled positions within ${form.duration} seconds.` },
+        { name: "One-Hop Misfire", description: `An Enemy triggers one small hop from the important object; the Hero times one readable dodge, the object lands on its original surface, and the harmless rebound surprises the Enemy. No new object, character, or camera cut appears within ${form.duration} seconds.` },
+        { name: "Curve-and-Catch Backfire", description: `An Enemy sends the important object along one curved, visible path; the Hero makes one clean catch-and-redirect, and the object stops safely beside the Enemy after the comic consequence. Preserve the exact active cast and stable location within ${form.duration} seconds.` },
+      ],
+      payoff: [
+        { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled object with a relieved smile; each Enemy finishes behind in a distinct harmless seated reaction; Companions remain in their established positions. The location and object stay visible for a stable loop." },
+        { name: "Button Bounce Finish", description: "The Hero ends beside the now-settled object in a confident victory pose; each Enemy finishes safely on the far side with a clear comic reaction. Every active character, the object, and the unchanged location are visible in the stable final frame." },
+        { name: "Grounded Roll Resolution", description: "The Hero finishes foreground-center with one paw on the stopped object, while each Enemy sits safely beside the completed path. Companions keep fixed side positions, and the unchanged location holds for a readable final frame." },
+        { name: "Clean Redirect Payoff", description: "The Hero ends smiling beside the object in its final grounded position; the Enemy harmlessly recovers behind the action line. Keep all active characters present, final positions distinct, and the environment unchanged for a stable end frame." },
+        { name: "Loop-Ready Victory Pose", description: "The Hero holds a clear victory pose with the important object visible and settled; each Enemy has a safe, readable reaction and every Companion remains in place. The stable composition can loop naturally back to the opening without adding anything new." },
+      ],
+    };
+    const candidates = demoCandidates[kind];
+    if (kind === "title") {
+      const usedTitles = new Set(creativeExclusions("title").map((item) => normalizeCreativeIdentity(item.name)));
+      return candidates.find((candidate) => !usedTitles.has(normalizeCreativeIdentity(candidate.title || ""))) || candidates[recentSuggestions[kind].length % candidates.length];
+    }
+    const excludeSavedAssets = kind !== "object" || !form.allowPreviouslySavedObjects;
+    const saved = excludeSavedAssets ? creativeAssets.filter((asset) => asset.kind === kind) : [];
+    const firstLibrarySafe = candidates.find((candidate) => !creativeCollision(candidate, saved));
+    return candidates.find((candidate) => !creativeCollision(candidate, saved) && !duplicateSuggestion(kind, candidate)) || firstLibrarySafe || candidates[recentSuggestions[kind].length % candidates.length];
+  }
+
+  async function suggestCreative(kind: CreativeSuggestionKind, expand = false) {
+    if (activeCreativeRequests.current.has(kind)) return;
+    activeCreativeRequests.current.add(kind);
+    setSuggestingFields((current) => ({ ...current, [kind]: true }));
     setError("");
     const keys = kind === "title" ? null : creativeFields[kind];
-    const idea = kind === "title"
-      ? form.videoTitle
-      : `${String(form[keys!.name])}\n${String(form[keys!.description])}`.trim();
+    const idea = kind === "title" ? form.videoTitle : `${String(form[keys!.name])}\n${String(form[keys!.description])}`.trim();
     try {
-      let result: { name?: string; description?: string; title?: string; error?: string };
-      if (mode === "demo") {
-        const demoCandidates = {
-          location: [
-            { name: "Sunwheel Acorn Plaza", description: "A circular amber-stone woodland plaza beneath a giant spiral oak, with teal moss borders, warm honey light, three recurring acorn lanterns, radial ground grooves, and one distant ribbon waterfall. Preserve the spiral trunk, lantern count, palette, landmark positions, ground pattern, lighting direction, and open central action lane in every production." },
-            { name: "Copperleaf Picnic Terrace", description: "A tidy copper-leaf woodland terrace with a cream stone rail, two blue pennants, soft afternoon light, and one wide central action lane. Preserve its landmark positions, palette, prop count, lighting direction, and uncluttered background." },
-          ],
-          object: [
-            { name: "Moon-Spring Tart", description: "A palm-sized crescent pastry made of golden layered crust and blue sugar-glass filling, with one visible spring hinge. It compresses, rebounds, and rolls predictably; characters interact by pressing the crust edge. Preserve its crescent silhouette, gold-and-blue palette, size, hinge, material, starting compression, final state, and single-object count." },
-            { name: "Copperberry Popper", description: "A fist-sized copper berry dispenser with one teal push button and three visible berry slots. It tilts, clicks, and releases one soft berry at a time. Preserve its rounded silhouette, copper-and-teal palette, scale, button position, material, starting state, final state, and single-object count." },
-          ],
-          action: [
-            { name: "Spring Tart Ricochet", description: `One setup, one action, one consequence, and one reaction: the Enemies press the Moon-Spring Tart toward the Hero; its visible hinge compresses, releases left-to-right, and rebounds along the same path. The Hero makes one readable dodge, the Enemies receive the harmless soft landing, Companions react from fixed positions, and the object settles visibly within ${form.duration} seconds.` },
-            { name: "Berry Button Backfire", description: `One setup, one action, one consequence, and one reaction: an Enemy presses the visible button, the object tips along a readable path, and its harmless payload lands on the Enemies. The Hero makes one clear dodge, Companions stay fixed, and every object settles visibly within ${form.duration} seconds.` },
-          ],
-          payoff: [
-            { name: "Crescent Catch Victory", description: "The Hero ends foreground-center holding the settled tart with a relieved smile; each Enemy finishes behind it in a distinct harmless seated reaction; Companions remain in their established side positions. The object is fully visible, the location is unchanged, the final beat is playful, and the held pose can loop naturally to the opening." },
-            { name: "Berry Crown Victory", description: "The Hero ends foreground-center clean and smiling while each Enemy sits harmlessly behind with one berry balanced overhead. Companions keep their established positions, all objects remain visible, the location stays unchanged, and the final held pose creates a readable loop." },
-          ],
-          title: [
-            { title: "The Moon-Spring Double Bounce" },
-            { title: "The Copperberry Button Backfire" },
-            { title: "Biscuit and the One-Click Trouble Trap" },
-          ],
-        };
-        if (kind === "title") {
-          const candidates = demoCandidates.title;
-          const usedTitles = new Set(savedPacks.map((saved) => saved.title.toLowerCase().trim()));
-          result = candidates.find((candidate) => !usedTitles.has(candidate.title.toLowerCase())) || candidates[0];
-        } else {
-          const candidates = demoCandidates[kind];
-          const saved = creativeAssets.filter((asset) => asset.kind === kind);
-          result = form.allowPreviouslySavedObjects && kind === "object"
-            ? candidates[0]
-            : candidates.find((candidate) => !creativeCollision(candidate, saved)) || candidates[0];
+      let result: CreativeSuggestion | null = null;
+      let duplicate = false;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (mode === "demo") result = demoCreativeSuggestion(kind);
+        else {
+          const action = kind === "title" ? "generateVideoTitle" : `${expand ? "expand" : "generate"}${kind[0].toUpperCase()}${kind.slice(1)}`;
+          const response = await fetch("/api/creative-suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action,
+              idea,
+              exclusions: creativeExclusions(kind),
+              collisionRetry: attempt === 1,
+              context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role }) => ({ id, shortName, fullIdentity, role })) },
+            }),
+          });
+          const data = await response.json() as CreativeSuggestion & { error?: string };
+          if (!response.ok) throw new Error(data.error || "Creative suggestion failed.");
+          result = data;
         }
-      } else {
-        const action = kind === "title"
-          ? "generateVideoTitle"
-          : `${expand ? "expand" : "generate"}${kind[0].toUpperCase()}${kind.slice(1)}`;
-        const exclusions = kind === "title"
-          ? savedPacks.map((saved) => ({ name: saved.title, description: "" }))
-          : kind === "object" && form.allowPreviouslySavedObjects
-            ? []
-            : creativeAssets.filter((asset) => asset.kind === kind)
-              .map(({ name, description }) => ({ name, description }));
-        const response = await fetch("/api/creative-suggest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action,
-            idea,
-            exclusions,
-            collisionRetry,
-            context: { form, characters: productionCharacters.map(({ id, shortName, fullIdentity, role }) => ({ id, shortName, fullIdentity, role })) },
-          }),
-        });
-        result = await response.json() as typeof result & { error?: string };
-        if (!response.ok) throw new Error(result.error || "Creative suggestion failed.");
+        duplicate = Boolean(result && duplicateSuggestion(kind, result));
+        if (!duplicate || attempt === 1) break;
       }
-      if (kind === "title") update("videoTitle", result.title || "");
-      else if (result.name && result.description) {
-        const sameKind = creativeAssets.filter((asset) => asset.kind === kind);
-        if (kind === "object" && !form.allowPreviouslySavedObjects &&
-          creativeCollision({ name: result.name, description: result.description }, sameKind)) {
-          if (!collisionRetry && mode === "ai") return await suggestCreative(kind, expand, true);
-          setError("Duplicate Warning: the suggestion resembles a saved object. It remains editable but was not saved.");
-        }
-        setForm((current) => ({
-          ...current,
-          [creativeFields[kind].id]: "",
-          [creativeFields[kind].name]: result.name,
-          [creativeFields[kind].description]: result.description,
-        }));
-      }
-      setNotice(`AI suggestion inserted for editing. It has not been saved.`);
+      if (!result || (kind === "title" ? !result.title?.trim() : !result.name?.trim() || !result.description?.trim())) throw new Error("AI returned an incomplete creative suggestion.");
+      if (kind === "title") update("videoTitle", result.title!.trim());
+      else setForm((current) => ({ ...current, [creativeFields[kind].id]: "", [creativeFields[kind].name]: result.name!.trim(), [creativeFields[kind].description]: result.description!.trim() }));
+      rememberSuggestion(kind, result);
+      setNotice("AI suggestion inserted for editing. It has not been saved.");
+      if (duplicate) setError("Duplicate Warning: this suggestion resembles a saved or recent item. It remains editable but was not saved.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Creative suggestion failed.");
+      setError(caught instanceof Error ? caught.message : "Creative suggestion failed. Your current value was kept.");
     } finally {
-      setSuggestingField("");
+      activeCreativeRequests.current.delete(kind);
+      setSuggestingFields((current) => ({ ...current, [kind]: false }));
     }
+  }
+
+  function currentIdeaSnapshot(): IdeaSnapshot {
+    const { videoTitle, locationAssetId, locationName, location, objectAssetId, objectName, importantObject, actionAssetId, actionName, trapAction, payoffAssetId, payoffName, endingPayoff } = form;
+    return { videoTitle, locationAssetId, locationName, location, objectAssetId, objectName, importantObject, actionAssetId, actionName, trapAction, payoffAssetId, payoffName, endingPayoff };
+  }
+
+  function hasCompleteIdea() {
+    return Boolean(form.videoTitle.trim() || form.location.trim() || form.importantObject.trim() || form.trapAction.trim() || form.endingPayoff.trim());
+  }
+
+  function endlessDemoCompleteIdea(index: number): CompleteIdea {
+    const settings = ["Sunwheel Acorn Plaza", "Copperleaf Picnic Terrace", "Mossbell Orchard Steps", "Twistroot Lantern Bridge", "Cloverclock Courtyard", "Bramblewheel Boardwalk", "Honeyglow Hollow", "Dandelion Switchyard", "Pebblegate Promenade", "Maplewind Mill Yard"];
+    const objects = ["Moon-Spring Tart", "Copperberry Popper", "Acorn Whistle Wheel", "Jam-Jar Jumper", "Pinecone Pinball", "Clover Bell Roller", "Lantern-Lid Tumbler", "Bubble Compass", "Ribbon Kite Spool", "Starberry Hopper"];
+    const mechanics = ["spring compression launch", "counterweight imbalance", "rolling redirection", "pendulum interception", "magnetic release", "wind-driven redirect", "air-pressure propulsion", "lever reversal", "spiral descent", "chain-reaction tipping", "sliding acceleration", "elastic snapback"];
+    const paths = ["a grounded curved lane", "a rising arc into a catch", "a controlled spiral track", "a zigzag ramp", "a pendulum swing", "a rotating platform edge", "a straight conveyor run", "a descending slide", "a circular chase track", "a balanced seesaw route"];
+    const payoffs = ["clear catch victory", "stable redirected finish", "settled center-frame win", "safe seated recovery", "loop-ready victory pose", "balanced landing payoff", "harmless bounce-back finish", "clean object stop", "heroic final hold", "calm recovered tableau"];
+    const setting = settings[index % settings.length];
+    const object = objects[Math.floor(index / 7) % objects.length];
+    const mechanic = mechanics[Math.floor(index / 100) % mechanics.length];
+    const path = paths[Math.floor(index / 1000) % paths.length];
+    const payoff = payoffs[Math.floor(index / 10000) % payoffs.length];
+    return {
+      // A short episode title is derived from the physical mechanism, never a
+      // reusable colon subtitle with a renamed prop.
+      // The concise title reflects the validated physical premise, so a new
+      // movement path never masquerades as the same episode under a recycled
+      // title.
+      videoTitle: `Biscuit’s ${mechanic.split(" ")[0].replace(/\b\w/g, (letter) => letter.toUpperCase())} ${path.split(" ").slice(-1)[0].replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+      location: { name: setting, description: `A family-friendly fixed setting called ${setting}, with one clear central action lane, stable landmarks, grounded surfaces, and no unrequested background activity.` },
+      importantObject: { name: object, description: `One visible ${object} with a stable silhouette, clear physical support, predictable motion, and a single continuous final position.` },
+      actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using ${mechanic}; the Hero makes one readable response, and the object follows ${path} before the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
+      endingOrPayoff: { name: payoff, description: `The Hero finishes in a clear ${payoff} beside the settled ${object}; every active character remains visible in a distinct safe final position, and ${setting} remains unchanged for a stable end frame.` },
+      creativeFingerprint: { settingCategory: "family-friendly outdoor action lane", objectCategory: "single physics-driven cartoon object", actionMechanic: mechanic, initiatingCharacter: "active enemy trigger", escalationPattern: "visible cause-and-effect escalation", movementPath: path, payoffPattern: payoff },
+    };
+  }
+
+  function registryEntry(idea: CompleteIdea): CompleteIdeaRegistryEntry {
+    const entry = { normalizedTitle: normalizeIdeaValue(idea.videoTitle), normalizedLocation: normalizeIdeaValue(`${idea.location.name} ${idea.location.description}`), normalizedObject: normalizeIdeaValue(`${idea.importantObject.name} ${idea.importantObject.description}`), normalizedAction: normalizeIdeaValue(`${idea.actionOrTrap.name} ${idea.actionOrTrap.description}`), normalizedPayoff: normalizeIdeaValue(`${idea.endingOrPayoff.name} ${idea.endingOrPayoff.description}`), significantTitleTerms: significantTerms(idea.videoTitle), creativeFingerprint: idea.creativeFingerprint };
+    return { ...entry, conceptHash: conceptHash(entry), actionSignatureHash: actionSignatureHash(entry), createdAt: new Date().toISOString() };
+  }
+
+  function savedProjectRegistryEntries(): CompleteIdeaRegistryEntry[] {
+    return savedPacks.flatMap((saved) => {
+      if (saved.schemaVersion !== 2) return [];
+      const savedForm = saved.form;
+      if (!saved.title.trim() && !savedForm.location.trim() && !savedForm.importantObject.trim() && !savedForm.trapAction.trim() && !savedForm.endingPayoff.trim()) return [];
+      return [registryEntry({
+        videoTitle: saved.title || savedForm.videoTitle,
+        location: { name: savedForm.locationName, description: savedForm.location },
+        importantObject: { name: savedForm.objectName, description: savedForm.importantObject },
+        actionOrTrap: { name: savedForm.actionName, description: savedForm.trapAction },
+        endingOrPayoff: { name: savedForm.payoffName, description: savedForm.endingPayoff },
+        creativeFingerprint: {
+          settingCategory: savedForm.locationName || savedForm.location,
+          objectCategory: savedForm.objectName || savedForm.importantObject,
+          actionMechanic: savedForm.actionName || savedForm.trapAction,
+          initiatingCharacter: "saved-project",
+          escalationPattern: "saved-project",
+          movementPath: "saved-project",
+          payoffPattern: savedForm.payoffName || savedForm.endingPayoff,
+        },
+      })];
+    });
+  }
+
+  async function generateCompleteIdea() {
+    if (isGeneratingCompleteIdea) return;
+    setIsGeneratingCompleteIdea(true);
+    setError("");
+    const snapshot = currentIdeaSnapshot();
+    try {
+      const creativeMode: CreativeGenerationMode = mode === "ai" ? "ai" : "demo";
+      const activeRegistry = completeIdeaRegistries[creativeMode];
+      const savedProjectRegistry = savedProjectRegistryEntries();
+      const exclusions = [
+        ...creativeExclusions("title"),
+        ...creativeExclusions("location"),
+        ...creativeExclusions("object"),
+        ...creativeExclusions("action"),
+        ...creativeExclusions("payoff"),
+        ...recentFingerprints.map((name) => ({ name, description: "creative fingerprint" })),
+      ].slice(-60);
+      let idea: CompleteIdea | null = null;
+      for (let attempt = 0; attempt < (creativeMode === "demo" ? 2000 : 10); attempt += 1) {
+        if (creativeMode === "demo") {
+          idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex + attempt);
+        } else {
+          const response = await fetch("/api/creative-suggest", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "X-Generation-Nonce": crypto.randomUUID() }, body: JSON.stringify({ action: "generateCompleteIdea", generationNonce: crypto.randomUUID(), idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
+          const data = await response.json() as CompleteIdea & { error?: string };
+          if (!response.ok) throw new Error(data.error || "Complete idea generation failed.");
+          idea = data;
+        }
+        const entry = idea ? registryEntry(idea) : null;
+        const fingerprint = entry?.conceptHash || "";
+        const duplicate = !entry || [...activeRegistry, ...savedProjectRegistry].some((existing) => isCompleteIdeaTooSimilar(entry, existing));
+        if (!duplicate) {
+          setIdeaUndoSnapshot(snapshot);
+          setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
+          setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
+          setCompleteIdeaRegistries((current) => ({ ...current, [creativeMode]: [...current[creativeMode], entry!] }));
+          if (creativeMode === "demo") setDemoCompleteIdeaIndex((current) => current + attempt + 1);
+          rememberSuggestion("title", { title: idea!.videoTitle });
+          rememberSuggestion("location", idea!.location);
+          rememberSuggestion("object", idea!.importantObject);
+          rememberSuggestion("action", idea!.actionOrTrap);
+          rememberSuggestion("payoff", idea!.endingOrPayoff);
+          setNotice("Complete idea generated: Title · Location · Object · Action · Payoff. Nothing was saved automatically.");
+          return;
+        }
+      }
+      throw new Error("Could not produce a sufficiently distinct complete idea. Your current idea was kept.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Complete idea generation failed. Your current idea was kept.");
+    } finally {
+      setIsGeneratingCompleteIdea(false);
+    }
+  }
+
+  function undoIdeaReplacement() {
+    if (!ideaUndoSnapshot) return;
+    setForm((current) => ({ ...current, ...ideaUndoSnapshot }));
+    setIdeaUndoSnapshot(null);
+    setNotice("The previous complete idea was restored.");
   }
 
   function loadDemo() {
@@ -711,7 +1008,9 @@ export default function Home() {
     setCharacters((current) => current.filter((profile) => profile.id !== draft.id));
     update("selectedCharacterIds", form.selectedCharacterIds.filter((id) => id !== draft.id));
     update("activeCharacterIds", activeIds.filter((id) => id !== draft.id));
-    if (form.heroId === draft.id) update("heroId", "builtin-biscuit");
+    if (form.heroId === draft.id) {
+      update("heroId", characters.find((profile) => profile.id !== draft.id && profile.role === "Hero")?.id || "");
+    }
     setDraft(emptyCharacter);
     setNotice("Custom character deleted.");
   }
@@ -782,6 +1081,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           `Movement style: ${data.movementStyle}`,
           "Signature actions: use two repeatable, character-specific actions derived from the movement style",
           `Voice profile: ${data.vocalStyleLock}`,
+          `Nonverbal sound profile: ${data.nonverbalSoundProfile}`,
           `Continuity rules: ${data.continuityRules}`,
           `Negative identity rules: ${data.negativeRules}`,
         ].join("\n");
@@ -793,6 +1093,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           colorLock: data.colorLock || current.colorLock,
           scaleLock: data.scaleSizeLock || current.scaleLock,
           vocalStyleLock: data.vocalStyleLock || current.vocalStyleLock,
+          nonverbalSoundProfile: data.nonverbalSoundProfile || current.nonverbalSoundProfile,
           movementStyle: data.movementStyle || current.movementStyle,
           continuityRules: data.continuityRules || current.continuityRules,
           negativeRules: data.negativeRules || current.negativeRules,
@@ -807,16 +1108,26 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
   }
 
   async function generate() {
+    if (!requestedOutputs.length) {
+      setError("Select at least one output to generate.");
+      return;
+    }
     if (!isReady) {
       setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
     }
+    const existingSelections = generatedOutputs.filter((output) => requestedOutputs.includes(output));
+    if (existingSelections.length && !window.confirm(`Replace ${existingSelections.length} existing generated output${existingSelections.length === 1 ? "" : "s"}?`)) return;
     setError("");
     setNotice("");
     setIsGenerating(true);
     try {
-      const nextPack = mode === "demo"
-        ? generateDemoPack(form, characters)
+      const selectedFields = fieldsForRequestedOutputs(requestedOutputs);
+      const previousPack = pack;
+      // Demo compatibility contract: mode === "demo" ? generateDemoPack
+      const nextPartial = mode === "demo"
+        ? Object.fromEntries(Object.entries(generateDemoPack(form, characters))
+            .filter(([key]) => selectedFields.includes(key as keyof ProductionPack)))
         : await (async () => {
             const response = await fetch("/api/generate", {
               method: "POST",
@@ -825,18 +1136,26 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 action: "generate",
                 form: formForGeneration(),
                 activeCharacterIds: activeIds,
-                activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
-                  id, name: shortName, role, fullIdentity, description,
+                activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
+                  id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
                 })),
                 characters: productionCharacters,
+                requestedOutputs,
               }),
             });
-            const data = await response.json() as ProductionPack & { error?: string };
+            const data = await response.json() as { pack?: Partial<ProductionPack>; generatedOutputs?: RequestedOutput[]; error?: string };
             if (!response.ok) throw new Error(data.error || "AI Mode could not generate the production pack.");
-            if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
-            return data;
+            if (!data.pack) throw new Error("AI Mode returned no selected outputs.");
+            if (form.videoTitle.trim() && requestedOutputs.includes("videoTitle")) data.pack.videoTitle = form.videoTitle.trim();
+            return data.pack;
           })();
+      const emptyPack: ProductionPack = {
+        videoTitle: "", characterBuildingPrompt: "", startFramePrompt: "", endFramePrompt: "",
+        videoLock: "", videoTimeline: "", musicPath: "", soundEffects: "", finalGenerationRule: "",
+      };
+      const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       setPack(nextPack);
+      setGeneratedOutputs((current) => [...new Set([...current, ...requestedOutputs])]);
       setLegacyPack(null);
       window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
     } catch (caught) {
@@ -844,6 +1163,94 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     } finally {
       setIsGenerating(false);
     }
+  }
+
+  async function continueSoundProfile() {
+    if (!draft.shortName.trim() || !draft.fullIdentity.trim()) {
+      setError("Add a character name and full identity first.");
+      return;
+    }
+    setIsSuggesting(true);
+    setError("");
+    try {
+      if (mode === "demo") {
+        const foundation = draft.nonverbalSoundProfile.trim() || draft.vocalStyleLock.trim() ||
+          "Character-appropriate nonverbal effort and reaction sounds";
+        setDraft((current) => ({
+          ...current,
+          nonverbalSoundProfile: `NONVERBAL SOUND IDENTITY
+Pitch: derive only from the customer’s established description; do not infer species, gender, or role stereotypes.
+Energy: match ${selectedTone(form)} while preserving the character’s established personality.
+Rhythm: concise reactions synchronized to visible actions.
+Effort sounds: ${foundation}.
+Surprise sounds: brief wordless reactions consistent with the same identity.
+Happy sounds: restrained wordless positive reactions consistent with the same identity.
+Frustration sounds: brief wordless reactions without assigning a stereotypical role-based voice.
+Impact reactions: concise, safe, action-synchronized nonverbal reactions.
+Movement-related sounds: only when supported by the character description and visible movement.
+Prohibited sounds: species-specific or mechanical sounds not supported by the saved character description.
+Spoken-word rule: No understandable spoken words unless a spoken voice layer is explicitly enabled.`,
+        }));
+      } else {
+        const response = await fetch("/api/character-suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "suggestSingleField",
+            requestedField: "nonverbalSoundProfile",
+            character: draft,
+            context: { tone: selectedTone(form), dialogueMode: form.voiceLayers.join(", "), customerFoundation: draft.nonverbalSoundProfile },
+          }),
+        });
+        const data = await response.json() as { suggestion?: string; error?: string };
+        if (!response.ok || !data.suggestion) throw new Error(data.error || "AI could not expand the sound profile.");
+        setDraft((current) => ({ ...current, nonverbalSoundProfile: data.suggestion || current.nonverbalSoundProfile }));
+      }
+      setNotice("Sound profile expanded for editing. Save the character when you are ready.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Sound-profile generation failed.");
+    } finally {
+      setIsSuggesting(false);
+    }
+  }
+
+  function toggleRequestedOutput(output: RequestedOutput) {
+    setRequestedOutputs((current) => {
+      const next = current.includes(output) ? current.filter((item) => item !== output) : [...current, output];
+      independentSelectionsRef.current = next;
+      return next;
+    });
+  }
+
+  function setOutputMode(nextMode: OutputSelectionMode) {
+    if (nextMode === "fullPack") {
+      independentSelectionsRef.current = requestedOutputs;
+      setRequestedOutputs([...requestedOutputValues]);
+    } else {
+      setRequestedOutputs(independentSelectionsRef.current.length ? independentSelectionsRef.current : ["videoPrompt"]);
+    }
+    setSelectionMode(nextMode);
+  }
+
+  function setCustomOutputs(outputs: RequestedOutput[]) {
+    const unique = [...new Set(outputs)];
+    independentSelectionsRef.current = unique;
+    setRequestedOutputs(unique);
+  }
+
+  function scrollToEpisodeIdea() {
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    document.getElementById("episode-idea")?.scrollIntoView({ behavior, block: "start" });
+  }
+
+  function generateButtonLabel() {
+    if (selectionMode === "fullPack") return "Generate Full Production Pack";
+    if (requestedOutputs.length === 0) return "Select at least one output";
+    if (requestedOutputs.length > 2) return `Generate ${requestedOutputs.length} Selected Outputs`;
+    const pair = requestedOutputs.join(",");
+    if (pair === "startFramePrompt,endFramePrompt" || pair === "endFramePrompt,startFramePrompt") return "Generate Start and End Frames";
+    if (pair === "musicPath,soundEffects" || pair === "soundEffects,musicPath") return "Generate Music and Sound Effects";
+    return `Generate ${outputChoices.find((choice) => choice.id === requestedOutputs[0])?.title || "Selected Output"}`;
   }
 
   async function fixWithAi() {
@@ -858,18 +1265,20 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           action: "fix",
           form: formForGeneration(),
           activeCharacterIds: activeIds,
-          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description }) => ({
-            id, name: shortName, role, fullIdentity, description,
+          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
+            id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
           })),
           characters: productionCharacters,
-          pack,
+          pack: Object.fromEntries(Object.entries(pack).filter(([key]) =>
+            fieldsForRequestedOutputs(generatedOutputs).includes(key as keyof ProductionPack))),
           qualityFindings: qualityReport.findings,
+          requestedOutputs: generatedOutputs,
         }),
       });
-      const data = await response.json() as ProductionPack & { error?: string };
+      const data = await response.json() as { pack?: Partial<ProductionPack>; error?: string };
       if (!response.ok) throw new Error(data.error || "AI could not improve the pack.");
-      if (form.videoTitle.trim()) data.videoTitle = form.videoTitle.trim();
-      setPack(data);
+      if (!data.pack) throw new Error("AI returned no repaired outputs.");
+      setPack((current) => ({ ...current, ...data.pack } as ProductionPack));
       setNotice("The complete pack was synchronized and Quality Control reran automatically.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "AI improvement failed.");
@@ -880,9 +1289,12 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
   function generateSoundProfiles() {
     const profiles = productionCharacters.map((profile) => {
-      const savedVoice = characterDescription(profile).split("\n")
+      const savedVoice = profile.nonverbalSoundProfile || characterDescription(profile).split("\n")
         .find((line) => /voice profile|nonverbal sound profile/i.test(line));
-      return `${profile.shortName}: ${savedVoice?.split(":").slice(1).join(":").trim() || "species-appropriate gasps, effort sounds, reaction noises, and a brief happy or surprised vocalization"}. No understandable words.`;
+      const identity = typeof savedVoice === "string"
+        ? savedVoice.includes(":") ? savedVoice.split(":").slice(1).join(":").trim() : savedVoice.trim()
+        : "";
+      return `${profile.shortName}: ${identity || "Short character-appropriate nonverbal effort and reaction sounds matching the established size, personality, movement, and emotional behavior"}. No understandable words.`;
     }).join("\n");
     update("characterCartoonSoundGuidance", profiles);
     setNotice("Editable nonverbal sound profiles created for the checked characters only. Nothing was saved automatically.");
@@ -906,7 +1318,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     const latest = migrateForm(preset.form);
     latest.heroId = characters.some((entry) => entry.id === latest.heroId)
       ? latest.heroId
-      : "builtin-biscuit";
+      : characters.find((entry) => entry.role === "Hero")?.id || "";
     latest.selectedCharacterIds = latest.selectedCharacterIds
       .filter((id) => characters.some((entry) => entry.id === id) && id !== latest.heroId);
     latest.activeCharacterIds = [...new Set(latest.activeCharacterIds)]
@@ -948,6 +1360,9 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       characterProfiles: productionCharacters,
       pack,
       qualityReport,
+      requestedOutputs,
+      generatedOutputs,
+      packStatus: generatedOutputs.length === requestedOutputValues.length ? "Complete Pack" : "Partial Pack",
     };
     setSavedPacks((current) => [saved, ...current]);
     setNotice("Production pack saved locally.");
@@ -963,7 +1378,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     }
     setForm(migrateForm(saved.form));
     setCharacters((current) => mergeCharacterLibraries(current, saved.characterProfiles));
-    setPack(saved.pack);
+    setPack(saved.pack as ProductionPack);
+    setGeneratedOutputs(saved.generatedOutputs || requestedOutputValues.filter((output) =>
+      fieldsForRequestedOutputs([output]).every((field) => Boolean(saved.pack[field]))));
+    setRequestedOutputs(saved.requestedOutputs || requestedOutputValues);
+    setSelectionMode((saved.generatedOutputs || []).length === requestedOutputValues.length ? "fullPack" : "custom");
     setLegacyPack(null);
     setNotice("Saved pack loaded.");
     window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1059,7 +1478,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       });
       const children = [
         new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun({ text: "Slapstick Prompt Pack", bold: true })] }),
-        new Paragraph({ heading: HeadingLevel.HEADING_2, text: pack.videoTitle }),
+        ...(generatedOutputs.includes("videoTitle") ? [new Paragraph({ heading: HeadingLevel.HEADING_2, text: pack.videoTitle })] : []),
         new Paragraph(`Generated: ${new Date().toLocaleString()}`),
         setting("Generator mode", mode === "demo" ? "Demo" : "AI"),
         setting("Selected model", selectedModel(form)),
@@ -1094,6 +1513,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         children.push(heading(profile.fullIdentity, HeadingLevel.HEADING_2));
         children.push(setting("Name", profile.shortName), setting("Role", profile.role), setting("Full identity", profile.fullIdentity));
         children.push(...paragraphLines(sanitizeActiveText(characterDescription(profile))));
+        children.push(setting("Nonverbal Sound Profile", profile.nonverbalSoundProfile || "Neutral character-appropriate nonverbal effort and reaction sounds; no understandable words."));
       });
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Creative Setup"));
       children.push(setting("Location", `${exportForm.locationName || "Location"} — ${exportForm.location}`));
@@ -1108,10 +1528,14 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       children.push(setting("Music", form.noMusic ? "No music" : `${form.musicType}; ${form.musicMood}; ${form.musicIntensity}`));
       children.push(setting("Sound effects", form.soundEffectsStyle), setting("Audio workflow", form.audioMode));
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Generated Outputs"));
-      if (pack.characterBuildingPrompt) children.push(heading("1. Character-Building Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.characterBuildingPrompt));
-      children.push(heading("2. Start-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.startFramePrompt));
-      children.push(heading("3. End-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.endFramePrompt));
-      children.push(heading("4. All-in-One Video Production Prompt", HeadingLevel.HEADING_2), ...paragraphLines(completePrompt));
+      // Complete-pack compatibility heading: 4. All-in-One Video Production Prompt
+      children.push(setting("Generated-output summary", generatedOutputs.join(", ")));
+      if (generatedOutputs.includes("characterBuildingPrompt") && pack.characterBuildingPrompt) children.push(heading("Character-Building Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.characterBuildingPrompt));
+      if (generatedOutputs.includes("startFramePrompt")) children.push(heading("Start-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.startFramePrompt));
+      if (generatedOutputs.includes("endFramePrompt")) children.push(heading("End-Frame Image Prompt", HeadingLevel.HEADING_2), ...paragraphLines(pack.endFramePrompt));
+      if (generatedOutputs.includes("videoPrompt")) children.push(heading("Video-Generation Prompt", HeadingLevel.HEADING_2), ...paragraphLines(visualPrompt));
+      if (generatedOutputs.includes("musicPath")) children.push(heading("Music Path", HeadingLevel.HEADING_2), ...paragraphLines(pack.musicPath));
+      if (generatedOutputs.includes("soundEffects")) children.push(heading("Sound-Effects Path", HeadingLevel.HEADING_2), ...paragraphLines(pack.soundEffects));
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("Quality-Control Report"));
       children.push(new Paragraph({ children: [new TextRun({ text: `Overall score: ${qualityReport.score}/100`, bold: true })] }));
       qualityReport.findings.forEach((finding) => children.push(new Paragraph({
@@ -1127,7 +1551,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         }],
       });
       saveAs(await Packer.toBlob(document), safeWordFilename(pack.videoTitle));
-      setNotice("Full production pack downloaded as an editable Word document.");
+      setNotice(`${generatedOutputs.length === requestedOutputValues.length ? "Full production pack" : "Selected outputs"} downloaded as an editable Word document.`);
       setError("");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The Word document could not be created.");
@@ -1165,8 +1589,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         </div>
         {kind === "object" && <label className="toggle-field"><input type="checkbox" checked={form.allowPreviouslySavedObjects} onChange={(event) => update("allowPreviouslySavedObjects", event.target.checked)} /><span>Allow Previously Saved Objects</span></label>}
         <div className="button-row">
-          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, false)}>{suggestingField === kind ? "Creating…" : `Generate ${label} with AI`}</button>
-          <button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative(kind, true)}>{`Continue and Improve ${label}`}</button>
+          <button type="button" disabled={suggestingFields[kind]} aria-busy={suggestingFields[kind]} onClick={() => suggestCreative(kind, false)}>{suggestingFields[kind] ? "Creating…" : `Regenerate ${label}`}</button>
+          <button type="button" disabled={suggestingFields[kind]} onClick={() => suggestCreative(kind, true)}>{suggestingFields[kind] ? "Creating…" : `Continue and Improve ${label}`}</button>
           <button className="primary-small" type="button" onClick={() => saveCreativeAsset(kind)}>{selected ? `Update ${label}` : `Save ${label}`}</button>
           {kind === "location" && <button type="button" onClick={setSignatureLocation} disabled={!selectedId}>Set as Signature Location</button>}
           <button type="button" onClick={() => selectCreativeAsset(kind, "")}>Remove from current video</button>
@@ -1174,6 +1598,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         </div>
       </article>
     );
+  }
+
+  function completeIdeaField(kind: CreativeAssetKind, label: string) {
+    const keys = creativeFields[kind];
+    return <div className="complete-idea-field" key={kind}><label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.name]: event.target.value }))} /></label><label className="field wide"><span>{label} description</span><textarea className={ideaDescriptionsExpanded ? "expanded-description" : "compact-description"} value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.description]: event.target.value }))} /></label></div>;
   }
 
   return (
@@ -1187,6 +1616,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           <span />
           {mode === "demo" ? "Demo Mode · local" : "AI Mode · server secured"}
         </div>
+        <a className="library-link" href="/library">My Prompt Library</a>
       </header>
 
       <section className="hero" id="top">
@@ -1199,24 +1629,64 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       </section>
 
       <div className="workspace">
+        <nav className="workflow-nav" role="tablist" aria-label="Production workflow">
+          {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
+          <a href="/library" role="tab" aria-selected="false">Library</a>
+        </nav>
         <section className="setup-panel">
           <div className="mode-switch" aria-label="Generator mode">
             <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
             <button className={mode === "ai" ? "active" : ""} type="button" onClick={() => setMode("ai")}>AI Mode<small>OpenAI powered</small></button>
           </div>
 
-          <section className="form-section">
-            <div className="section-heading"><span>01</span><div><h2>Episode Idea</h2><p>Define the physical story before adding production settings.</p></div></div>
+          <section className="form-section output-picker compact-selector" id="choose-outputs" role="tabpanel" aria-labelledby="workflow-tab-outputs" hidden={activeWorkflowTab !== "outputs"}>
+            <div className="selector-header">
+              <div className="section-heading"><span>01</span><div><h2 id="output-selector-title">Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized production pack.</p></div></div>
+              <strong className="selected-count" aria-live="polite">{selectionMode === "fullPack" ? "7 outputs included" : `${requestedOutputs.length} output${requestedOutputs.length === 1 ? "" : "s"} selected`}</strong>
+            </div>
+            <div className="selection-mode" role="group" aria-label="Output selection mode">
+              <button type="button" aria-pressed={selectionMode === "custom"} className={selectionMode === "custom" ? "active" : ""} onClick={() => setOutputMode("custom")}>Custom Selection</button>
+              <button type="button" aria-pressed={selectionMode === "fullPack"} className={selectionMode === "fullPack" ? "active" : ""} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
+            </div>
+            {selectionMode === "custom" ? <>
+              <div className="selector-toolbar">
+                <button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select All</button>
+                <button type="button" onClick={() => setCustomOutputs([])}>Clear Selection</button>
+                <button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended Setup</button>
+              </div>
+              <div className="selection-grid">
+                {outputChoices.map((choice) => {
+                  const included = requestedOutputs.includes(choice.id);
+                  return <label className={`selection-card ${included ? "selected" : ""}`} key={choice.id} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); toggleRequestedOutput(choice.id); } }}>
+                    <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                    <span className="output-icon" aria-hidden="true">{choice.icon}</span>
+                    <span className="choice-copy"><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
+                    <span className="check-indicator" aria-hidden="true">{included ? "✓" : ""}</span>
+                  </label>;
+                })}
+              </div>
+            </> : <div className="full-pack-panel">
+              <span className="output-icon" aria-hidden="true">✓</span>
+              <div><strong>All production outputs included</strong><p>One synchronized generation containing every available output exactly once.</p><div className="included-chips">{outputChoices.map((choice) => <span key={choice.id}>{choice.short}</span>)}</div></div>
+              <button type="button" onClick={() => setOutputMode("custom")}>Customize Outputs</button>
+            </div>}
+            <div className="selection-summary">
+              <div>{requestedOutputs.length ? <><strong>{selectionMode === "fullPack" ? "Full Production Pack:" : `${requestedOutputs.length} selected:`}</strong> {outputChoices.filter((choice) => requestedOutputs.includes(choice.id)).map((choice) => choice.short).join(", ")}</> : <strong className="selection-warning">Select at least one output to continue.</strong>}</div>
+              <button type="button" onClick={scrollToEpisodeIdea}>Continue to Production Setup</button>
+            </div>
+          </section>
+
+          <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
+            <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
+            <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
             <div className="form-grid">
-              <article className="creative-editor title-editor wide">
-                <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
-                <label className="field wide"><span>Video Title</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-                <div className="button-row"><button type="button" disabled={Boolean(suggestingField)} onClick={() => suggestCreative("title")}>{suggestingField === "title" ? "Creating…" : "Generate Ultra-Unique Title with AI"}</button></div>
-              </article>
-              {creativeEditor("location", "Location")}
-              {creativeEditor("object", "Important Object")}
-              {creativeEditor("action", "Action or Trap")}
-              {creativeEditor("payoff", "Ending or Payoff")}
+              {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
+              <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
+              {completeIdeaField("location", "Location")}
+              {completeIdeaField("object", "Important Object")}
+              {completeIdeaField("action", "Action or Trap")}
+              {completeIdeaField("payoff", "Ending or Payoff")}
+              <button type="button" className="description-toggle wide" aria-expanded={ideaDescriptionsExpanded} onClick={() => setIdeaDescriptionsExpanded((current) => !current)}>{ideaDescriptionsExpanded ? "Collapse descriptions" : "Expand descriptions"}</button>
               <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
               <details className="advanced-panel wide">
                 <summary>Creative Library import and export <span>+</span></summary>
@@ -1232,9 +1702,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             </div>
           </section>
 
-          <section className="form-section">
-            <div className="section-heading"><span>02</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
-            <div className="character-block">
+          <section className="form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
+            <div className="section-heading"><span>03</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
+            <div className="character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
+            <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
                 <div><strong>{viewedCharacter?.fullIdentity || "No saved characters"}</strong><small>Character {characters.length ? characterIndex + 1 : 0} of {characters.length}</small></div>
@@ -1247,9 +1718,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <label className="field"><span>Role</span><select disabled={Boolean(draft.builtIn)} value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value as CharacterRole }))}>{roles.map((role) => <option key={role}>{role}</option>)}</select></label>
                 <label className="field wide"><span>Full identity</span><input disabled={Boolean(draft.builtIn)} value={draft.fullIdentity} onChange={(event) => setDraft((current) => ({ ...current, fullIdentity: event.target.value }))} /></label>
                 <label className="field wide"><span>Complete description</span><textarea disabled={Boolean(draft.builtIn)} className="character-description" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>
+                <label className="field wide"><span>Nonverbal Sound Profile</span><textarea disabled={Boolean(draft.builtIn)} value={draft.nonverbalSoundProfile} onChange={(event) => setDraft((current) => ({ ...current, nonverbalSoundProfile: event.target.value }))} placeholder="Medium-high, energetic nonverbal vocal style with short effort sounds, quick surprised gasps, soft happy reactions, and brief impact yelps. Keep all sounds wordless and consistent with the character’s size, personality, and movement." /><i>Write a profile, enter a short idea, or expand it with AI. Placeholder examples are never saved or generated automatically.</i></label>
               </div>
               <div className="button-row">
                 <button type="button" onClick={generateCharacterDescription} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Improving…" : "Continue and Improve with AI"}</button>
+                <button type="button" onClick={continueSoundProfile} disabled={isSuggesting || Boolean(draft.builtIn)}>{isSuggesting ? "Expanding…" : "Continue Sound Profile with AI"}</button>
                 <button className="primary-small" disabled={Boolean(draft.builtIn)} type="button" onClick={() => saveCharacter(false)}>{draft.id ? "Update Character" : "Save to Character Library"}</button>
                 <button type="button" onClick={() => newCharacter()}>Add New Character</button>
                 <button type="button" disabled={!draft.id || Boolean(draft.builtIn)} onClick={deleteCharacter}>Delete Custom Character</button>
@@ -1258,7 +1731,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 {productionCharacters.map((profile) => <article key={profile.id}><button className="character-card-main" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); }}><b>{profile.shortName}</b><small>{profile.role}</small></button><button className="remove-chip" type="button" aria-label={`Remove ${profile.shortName} from video`} onClick={() => toggleActiveCharacter(profile.id)}>×</button></article>)}
                 {!productionCharacters.length && <p className="empty-note">No characters selected.</p>}
               </div></div>
-            </div>
+            </details>
 
             <details className="advanced-panel">
               <summary>Character Library import and export <span>+</span></summary>
@@ -1273,8 +1746,9 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             </details>
           </section>
 
-          <section className="form-section">
-            <div className="section-heading"><span>03</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
+          <section className="form-section" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
+            <div className="section-heading"><span>04</span><div><h2>Production Setup</h2><p>Compact format, model, motion, ratio, voice, music, and sound controls.</p></div></div>
+            <div className="production-tabs" role="tablist" aria-label="Production settings">{(["core", "motion", "audio", "advanced"] as const).map((tab) => <button key={tab} type="button" role="tab" aria-selected={productionTab === tab} className={productionTab === tab ? "active" : ""} onClick={() => setProductionTab(tab)}>{tab}</button>)}</div>
             <div className="form-grid">
               <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
               <label className="field"><span>AI video model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select>{form.videoModel === "Custom model" && <input value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
@@ -1296,8 +1770,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 <div className="form-grid">
                   <fieldset className="choice-field wide"><legend>Narration and voice layers</legend><div className="choice-grid">{voiceLayerOptions.map((layer) => <label key={layer}><input type="checkbox" checked={form.voiceLayers.includes(layer)} onChange={() => toggleVoiceLayer(layer)} /><span>{layer}</span></label>)}</div></fieldset>
                   <label className="toggle-field wide"><input type="checkbox" checked={form.characterCartoonSounds} onChange={(event) => update("characterCartoonSounds", event.target.checked)} /><span>Character Cartoon Sounds</span></label>
-                  <p className="helper-text wide">Creates nonverbal character vocal sounds such as gasps, squeaks, grunts, giggles, yelps, huffs, chirps, effort sounds, and reaction noises. It does not create spoken words or dialogue.</p>
-                  {form.characterCartoonSounds && <div className="wide"><label className="field"><span>Character Cartoon Sound Guidance <i>optional</i></span><textarea value={form.characterCartoonSoundGuidance} onChange={(event) => update("characterCartoonSoundGuidance", event.target.value)} placeholder="Example: Give Biscuit quick cheerful squeaks and effort sounds, while Grumpy uses low irritated grunts and surprised yelps. No spoken words." /></label><div className="button-row"><button type="button" onClick={generateSoundProfiles} disabled={!productionCharacters.length}>Generate Sound Profiles with AI</button></div></div>}
+                  <p className="helper-text wide">Creates concise nonverbal effort and reaction sounds from each active character’s saved profile. It does not infer species sounds or create spoken dialogue.</p>
+                  {form.characterCartoonSounds && <div className="wide"><label className="field"><span>Temporary Sound Overrides <i>optional</i></span><textarea value={form.characterCartoonSoundGuidance} onChange={(event) => update("characterCartoonSoundGuidance", event.target.value)} placeholder="Character Name: low controlled mechanical hums, short effort sounds, brief alarm reactions, and a soft descending impact tone. No spoken words." /></label><div className="button-row"><button type="button" onClick={generateSoundProfiles} disabled={!productionCharacters.length}>Use Active Character Sound Profiles</button></div></div>}
                   {hasNarrator && <><label className="field wide"><span>Narrator guidance</span><textarea value={form.narratorGuidance} onChange={(event) => update("narratorGuidance", event.target.value)} /></label><label className="field wide"><span>Narration text</span><textarea value={form.narrationText} onChange={(event) => update("narrationText", event.target.value)} /></label></>}
                   {hasCharacterVoices && <><label className="field wide"><span>Character dialogue</span><textarea value={form.characterDialogue} onChange={(event) => update("characterDialogue", event.target.value)} /></label><label className="field wide"><span>Character voice guidance</span><textarea value={form.characterVoiceGuidance} onChange={(event) => update("characterVoiceGuidance", event.target.value)} /></label></>}
                   {!silentMode && <><label className="field"><span>Language</span><input value={form.language} onChange={(event) => update("language", event.target.value)} /></label><label className="field"><span>Vocal tone</span><input value={form.vocalTone} onChange={(event) => update("vocalTone", event.target.value)} /></label><label className="toggle-field"><input type="checkbox" checked={form.lipSyncRequired} onChange={(event) => update("lipSyncRequired", event.target.checked)} /><span>Lip-sync required</span></label></>}
@@ -1344,22 +1818,24 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 </div>
               </div>
             </details>
+            <section className="generate-section setup-generation" aria-labelledby="setup-generation-title">
+              <div><span>05</span><h2 id="setup-generation-title">Generation Summary</h2><p>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
+              <button className="generate-button selectable-generate" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
+            </section>
           </section>
 
           {error && <div className="message error" role="alert">{error}</div>}
           {notice && <div className="message success" role="status">{notice}</div>}
 
-          <section className="generate-section">
-            <div><span>04</span><h2>Generate Production Pack</h2><p>Creates the five simplified production outputs with one synchronized internal video schema.</p></div>
-            <button className="generate-button" type="button" disabled={!isReady || isGenerating} onClick={generate}>{isGenerating ? "Synchronizing production…" : `Generate with ${mode === "demo" ? "Demo Mode" : "AI Mode"} →`}</button>
-          </section>
         </section>
 
         <section className="output-panel" ref={outputRef}>
           <div className="output-heading">
-            <div><span className="eyebrow">05 · GENERATED PRODUCTION PACK</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your synchronized pack will appear here."}</h2></div>
-            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Pack</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
+            <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
+            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
+          {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}
+          {pack && <button className="dynamic-word-button" type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word document…" : generatedOutputs.length === requestedOutputValues.length ? "Download Full Pack as Word" : "Download Selected Outputs as Word"}</button>}
 
           {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}
 
@@ -1372,32 +1848,31 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
 
           {pack && qualityReport && (
             <>
-              <div className="video-title-output"><span>VIDEO TITLE</span><h2>{pack.videoTitle}</h2><CopyButton label="Copy Title" value={pack.videoTitle} /></div>
-              {pack.characterBuildingPrompt && <article className="output-card">
+              {generatedOutputs.includes("videoTitle") && <div className="video-title-output"><span>VIDEO TITLE</span><h2>{pack.videoTitle}</h2><CopyButton label="Copy Title" value={pack.videoTitle} /></div>}
+              {generatedOutputs.includes("characterBuildingPrompt") && pack.characterBuildingPrompt && <article className="output-card">
                 <div className="card-heading"><span>01 · CHARACTER</span><h3>Character-Building Prompt</h3><CopyButton label="Copy" value={pack.characterBuildingPrompt || "Character-building prompt disabled."} /></div>
                 <pre>{pack.characterBuildingPrompt}</pre>
               </article>}
-              <article className="output-card">
+              {generatedOutputs.includes("startFramePrompt") && <article className="output-card">
                 <div className="card-heading"><span>02 · REFERENCE FRAME</span><h3>Start-Frame Image Prompt</h3><CopyButton label="Copy" value={pack.startFramePrompt} /></div>
                 <pre>{pack.startFramePrompt}</pre>
-              </article>
-              <article className="output-card">
+              </article>}
+              {generatedOutputs.includes("endFramePrompt") && <article className="output-card">
                 <div className="card-heading"><span>03 · REFERENCE FRAME</span><h3>End-Frame Image Prompt</h3><CopyButton label="Copy" value={pack.endFramePrompt} /></div>
                 <pre>{pack.endFramePrompt}</pre>
-              </article>
-              <article className="output-card featured">
+              </article>}
+              {generatedOutputs.some((output) => ["videoPrompt", "musicPath", "soundEffects"].includes(output)) && <article className="output-card featured">
                 <div className="card-heading"><span>04 · COMPLETE VIDEO</span><h3>All-in-One Video Production Prompt</h3></div>
                 <div className="copy-group">
                   <CopyButton label="Copy Complete Production Prompt" value={completePrompt} />
                   <CopyButton label="Copy Visual Portion Only" value={visualPrompt} />
                   <CopyButton label="Copy Audio Portion Only" value={audioPrompt} />
                 </div>
-                <div className="prompt-block"><h4>VIDEO LOCK</h4><pre>{pack.videoLock}</pre></div>
-                <div className="prompt-block"><h4>SECOND-BY-SECOND VIDEO ACTION</h4><pre>{pack.videoTimeline}</pre></div>
-                <div className="prompt-block"><h4>MUSIC PATH</h4><pre>{pack.musicPath || "No music."}</pre></div>
-                <div className="prompt-block"><h4>SOUND EFFECTS</h4><pre>{pack.soundEffects}</pre></div>
-                <div className="prompt-block"><h4>FINAL GENERATION RULE</h4><pre>{pack.finalGenerationRule}</pre></div>
-              </article>
+                {generatedOutputs.includes("videoPrompt") && <><div className="prompt-block"><h4>VIDEO LOCK</h4><pre>{pack.videoLock}</pre></div><div className="prompt-block"><h4>SECOND-BY-SECOND VIDEO ACTION</h4><pre>{pack.videoTimeline}</pre></div></>}
+                {generatedOutputs.includes("musicPath") && <div className="prompt-block"><h4>MUSIC PATH</h4><pre>{pack.musicPath || "No music."}</pre></div>}
+                {generatedOutputs.includes("soundEffects") && <div className="prompt-block"><h4>SOUND EFFECTS</h4><pre>{pack.soundEffects}</pre></div>}
+                {generatedOutputs.includes("videoPrompt") && <div className="prompt-block"><h4>FINAL GENERATION RULE</h4><pre>{pack.finalGenerationRule}</pre></div>}
+              </article>}
               <article className="output-card quality-card">
                 <div className="quality-score"><strong>{qualityReport.score}</strong><span>/ 100</span></div>
                 <div className="card-heading"><span>05 · ERROR PREVENTION</span><h3>Quality-Control Report</h3><CopyButton label="Copy Report" value={qualityText(qualityReport)} /></div>

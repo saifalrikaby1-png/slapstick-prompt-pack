@@ -60,6 +60,7 @@ const STORAGE = {
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 type OutputSelectionMode = "custom" | "fullPack";
+type CreativeGenerationMode = "ai" | "demo";
 type CreativeSuggestionKind = CreativeAssetKind | "title";
 type CreativeSuggestion = { name?: string; description?: string; title?: string };
 type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
@@ -69,7 +70,7 @@ type CompleteIdea = {
   importantObject: { name: string; description: string };
   actionOrTrap: { name: string; description: string };
   endingOrPayoff: { name: string; description: string };
-  creativeFingerprint: { settingCategory: string; objectCategory: string; actionMechanic: string; escalationPattern: string; payoffPattern: string };
+  creativeFingerprint: { settingCategory: string; objectCategory: string; actionMechanic: string; initiatingCharacter: string; escalationPattern: string; movementPath: string; payoffPattern: string };
 };
 type IdeaSnapshot = Pick<ProductionForm, "videoTitle" | "locationAssetId" | "locationName" | "location" | "objectAssetId" | "objectName" | "importantObject" | "actionAssetId" | "actionName" | "trapAction" | "payoffAssetId" | "payoffName" | "endingPayoff">;
 const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
@@ -819,7 +820,7 @@ export default function Home() {
       importantObject: { name: object, description: `One visible ${object} with a stable silhouette, clear physical support, predictable motion, and a single continuous final position.` },
       actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using a visible ${mechanic}; the Hero makes one readable response, the object follows a continuous grounded path, and the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
       endingOrPayoff: { name: payoff, description: `The Hero finishes in a clear ${payoff} beside the settled ${object}; every active character remains visible in a distinct safe final position, and ${setting} remains unchanged for a stable end frame.` },
-      creativeFingerprint: { settingCategory: `${setting}-${Math.floor(index / 7)}`, objectCategory: `${object}-${Math.floor(index / 49)}`, actionMechanic: `${mechanic}-${Math.floor(index / 343)}`, escalationPattern: `causal-${edition}`, payoffPattern: `${payoff}-${Math.floor(index / 2401)}` },
+      creativeFingerprint: { settingCategory: `${setting}-${Math.floor(index / 7)}`, objectCategory: `${object}-${Math.floor(index / 49)}`, actionMechanic: `${mechanic}-${Math.floor(index / 343)}`, initiatingCharacter: `enemy-${edition % 3}`, escalationPattern: `causal-${edition}`, movementPath: `grounded-${Math.floor(index / 17)}`, payoffPattern: `${payoff}-${Math.floor(index / 2401)}` },
     };
   }
 
@@ -830,6 +831,7 @@ export default function Home() {
     setError("");
     const snapshot = currentIdeaSnapshot();
     try {
+      const creativeMode: CreativeGenerationMode = mode === "ai" ? "ai" : "demo";
       const exclusions = [
         ...creativeExclusions("title"),
         ...creativeExclusions("location"),
@@ -840,10 +842,10 @@ export default function Home() {
       ].slice(-60);
       let idea: CompleteIdea | null = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        if (mode === "demo") {
+        if (creativeMode === "demo") {
           idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex);
         } else {
-          const response = await fetch("/api/creative-suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "generateCompleteIdea", idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
+          const response = await fetch("/api/creative-suggest", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "X-Generation-Nonce": crypto.randomUUID() }, body: JSON.stringify({ action: "generateCompleteIdea", generationNonce: crypto.randomUUID(), idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
           const data = await response.json() as CompleteIdea & { error?: string };
           if (!response.ok) throw new Error(data.error || "Complete idea generation failed.");
           idea = data;
@@ -854,7 +856,7 @@ export default function Home() {
           setIdeaUndoSnapshot(snapshot);
           setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
           setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
-          if (mode === "demo") setDemoCompleteIdeaIndex((current) => current + 1);
+          if (creativeMode === "demo") setDemoCompleteIdeaIndex((current) => current + 1);
           rememberSuggestion("title", { title: idea!.videoTitle });
           rememberSuggestion("location", idea!.location);
           rememberSuggestion("object", idea!.importantObject);

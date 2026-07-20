@@ -11,6 +11,7 @@ type RequestPayload = {
   context?: Record<string, unknown>;
   exclusions?: Exclusion[];
   collisionRetry?: boolean;
+  generationNonce?: string;
 };
 
 const requestCooldowns = new Map<string, number>();
@@ -66,7 +67,7 @@ function validSuggestion(value: unknown, titleOnly: boolean, completeIdea: boole
     const fingerprint = item.creativeFingerprint as Record<string, unknown> | undefined;
     return typeof item.videoTitle === "string" && item.videoTitle.trim().length > 0 && item.videoTitle.length <= 100 &&
       asset(item.location) && asset(item.importantObject) && asset(item.actionOrTrap) && asset(item.endingOrPayoff) &&
-      Boolean(fingerprint && ["settingCategory", "objectCategory", "actionMechanic", "escalationPattern", "payoffPattern"].every((key) => typeof fingerprint[key] === "string" && fingerprint[key].trim().length > 0));
+      Boolean(fingerprint && ["settingCategory", "objectCategory", "actionMechanic", "initiatingCharacter", "escalationPattern", "movementPath", "payoffPattern"].every((key) => typeof fingerprint[key] === "string" && fingerprint[key].trim().length > 0));
   }
   if (titleOnly) return typeof item.title === "string" && item.title.trim().length > 0 && item.title.length <= 100;
   return typeof item.name === "string" && item.name.trim().length > 0 && item.name.length <= 100 &&
@@ -76,7 +77,8 @@ function validSuggestion(value: unknown, titleOnly: boolean, completeIdea: boole
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey?.trim()) {
-    return Response.json({ error: "AI Mode needs an OPENAI_API_KEY in .env.local. Demo Mode is still available." }, { status: 503 });
+    console.error("[Creative Suggest] AI configuration unavailable");
+    return Response.json({ code: "AI_CONFIGURATION_ERROR", error: "AI generation is not configured for this deployment." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   let body: RequestPayload;
   try {
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
           importantObject: { type: "object", additionalProperties: false, properties: { name: { type: "string", maxLength: 100 }, description: { type: "string", maxLength: 4000 } }, required: ["name", "description"] },
           actionOrTrap: { type: "object", additionalProperties: false, properties: { name: { type: "string", maxLength: 100 }, description: { type: "string", maxLength: 4000 } }, required: ["name", "description"] },
           endingOrPayoff: { type: "object", additionalProperties: false, properties: { name: { type: "string", maxLength: 100 }, description: { type: "string", maxLength: 4000 } }, required: ["name", "description"] },
-          creativeFingerprint: { type: "object", additionalProperties: false, properties: { settingCategory: { type: "string", maxLength: 80 }, objectCategory: { type: "string", maxLength: 80 }, actionMechanic: { type: "string", maxLength: 80 }, escalationPattern: { type: "string", maxLength: 80 }, payoffPattern: { type: "string", maxLength: 80 } }, required: ["settingCategory", "objectCategory", "actionMechanic", "escalationPattern", "payoffPattern"] },
+          creativeFingerprint: { type: "object", additionalProperties: false, properties: { settingCategory: { type: "string", maxLength: 80 }, objectCategory: { type: "string", maxLength: 80 }, actionMechanic: { type: "string", maxLength: 80 }, initiatingCharacter: { type: "string", maxLength: 80 }, escalationPattern: { type: "string", maxLength: 80 }, movementPath: { type: "string", maxLength: 80 }, payoffPattern: { type: "string", maxLength: 80 } }, required: ["settingCategory", "objectCategory", "actionMechanic", "initiatingCharacter", "escalationPattern", "movementPath", "payoffPattern"] },
         }
       : titleOnly
       ? { title: { type: "string", maxLength: 100 } }
@@ -127,7 +129,7 @@ Return only strict JSON.`;
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), cache: "no-store",
       body: JSON.stringify({
         model: "gpt-5.6-sol",
         instructions,
@@ -149,10 +151,10 @@ Return only strict JSON.`;
     } catch {
       return Response.json({ error: "AI returned an invalid creative suggestion." }, { status: 502 });
     }
-    if (!validSuggestion(suggestion, titleOnly, completeIdea)) return Response.json({ error: "AI returned an incomplete creative suggestion." }, { status: 502 });
-    return Response.json(suggestion);
+    if (!validSuggestion(suggestion, titleOnly, completeIdea)) return Response.json({ code: "AI_GENERATION_FAILED", error: "A new idea could not be generated. Please try again." }, { status: 502, headers: { "Cache-Control": "no-store" } });
+    return Response.json(suggestion, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("[Creative Suggest] Network/API failure", error);
-    return Response.json({ error: "Network/API request failed. Try Demo Mode or retry later." }, { status: 502 });
+    return Response.json({ code: "AI_GENERATION_FAILED", error: "A new idea could not be generated. Please try again." }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }
 }

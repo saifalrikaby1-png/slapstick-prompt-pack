@@ -8,7 +8,7 @@ const actions = fs.readFileSync("app/ai-actions.ts", "utf8");
 const library = fs.readFileSync("app/library/page.tsx", "utf8");
 
 test("complete idea generation is structured, replace-safe, and undoable", () => {
-  for (const key of ["generateCompleteIdea", "videoTitle", "importantObject", "actionOrTrap", "endingOrPayoff", "creativeFingerprint"]) assert.match(route, new RegExp(key));
+  for (const key of ["generateCompleteIdea", "videoTitle", "importantObject", "actionOrTrap", "endingOrPayoff", "creativeFingerprint", "initiatingCharacter", "movementPath"]) assert.match(route, new RegExp(key));
   assert.match(page, /Generate Complete Video Idea/);
   assert.match(page, /Generate Another Complete Idea/);
   assert.match(page, /This will replace the current title, location, important object, action or trap, and ending or payoff/);
@@ -32,4 +32,14 @@ test("complete idea generation remains available beyond five requests", () => {
   assert.match(page, /\[\.\.\.current, fingerprint\]\.slice\(-20\)/);
   assert.match(page, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
   assert.doesNotMatch(page, /maxGenerations|generationCount|remainingGenerations|attempts >= 5/);
+});
+
+test("AI mode never falls back to the five demo complete ideas", () => {
+  assert.match(page, /const creativeMode: CreativeGenerationMode = mode === "ai" \? "ai" : "demo"/);
+  assert.match(page, /if \(creativeMode === "demo"\)[\s\S]*endlessDemoCompleteIdea/);
+  assert.match(page, /cache: "no-store"/);
+  assert.match(page, /generationNonce: crypto\.randomUUID\(\)/);
+  assert.match(route, /AI_CONFIGURATION_ERROR/);
+  assert.match(route, /AI_GENERATION_FAILED/);
+  assert.match(route, /Cache-Control": "no-store/);
 });

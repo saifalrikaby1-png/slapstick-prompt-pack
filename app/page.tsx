@@ -61,6 +61,7 @@ const STORAGE = {
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 type OutputSelectionMode = "custom" | "fullPack";
 type CreativeGenerationMode = "ai" | "demo";
+type IdeaCreationMethod = "manual" | "ai";
 type CreativeSuggestionKind = CreativeAssetKind | "title";
 type CreativeSuggestion = { name?: string; description?: string; title?: string };
 type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
@@ -346,6 +347,7 @@ export default function Home() {
   const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
   const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
   const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
+  const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1536,6 +1538,11 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     );
   }
 
+  function completeIdeaField(kind: CreativeAssetKind, label: string) {
+    const keys = creativeFields[kind];
+    return <div className="complete-idea-field" key={kind}><label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.name]: event.target.value }))} /></label><label className="field wide"><span>{label} description</span><textarea value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.description]: event.target.value }))} /></label></div>;
+  }
+
   return (
     <main>
       <header className="topbar">
@@ -1603,18 +1610,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </div>
           </section>
 
-          <section className="form-section" id="episode-idea">
-            <div className="section-heading"><span>02</span><div><h2>Episode Idea</h2><p>Define the physical story before adding production settings.</p></div></div>
+          <section className="form-section complete-video-idea" id="episode-idea">
+            <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
+            <div className="selection-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>AI Generate</button></div>
             <div className="form-grid">
-              <article className="creative-editor title-editor wide">
-                <div className="mini-heading"><h3>Video Name</h3><p>Manual titles are preserved exactly unless you request a replacement.</p></div>
-                <label className="field wide"><span>Video Title</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-                <div className="button-row"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button><button type="button" disabled={suggestingFields.title} aria-busy={suggestingFields.title} onClick={() => suggestCreative("title")}>{suggestingFields.title ? "Creating…" : "Regenerate Title"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div>
-              </article>
-              {creativeEditor("location", "Location")}
-              {creativeEditor("object", "Important Object")}
-              {creativeEditor("action", "Action or Trap")}
-              {creativeEditor("payoff", "Ending or Payoff")}
+              {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation — uses idea credits at launch." : "Demo AI simulation — no API credits used."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
+              <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
+              {completeIdeaField("location", "Location")}
+              {completeIdeaField("object", "Important Object")}
+              {completeIdeaField("action", "Action or Trap")}
+              {completeIdeaField("payoff", "Ending or Payoff")}
               <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
               <details className="advanced-panel wide">
                 <summary>Creative Library import and export <span>+</span></summary>

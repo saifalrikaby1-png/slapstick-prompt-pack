@@ -11,7 +11,7 @@ test("renders the approved five-output workflow in Demo and AI modes", async () 
     "Demo Mode",
     "AI Mode",
     "Load Biscuit Demo",
-    "Episode Idea",
+    "Complete Video Idea",
     "Include in This Video",
     "Selected for This Video",
     "Production Setup",

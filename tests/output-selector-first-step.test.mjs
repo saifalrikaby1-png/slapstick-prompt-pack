@@ -6,9 +6,9 @@ const page = fs.readFileSync("app/page.tsx", "utf8");
 const css = fs.readFileSync("app/globals.css", "utf8");
 
 test("output selector is the single first workflow step", () => {
-  assert.ok(page.indexOf("Choose What to Generate") < page.indexOf(">Episode Idea<"));
+  assert.ok(page.indexOf("Choose What to Generate") < page.indexOf(">Complete Video Idea<"));
   assert.match(page, /<span>01<\/span>[\s\S]{0,160}Choose What to Generate/);
-  assert.match(page, /<span>02<\/span>[\s\S]{0,100}Episode Idea/);
+  assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
   assert.match(page, /<span>04<\/span>[\s\S]{0,100}Production Setup/);
   assert.match(page, /<span>05<\/span>[\s\S]{0,120}Voice, Music, and Saved Settings/);

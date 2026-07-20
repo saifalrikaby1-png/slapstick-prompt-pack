@@ -19,14 +19,15 @@ test("each creative control has independent loading and duplicate-request protec
   assert.match(page, /activeCreativeRequests\.current\.add\(kind\)/);
   assert.match(page, /activeCreativeRequests\.current\.delete\(kind\)/);
   assert.match(page, /disabled=\{suggestingFields\[kind\]\}/);
-  assert.match(page, /disabled=\{suggestingFields\.title\}/);
+  assert.match(page, /isGeneratingCompleteIdea/);
 });
 
 test("new title, location, object, action, and payoff suggestions are repeatable and editable", () => {
   for (const kind of ["title", "location", "object", "action", "payoff"]) assert.match(page, new RegExp(`demoCandidates[\\s\\S]*${kind}:`));
   assert.match(page, /Generate Complete Video Idea/);
   assert.match(page, /Regenerate \$\{label\}/);
-  for (const kind of ["location", "object", "action", "payoff"]) assert.match(page, new RegExp(`creativeEditor\\("${kind}"`));
+  assert.match(page, /function creativeEditor\(kind: CreativeAssetKind, label: string\)/);
+  assert.match(page, /suggestCreative\(kind, false\)/);
   assert.match(page, /\[creativeFields\[kind\]\.description\]: result\.description!\.trim\(\)/);
   assert.match(page, /update\("videoTitle", result\.title!\.trim\(\)\)/);
   assert.match(page, /AI suggestion inserted for editing\. It has not been saved\./);

@@ -12,6 +12,9 @@ export function isCompleteIdeaTooSimilar(candidate: CompleteIdeaRegistryEntry, e
   const sameCore = core.filter((key) => candidate[key] === existing[key]).length;
   const axes = (Object.keys(candidate.creativeFingerprint) as Array<keyof CompleteFingerprint>).filter((key) => normalizeIdeaValue(candidate.creativeFingerprint[key]) === normalizeIdeaValue(existing.creativeFingerprint[key])).length;
   const titleSimilar = overlap(candidate.significantTitleTerms, existing.significantTitleTerms) >= Math.max(2, Math.min(candidate.significantTitleTerms.length, existing.significantTitleTerms.length) - 1);
-  return (sameCore >= 3 && axes >= 4) || (sameCore >= 2 && axes >= 5) || (titleSimilar && sameCore >= 2);
+  // A saved project may not have the richer seven-axis fingerprint that a
+  // newly generated idea has. Four identical connected story fields are
+  // already a repeat premise, regardless of that missing historical detail.
+  return sameCore >= 4 || (sameCore >= 3 && axes >= 4) || (sameCore >= 2 && axes >= 5) || (titleSimilar && sameCore >= 2);
 }
 export function parseCompleteIdeaRegistry(raw: string | null) { try { const parsed = JSON.parse(raw || "[]"); return Array.isArray(parsed) ? parsed.filter((entry): entry is CompleteIdeaRegistryEntry => Boolean(entry && typeof entry.conceptHash === "string" && entry.creativeFingerprint)).slice(-1000) : []; } catch { return []; } }

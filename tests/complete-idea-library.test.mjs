@@ -28,9 +28,12 @@ test("credit-ready action map and local prompt library are explicit", () => {
 test("complete idea generation remains available beyond five requests", () => {
   assert.match(page, /function endlessDemoCompleteIdea\(index: number\)/);
   assert.match(page, /demoCompleteIdeaIndex/);
-  assert.match(page, /setDemoCompleteIdeaIndex\(\(current\) => current \+ 1\)/);
-  assert.match(page, /\[\.\.\.current, fingerprint\]\.slice\(-20\)/);
-  assert.match(page, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
+  assert.match(page, /setDemoCompleteIdeaIndex\(\(current\) => current \+ attempt \+ 1\)/);
+  assert.match(page, /for \(let attempt = 0; attempt < \(creativeMode === "demo" \? 500 : 5\); attempt \+= 1\)/);
+  assert.match(page, /isCompleteIdeaTooSimilar/);
+  assert.match(page, /completeIdeaRegistryAi/);
+  assert.match(page, /completeIdeaRegistryDemo/);
+  assert.match(page, /savedProjectRegistryEntries/);
   assert.doesNotMatch(page, /maxGenerations|generationCount|remainingGenerations|attempts >= 5/);
 });
 

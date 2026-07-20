@@ -58,6 +58,8 @@ const STORAGE = {
   recentCreativeSuggestions: "slapstick-recent-creative-suggestions-v1",
   recentCreativeFingerprints: "slapstick-recent-creative-fingerprints-v1",
   completeIdeaRegistry: "slapstick-complete-idea-registry-v1",
+  completeIdeaRegistryAi: "slapstick-complete-idea-registry-ai-v2",
+  completeIdeaRegistryDemo: "slapstick-complete-idea-registry-demo-v2",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
@@ -346,7 +348,7 @@ export default function Home() {
   const activeCreativeRequests = useRef<Set<CreativeSuggestionKind>>(new Set());
   const [recentSuggestions, setRecentSuggestions] = useState<RecentSuggestions>(emptyRecentSuggestions);
   const [recentFingerprints, setRecentFingerprints] = useState<string[]>([]);
-  const [completeIdeaRegistry, setCompleteIdeaRegistry] = useState<CompleteIdeaRegistryEntry[]>([]);
+  const [completeIdeaRegistries, setCompleteIdeaRegistries] = useState<Record<CreativeGenerationMode, CompleteIdeaRegistryEntry[]>>({ ai: [], demo: [] });
   const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
   const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
   const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
@@ -420,7 +422,15 @@ export default function Home() {
         .filter((entry): entry is string => typeof entry === "string")
         .map((entry) => entry.slice(0, 400)).slice(-20);
       setRecentFingerprints(storedFingerprints);
-      setCompleteIdeaRegistry(parseCompleteIdeaRegistry(localStorage.getItem(STORAGE.completeIdeaRegistry)));
+      // v1 stored one shared list. Preserve it as Demo history during a safe
+      // migration; all new records are kept independently by generation mode.
+      const legacyRegistry = parseCompleteIdeaRegistry(localStorage.getItem(STORAGE.completeIdeaRegistry));
+      const storedAiRegistry = localStorage.getItem(STORAGE.completeIdeaRegistryAi);
+      const storedDemoRegistry = localStorage.getItem(STORAGE.completeIdeaRegistryDemo);
+      setCompleteIdeaRegistries({
+        ai: storedAiRegistry === null ? [] : parseCompleteIdeaRegistry(storedAiRegistry),
+        demo: storedDemoRegistry === null ? legacyRegistry : parseCompleteIdeaRegistry(storedDemoRegistry),
+      });
       const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
       if (storedSelection) {
         const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
@@ -483,7 +493,11 @@ export default function Home() {
     if (!hydratedRef.current) return;
     sessionStorage.setItem(STORAGE.recentCreativeFingerprints, JSON.stringify(recentFingerprints));
   }, [recentFingerprints]);
-  useEffect(() => { if (hydratedRef.current) localStorage.setItem(STORAGE.completeIdeaRegistry, JSON.stringify(completeIdeaRegistry)); }, [completeIdeaRegistry]);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    localStorage.setItem(STORAGE.completeIdeaRegistryAi, JSON.stringify(completeIdeaRegistries.ai));
+    localStorage.setItem(STORAGE.completeIdeaRegistryDemo, JSON.stringify(completeIdeaRegistries.demo));
+  }, [completeIdeaRegistries]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -836,6 +850,30 @@ export default function Home() {
     return { ...entry, conceptHash: conceptHash(entry), createdAt: new Date().toISOString() };
   }
 
+  function savedProjectRegistryEntries(): CompleteIdeaRegistryEntry[] {
+    return savedPacks.flatMap((saved) => {
+      if (saved.schemaVersion !== 2) return [];
+      const savedForm = saved.form;
+      if (!saved.title.trim() && !savedForm.location.trim() && !savedForm.importantObject.trim() && !savedForm.trapAction.trim() && !savedForm.endingPayoff.trim()) return [];
+      return [registryEntry({
+        videoTitle: saved.title || savedForm.videoTitle,
+        location: { name: savedForm.locationName, description: savedForm.location },
+        importantObject: { name: savedForm.objectName, description: savedForm.importantObject },
+        actionOrTrap: { name: savedForm.actionName, description: savedForm.trapAction },
+        endingOrPayoff: { name: savedForm.payoffName, description: savedForm.endingPayoff },
+        creativeFingerprint: {
+          settingCategory: savedForm.locationName || savedForm.location,
+          objectCategory: savedForm.objectName || savedForm.importantObject,
+          actionMechanic: savedForm.actionName || savedForm.trapAction,
+          initiatingCharacter: "saved-project",
+          escalationPattern: "saved-project",
+          movementPath: "saved-project",
+          payoffPattern: savedForm.payoffName || savedForm.endingPayoff,
+        },
+      })];
+    });
+  }
+
   async function generateCompleteIdea() {
     if (isGeneratingCompleteIdea) return;
     if (hasCompleteIdea() && !window.confirm("This will replace the current title, location, important object, action or trap, and ending or payoff.")) return;
@@ -844,6 +882,8 @@ export default function Home() {
     const snapshot = currentIdeaSnapshot();
     try {
       const creativeMode: CreativeGenerationMode = mode === "ai" ? "ai" : "demo";
+      const activeRegistry = completeIdeaRegistries[creativeMode];
+      const savedProjectRegistry = savedProjectRegistryEntries();
       const exclusions = [
         ...creativeExclusions("title"),
         ...creativeExclusions("location"),
@@ -864,12 +904,12 @@ export default function Home() {
         }
         const entry = idea ? registryEntry(idea) : null;
         const fingerprint = entry?.conceptHash || "";
-        const duplicate = !entry || completeIdeaRegistry.some((existing) => isCompleteIdeaTooSimilar(entry, existing));
+        const duplicate = !entry || [...activeRegistry, ...savedProjectRegistry].some((existing) => isCompleteIdeaTooSimilar(entry, existing));
         if (!duplicate) {
           setIdeaUndoSnapshot(snapshot);
           setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
           setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
-          setCompleteIdeaRegistry((current) => [...current, entry!]);
+          setCompleteIdeaRegistries((current) => ({ ...current, [creativeMode]: [...current[creativeMode], entry!] }));
           if (creativeMode === "demo") setDemoCompleteIdeaIndex((current) => current + attempt + 1);
           rememberSuggestion("title", { title: idea!.videoTitle });
           rememberSuggestion("location", idea!.location);
@@ -1626,7 +1666,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
             <div className="selection-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>AI Generate</button></div>
             <div className="form-grid">
-              {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation — uses idea credits at launch." : "Demo AI simulation — no API credits used."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
+              {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
               <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
               {completeIdeaField("location", "Location")}
               {completeIdeaField("object", "Important Object")}

@@ -6,7 +6,9 @@ export function normalizeIdeaValue(value: string) { return value.toLowerCase().r
 export function significantTerms(value: string) { return [...new Set(normalizeIdeaValue(value).split(" ").filter((term) => term.length > 2 && !ignored.has(term)))]; }
 export function conceptHash(entry: Omit<CompleteIdeaRegistryEntry, "conceptHash" | "createdAt">) { return [entry.normalizedTitle, entry.normalizedLocation, entry.normalizedObject, entry.normalizedAction, entry.normalizedPayoff, ...Object.values(entry.creativeFingerprint).map(normalizeIdeaValue)].join("|"); }
 const actionAxis = (value: string) => normalizeIdeaValue(value).replace(/\b\d+\b/g, "").trim();
-export function actionSignatureHash(entry: Pick<CompleteIdeaRegistryEntry, "creativeFingerprint" | "normalizedAction" | "normalizedPayoff">) { return [actionAxis(entry.creativeFingerprint.actionMechanic), actionAxis(entry.creativeFingerprint.movementPath), actionAxis(entry.creativeFingerprint.escalationPattern), actionAxis(entry.creativeFingerprint.payoffPattern), actionAxis(entry.normalizedAction), actionAxis(entry.normalizedPayoff)].join("|"); }
+// Deliberately omit display action/payoff text: it can contain a renamed prop
+// or location. The semantic fingerprint is the physical-premise identity.
+export function actionSignatureHash(entry: Pick<CompleteIdeaRegistryEntry, "creativeFingerprint" | "normalizedAction" | "normalizedPayoff">) { return [actionAxis(entry.creativeFingerprint.actionMechanic), actionAxis(entry.creativeFingerprint.movementPath), actionAxis(entry.creativeFingerprint.escalationPattern), actionAxis(entry.creativeFingerprint.payoffPattern)].join("|"); }
 const overlap = (left: string[], right: string[]) => left.filter((term) => right.includes(term)).length;
 export function isCompleteIdeaTooSimilar(candidate: CompleteIdeaRegistryEntry, existing: CompleteIdeaRegistryEntry) {
   const candidateAction = candidate.actionSignatureHash || actionSignatureHash(candidate);

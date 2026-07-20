@@ -7,11 +7,14 @@ const route = fs.readFileSync("app/api/creative-suggest/route.ts", "utf8");
 const actions = fs.readFileSync("app/ai-actions.ts", "utf8");
 const library = fs.readFileSync("app/library/page.tsx", "utf8");
 
-test("complete idea generation is structured, replace-safe, and undoable", () => {
+test("complete idea generation is structured, replaces without a popup, and is undoable", () => {
   for (const key of ["generateCompleteIdea", "videoTitle", "importantObject", "actionOrTrap", "endingOrPayoff", "creativeFingerprint", "initiatingCharacter", "movementPath"]) assert.match(route, new RegExp(key));
   assert.match(page, /Generate Complete Video Idea/);
   assert.match(page, /Generate Another Complete Idea/);
-  assert.match(page, /This will replace the current title, location, important object, action or trap, and ending or payoff/);
+  const handler = page.slice(page.indexOf("async function generateCompleteIdea"), page.indexOf("function undoIdeaReplacement"));
+  assert.doesNotMatch(handler, /window\.confirm/);
+  assert.match(handler, /const snapshot = currentIdeaSnapshot\(\)/);
+  assert.match(handler, /setIsGeneratingCompleteIdea\(false\)/);
   assert.match(page, /Undo Idea Replacement/);
   assert.match(page, /slice\(-20\)/);
 });

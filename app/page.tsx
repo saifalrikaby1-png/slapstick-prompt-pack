@@ -831,24 +831,28 @@ export default function Home() {
   }
 
   function endlessDemoCompleteIdea(index: number): CompleteIdea {
-    const settings = ["Sunwheel Acorn Plaza", "Copperleaf Picnic Terrace", "Mossbell Orchard Steps", "Twistroot Lantern Bridge", "Cloverclock Courtyard", "Bramblewheel Boardwalk", "Honeyglow Hollow"];
-    const objects = ["Moon-Spring Tart", "Copperberry Popper", "Acorn Whistle Wheel", "Jam-Jar Jumper", "Pinecone Pinball", "Clover Bell Roller", "Lantern-Lid Tumbler"];
-    const mechanics = ["spring rebound", "button backfire", "grounded rolling redirect", "one-hop misfire", "curve-and-catch reversal", "tilt-and-return ricochet", "safe wobble rebound"];
-    const payoffs = ["clear catch victory", "button bounce finish", "grounded roll resolution", "clean redirect payoff", "loop-ready victory pose", "safe seated recovery", "settled center-frame win"];
+    const settings = ["Sunwheel Acorn Plaza", "Copperleaf Picnic Terrace", "Mossbell Orchard Steps", "Twistroot Lantern Bridge", "Cloverclock Courtyard", "Bramblewheel Boardwalk", "Honeyglow Hollow", "Dandelion Switchyard", "Pebblegate Promenade", "Maplewind Mill Yard"];
+    const objects = ["Moon-Spring Tart", "Copperberry Popper", "Acorn Whistle Wheel", "Jam-Jar Jumper", "Pinecone Pinball", "Clover Bell Roller", "Lantern-Lid Tumbler", "Bubble Compass", "Ribbon Kite Spool", "Starberry Hopper"];
+    const mechanics = ["spring compression launch", "counterweight imbalance", "rolling redirection", "pendulum interception", "magnetic release", "wind-driven redirect", "air-pressure propulsion", "lever reversal", "spiral descent", "chain-reaction tipping", "sliding acceleration", "elastic snapback"];
+    const paths = ["a grounded curved lane", "a rising arc into a catch", "a controlled spiral track", "a zigzag ramp", "a pendulum swing", "a rotating platform edge", "a straight conveyor run", "a descending slide", "a circular chase track", "a balanced seesaw route"];
+    const payoffs = ["clear catch victory", "stable redirected finish", "settled center-frame win", "safe seated recovery", "loop-ready victory pose", "balanced landing payoff", "harmless bounce-back finish", "clean object stop", "heroic final hold", "calm recovered tableau"];
     const setting = settings[index % settings.length];
     const object = objects[Math.floor(index / 7) % objects.length];
-    const mechanic = mechanics[Math.floor(index / 49) % mechanics.length];
-    const payoff = payoffs[Math.floor(index / 343) % payoffs.length];
-    const edition = index + 1;
+    const mechanic = mechanics[Math.floor(index / 100) % mechanics.length];
+    const path = paths[Math.floor(index / 1000) % paths.length];
+    const payoff = payoffs[Math.floor(index / 10000) % payoffs.length];
     return {
       // A short episode title is derived from the physical mechanism, never a
       // reusable colon subtitle with a renamed prop.
-      videoTitle: `Biscuit’s ${mechanic.replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
+      // The concise title reflects the validated physical premise, so a new
+      // movement path never masquerades as the same episode under a recycled
+      // title.
+      videoTitle: `Biscuit’s ${mechanic.split(" ")[0].replace(/\b\w/g, (letter) => letter.toUpperCase())} ${path.split(" ").slice(-1)[0].replace(/\b\w/g, (letter) => letter.toUpperCase())}`,
       location: { name: setting, description: `A family-friendly fixed setting called ${setting}, with one clear central action lane, stable landmarks, grounded surfaces, and no unrequested background activity.` },
       importantObject: { name: object, description: `One visible ${object} with a stable silhouette, clear physical support, predictable motion, and a single continuous final position.` },
-      actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using a visible ${mechanic}; the Hero makes one readable response, the object follows a continuous grounded path, and the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
+      actionOrTrap: { name: mechanic, description: `One active Enemy triggers the ${object} using ${mechanic}; the Hero makes one readable response, and the object follows ${path} before the harmless consequence returns to the initiating Enemy within ${form.duration} seconds.` },
       endingOrPayoff: { name: payoff, description: `The Hero finishes in a clear ${payoff} beside the settled ${object}; every active character remains visible in a distinct safe final position, and ${setting} remains unchanged for a stable end frame.` },
-      creativeFingerprint: { settingCategory: `${setting}-${Math.floor(index / 7)}`, objectCategory: `${object}-${Math.floor(index / 49)}`, actionMechanic: `${mechanic}-${Math.floor(index / 343)}`, initiatingCharacter: `enemy-${edition % 3}`, escalationPattern: `causal-${edition}`, movementPath: `grounded-${Math.floor(index / 17)}`, payoffPattern: `${payoff}-${Math.floor(index / 2401)}` },
+      creativeFingerprint: { settingCategory: "family-friendly outdoor action lane", objectCategory: "single physics-driven cartoon object", actionMechanic: mechanic, initiatingCharacter: "active enemy trigger", escalationPattern: "visible cause-and-effect escalation", movementPath: path, payoffPattern: payoff },
     };
   }
 
@@ -883,7 +887,6 @@ export default function Home() {
 
   async function generateCompleteIdea() {
     if (isGeneratingCompleteIdea) return;
-    if (hasCompleteIdea() && !window.confirm("This will replace the current title, location, important object, action or trap, and ending or payoff.")) return;
     setIsGeneratingCompleteIdea(true);
     setError("");
     const snapshot = currentIdeaSnapshot();

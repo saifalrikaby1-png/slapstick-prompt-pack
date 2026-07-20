@@ -46,6 +46,7 @@ import {
   normalizeCreativeIdentity,
   parseCreativeLibrary,
 } from "./creative-library";
+import { CompleteIdeaRegistryEntry, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -56,6 +57,7 @@ const STORAGE = {
   outputSelection: "slapstick-output-selection",
   recentCreativeSuggestions: "slapstick-recent-creative-suggestions-v1",
   recentCreativeFingerprints: "slapstick-recent-creative-fingerprints-v1",
+  completeIdeaRegistry: "slapstick-complete-idea-registry-v1",
 };
 
 const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
@@ -344,6 +346,7 @@ export default function Home() {
   const activeCreativeRequests = useRef<Set<CreativeSuggestionKind>>(new Set());
   const [recentSuggestions, setRecentSuggestions] = useState<RecentSuggestions>(emptyRecentSuggestions);
   const [recentFingerprints, setRecentFingerprints] = useState<string[]>([]);
+  const [completeIdeaRegistry, setCompleteIdeaRegistry] = useState<CompleteIdeaRegistryEntry[]>([]);
   const [isGeneratingCompleteIdea, setIsGeneratingCompleteIdea] = useState(false);
   const [ideaUndoSnapshot, setIdeaUndoSnapshot] = useState<IdeaSnapshot | null>(null);
   const [demoCompleteIdeaIndex, setDemoCompleteIdeaIndex] = useState(0);
@@ -417,6 +420,7 @@ export default function Home() {
         .filter((entry): entry is string => typeof entry === "string")
         .map((entry) => entry.slice(0, 400)).slice(-20);
       setRecentFingerprints(storedFingerprints);
+      setCompleteIdeaRegistry(parseCompleteIdeaRegistry(localStorage.getItem(STORAGE.completeIdeaRegistry)));
       const storedSelection = safeObject(localStorage.getItem(STORAGE.outputSelection));
       if (storedSelection) {
         const storedRequestedOutputs: unknown[] = Array.isArray(storedSelection.requestedOutputs) ? storedSelection.requestedOutputs : [];
@@ -479,6 +483,7 @@ export default function Home() {
     if (!hydratedRef.current) return;
     sessionStorage.setItem(STORAGE.recentCreativeFingerprints, JSON.stringify(recentFingerprints));
   }, [recentFingerprints]);
+  useEffect(() => { if (hydratedRef.current) localStorage.setItem(STORAGE.completeIdeaRegistry, JSON.stringify(completeIdeaRegistry)); }, [completeIdeaRegistry]);
 
   const activeIds = [...new Set(form.activeCharacterIds)].filter((id) => characters.some((profile) => profile.id === id));
   const productionCharacters = activeIds
@@ -826,6 +831,11 @@ export default function Home() {
     };
   }
 
+  function registryEntry(idea: CompleteIdea): CompleteIdeaRegistryEntry {
+    const entry = { normalizedTitle: normalizeIdeaValue(idea.videoTitle), normalizedLocation: normalizeIdeaValue(`${idea.location.name} ${idea.location.description}`), normalizedObject: normalizeIdeaValue(`${idea.importantObject.name} ${idea.importantObject.description}`), normalizedAction: normalizeIdeaValue(`${idea.actionOrTrap.name} ${idea.actionOrTrap.description}`), normalizedPayoff: normalizeIdeaValue(`${idea.endingOrPayoff.name} ${idea.endingOrPayoff.description}`), significantTitleTerms: significantTerms(idea.videoTitle), creativeFingerprint: idea.creativeFingerprint };
+    return { ...entry, conceptHash: conceptHash(entry), createdAt: new Date().toISOString() };
+  }
+
   async function generateCompleteIdea() {
     if (isGeneratingCompleteIdea) return;
     if (hasCompleteIdea() && !window.confirm("This will replace the current title, location, important object, action or trap, and ending or payoff.")) return;
@@ -843,22 +853,24 @@ export default function Home() {
         ...recentFingerprints.map((name) => ({ name, description: "creative fingerprint" })),
       ].slice(-60);
       let idea: CompleteIdea | null = null;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      for (let attempt = 0; attempt < (creativeMode === "demo" ? 500 : 5); attempt += 1) {
         if (creativeMode === "demo") {
-          idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex);
+          idea = endlessDemoCompleteIdea(demoCompleteIdeaIndex + attempt);
         } else {
           const response = await fetch("/api/creative-suggest", { method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", "X-Generation-Nonce": crypto.randomUUID() }, body: JSON.stringify({ action: "generateCompleteIdea", generationNonce: crypto.randomUUID(), idea: form.videoTitle || "Create a new original connected short-video idea", exclusions, collisionRetry: attempt > 0, context: { form: formForGeneration(), characters: productionCharacters.map(({ id, shortName, fullIdentity, role, description }) => ({ id, shortName, fullIdentity, role, description })), authorizedInventory: buildAuthorizedSceneInventory(form, productionCharacters) } }) });
           const data = await response.json() as CompleteIdea & { error?: string };
           if (!response.ok) throw new Error(data.error || "Complete idea generation failed.");
           idea = data;
         }
-        const fingerprint = idea ? Object.values(idea.creativeFingerprint).map(normalizeCreativeIdentity).join("|") : "";
-        const duplicate = !idea || recentFingerprints.includes(fingerprint) || creativeExclusions("title").some((item) => normalizeCreativeIdentity(item.name) === normalizeCreativeIdentity(idea!.videoTitle));
+        const entry = idea ? registryEntry(idea) : null;
+        const fingerprint = entry?.conceptHash || "";
+        const duplicate = !entry || completeIdeaRegistry.some((existing) => isCompleteIdeaTooSimilar(entry, existing));
         if (!duplicate) {
           setIdeaUndoSnapshot(snapshot);
           setForm((current) => ({ ...current, videoTitle: idea!.videoTitle.trim(), locationAssetId: "", locationName: idea!.location.name.trim(), location: idea!.location.description.trim(), objectAssetId: "", objectName: idea!.importantObject.name.trim(), importantObject: idea!.importantObject.description.trim(), actionAssetId: "", actionName: idea!.actionOrTrap.name.trim(), trapAction: idea!.actionOrTrap.description.trim(), payoffAssetId: "", payoffName: idea!.endingOrPayoff.name.trim(), endingPayoff: idea!.endingOrPayoff.description.trim() }));
           setRecentFingerprints((current) => [...current, fingerprint].slice(-20));
-          if (creativeMode === "demo") setDemoCompleteIdeaIndex((current) => current + 1);
+          setCompleteIdeaRegistry((current) => [...current, entry!]);
+          if (creativeMode === "demo") setDemoCompleteIdeaIndex((current) => current + attempt + 1);
           rememberSuggestion("title", { title: idea!.videoTitle });
           rememberSuggestion("location", idea!.location);
           rememberSuggestion("object", idea!.importantObject);

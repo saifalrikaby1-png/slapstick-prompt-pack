@@ -653,7 +653,6 @@ export function generateDemoPack(
   const platform = selectedPlatform(form);
   const model = selectedModel(form);
   const adapter = selectedModelAdapter(form);
-  const pacingProfile = motionPacingProfile(form);
   const ranges = timelineRanges(duration);
   const heroName = hero?.shortName || "Hero";
   const others = supporting.map((profile) => profile.shortName).join(" and ") || "the supporting cast";

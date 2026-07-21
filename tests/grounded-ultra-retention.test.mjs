@@ -57,6 +57,16 @@ test("Demo Mode repairs only failed sections and the inspector measures the real
   assert.equal(repaired.characterBuildingPrompt, broken.characterBuildingPrompt);
 });
 
+test("Demo repair includes warnings, changes text, and refreshes the resulting findings", () => {
+  const original = engine.generateDemoPack(form(), characters);
+  const weak = { ...original, videoLock: original.videoLock.replace("no sudden cuts", "avoid edits") };
+  const before = engine.inspectProductionPack(weak, form(), characters);
+  const repaired = engine.repairDemoPack(weak, form(), characters, before.findings);
+  const after = engine.inspectProductionPack(repaired, form(), characters);
+  assert.notEqual(repaired.videoLock, weak.videoLock);
+  assert.notDeepEqual(after.findings.filter((item) => item.status !== "Passed"), before.findings.filter((item) => item.status !== "Passed"));
+});
+
 test("retention starts immediately, escalates in the middle, and covers ten seconds", () => {
   const pack = engine.generateDemoPack(form({ duration: "10", tones: ["Fast", "Chaotic slapstick"] }), characters);
   assert.match(pack.videoTimeline, /0:00/);

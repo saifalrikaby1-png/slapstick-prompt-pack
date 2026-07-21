@@ -853,7 +853,7 @@ export function repairDemoPack(
   characters: CharacterProfile[],
   findings: QualityFinding[],
 ): ProductionPack {
-  const failed = findings.filter((finding) => finding.status === "Failed").map((finding) => finding.label);
+  const failed = findings.filter((finding) => finding.status !== "Passed").map((finding) => finding.label);
   if (!failed.length) return pack;
   const canonical = generateDemoPack(form, characters);
   const fields = new Set<keyof ProductionPack>();
@@ -863,7 +863,7 @@ export function repairDemoPack(
     if (/end-frame|ending|frame perspective/i.test(label)) add("endFramePrompt");
     if (/audio|sound|voice/i.test(label)) add("musicPath", "soundEffects", "videoLock");
     if (/timeline|timing|opening|middle|motion|action|duration/i.test(label)) add("videoTimeline", "videoLock", "finalGenerationRule");
-    if (/character|cast|identity|inventory|object|spawn|scene|camera|cut|teleport|gliding|ground|ratio|model|tone|natural/i.test(label)) add("videoLock", "finalGenerationRule", "startFramePrompt", "endFramePrompt");
+    if (/character|cast|identity|inventory|object|spawn|sudden|scene|camera|cut|teleport|gliding|ground|ratio|model|tone|natural/i.test(label)) add("videoLock", "finalGenerationRule", "startFramePrompt", "endFramePrompt");
   });
   const repaired = { ...pack };
   fields.forEach((field) => { repaired[field] = canonical[field]; });

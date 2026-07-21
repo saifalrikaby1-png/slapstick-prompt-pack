@@ -345,6 +345,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isFixingPrompts, setIsFixingPrompts] = useState(false);
   const [fixSummary, setFixSummary] = useState<{ originalScore: number; improvedScore: number; resolved: number; remaining: number; passes: number } | null>(null);
+  const [remainingFixFindings, setRemainingFixFindings] = useState<QualityFinding[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestingFields, setSuggestingFields] = useState<Record<CreativeSuggestionKind, boolean>>({
     title: false, location: false, object: false, action: false, payoff: false,
@@ -1156,6 +1157,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       setPack(nextPack);
       setFixSummary(null);
+      setRemainingFixFindings([]);
       setGeneratedOutputs((current) => [...new Set([...current, ...requestedOutputs])]);
       setLegacyPack(null);
       window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1256,14 +1258,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
   function correctionOutputs(findings: QualityFinding[]) {
     const outputs = new Set<RequestedOutput>();
-    findings.filter((finding) => finding.status === "Failed").forEach((finding) => {
+    findings.filter((finding) => finding.status !== "Passed").forEach((finding) => {
       const label = finding.label.toLowerCase();
       if (/title/.test(label)) outputs.add("videoTitle");
       if (/character|identity|cast|role/.test(label)) outputs.add("characterBuildingPrompt");
       if (/start-frame|beginning/.test(label)) outputs.add("startFramePrompt");
       if (/end-frame|ending/.test(label)) outputs.add("endFramePrompt");
       if (/audio|sound|voice/.test(label)) { outputs.add("musicPath"); outputs.add("soundEffects"); }
-      if (/object|scene|camera|motion|timeline|timing|ratio|duration|tone|model|spawn|cut|teleport|ground|inventory|action|gliding/.test(label)) outputs.add("videoPrompt");
+      if (/object|scene|camera|motion|timeline|timing|ratio|duration|tone|model|spawn|sudden|cut|teleport|ground|inventory|action|gliding/.test(label)) outputs.add("videoPrompt");
     });
     const selected = [...outputs].filter((output) => generatedOutputs.includes(output));
     return selected.length ? selected : generatedOutputs;
@@ -1285,7 +1287,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         if (mode === "demo") {
           const next = repairDemoPack(currentPack, form, characters, currentReport.findings);
           const nextReport = inspectProductionPack(next, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
-          if (nextReport.score <= currentReport.score) break;
+          if (JSON.stringify(next) === JSON.stringify(currentPack)) break;
           currentPack = next;
           currentReport = nextReport;
         } else {
@@ -1308,15 +1310,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           if (!response.ok || !data.pack || !fields.every((field) => typeof data.pack?.[field] === "string")) throw new Error(data.error || "AI returned an incomplete prompt correction.");
           const next = { ...currentPack, ...data.pack } as ProductionPack;
           const nextReport = inspectProductionPack(next, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
-          if (nextReport.score <= currentReport.score) break;
+          if (JSON.stringify(next) === JSON.stringify(currentPack)) break;
           currentPack = next;
           currentReport = nextReport;
         }
         passes += 1;
       }
       setPack(currentPack);
-      const remaining = currentReport.findings.filter((finding) => finding.status === "Failed").length;
+      const remaining = currentReport.findings.filter((finding) => finding.status !== "Passed").length;
       setFixSummary({ originalScore, improvedScore: currentReport.score, resolved: Math.max(0, originalFailed - remaining), remaining, passes });
+      setRemainingFixFindings(currentReport.findings.filter((finding) => finding.status !== "Passed"));
       setNotice(currentReport.score >= 90 ? "Prompts improved and Quality Control reached the target." : "Quality Control reran. Review the remaining issues before publishing.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Prompt correction failed. Your original pack is unchanged.");
@@ -1917,6 +1920,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <div className="quality-header">
                   <div className="quality-summary"><span>Errors: {qualityReport.findings.filter((finding) => finding.status === "Failed").length}</span><span>Warnings: {qualityReport.findings.filter((finding) => finding.status === "Warning").length}</span><span>Passed: {qualityReport.findings.filter((finding) => finding.status === "Passed").length}</span></div>
                   {fixSummary && <div className="fix-summary">Original score: {fixSummary.originalScore} · Improved score: {fixSummary.improvedScore} · Resolved: {fixSummary.resolved} · Remaining: {fixSummary.remaining} · Passes: {fixSummary.passes}</div>}
+                  {fixSummary && <div className="remaining-issues">{remainingFixFindings.length ? <>Remaining issues: {remainingFixFindings.map((finding) => <span key={finding.label}>{finding.label} — {finding.detail}</span>)}</> : "Quality target reached. No remaining correctable issues."}</div>}
                   <button className="fix-button" type="button" onClick={fixPrompts} disabled={isFixingPrompts || qualityReport.score >= 90 || generatedOutputs.length !== requestedOutputValues.length}>{isFixingPrompts ? "Fixing Prompts…" : qualityReport.score >= 90 ? "Quality Target Reached" : fixSummary ? (fixSummary.remaining ? "Review Remaining Issues" : "Prompts Improved") : "Fix Prompts"}</button>
                 </div>
                 <div className="findings">

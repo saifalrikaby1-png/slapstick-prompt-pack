@@ -855,18 +855,22 @@ export function repairDemoPack(
 ): ProductionPack {
   const failed = findings.filter((finding) => finding.status !== "Passed").map((finding) => finding.label);
   if (!failed.length) return pack;
-  const canonical = generateDemoPack(form, characters);
-  const fields = new Set<keyof ProductionPack>();
-  const add = (...keys: (keyof ProductionPack)[]) => keys.forEach((key) => fields.add(key));
-  failed.forEach((label) => {
-    if (/start-frame|beginning|frame perspective/i.test(label)) add("startFramePrompt");
-    if (/end-frame|ending|frame perspective/i.test(label)) add("endFramePrompt");
-    if (/audio|sound|voice/i.test(label)) add("musicPath", "soundEffects", "videoLock");
-    if (/timeline|timing|opening|middle|motion|action|duration/i.test(label)) add("videoTimeline", "videoLock", "finalGenerationRule");
-    if (/character|cast|identity|inventory|object|spawn|sudden|scene|camera|cut|teleport|gliding|ground|ratio|model|tone|natural/i.test(label)) add("videoLock", "finalGenerationRule", "startFramePrompt", "endFramePrompt");
-  });
   const repaired = { ...pack };
-  fields.forEach((field) => { repaired[field] = canonical[field]; });
+  const append = (field: keyof ProductionPack, text: string) => {
+    if (!repaired[field].toLowerCase().includes(text.toLowerCase())) repaired[field] = `${repaired[field]}\n${text}`.trim();
+  };
+  const strategies: Record<string, () => void> = {
+    "Extreme Fast-Chaotic motion pacing": () => { append("videoLock", "EXTREME SPEED LOCK: at exactly 0:00 named action is already active; compressed anticipation, immediate acceleration, rapid connected beats, and midpoint backfire."); append("videoTimeline", "0:00–0:00.7 — immediate visible action and object response; no static opening."); },
+    "Camera keeps active cast visible": () => append("videoLock", "CAMERA VISIBILITY LOCK: continuous wide or medium-wide framing; no accidental crop-out or camera-caused disappearance."),
+    "No scene reset between ranges": () => append("videoTimeline", "Transition rule: every range inherits the exact cast, object, location, and screen-direction state from the prior range; no scene reset."),
+    "Completed grounded ending": () => { append("endFramePrompt", "Final support contact, stable completed pose, complete settling, and unchanged ground plane; no unresolved motion."); append("videoTimeline", "Final beat ends with supported contact, visible settling, and a stable completed payoff."); },
+    "Major middle escalation": () => append("videoTimeline", "Major middle escalation: a physically caused consequence occurs at mid-duration, followed by readable follow-through and recovery."),
+    "Immediate active opening hook": () => append("videoTimeline", "At exactly 0:00 the first second contains already active visible action; no static introduction."),
+    "No sudden cuts or freezes": () => append("videoLock", "One continuous shot only; no sudden cuts, jump cuts, freeze frame, or frozen midair motion."),
+    "No gliding rule": () => append("finalGenerationRule", "No snapping, no gliding feet, and no pose reset; use visible contact, deceleration, and settling."),
+    "Sudden-disappearance prohibition": () => append("finalGenerationRule", "No sudden disappearances, vanishing, despawning, or removed selected character or object."),
+  };
+  failed.forEach((label) => strategies[label]?.());
   return repaired;
 }
 

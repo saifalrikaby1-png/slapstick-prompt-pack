@@ -35,7 +35,7 @@ test("Fix Prompts is in the Quality Control header before detailed findings", as
   const qualityCard = page.slice(page.indexOf('className="output-card quality-card"'));
   assert.ok(qualityCard.indexOf("Fix Prompts") < qualityCard.indexOf('className="findings"'));
   assert.match(qualityCard, /isFixingPrompts/);
-  assert.match(qualityCard, /Quality Target Reached/);
+  assert.match(qualityCard, /Prompt quality improved successfully/);
   assert.match(qualityCard, /remainingFixFindings/);
   assert.match(qualityCard, /qualityTargetReached/);
   assert.match(qualityCard, /Prompt quality improved successfully/);

@@ -62,7 +62,7 @@ check("33. start/end character-count parity is checked", engine, /Character coun
 check("34. start/end environment parity is instructed", engine, /exactly the same environment/);
 check("35. start/end object parity is instructed", engine, /same \$\{object\}/);
 check("36. updated Quality Control checks adapter fit", engine, /Model adapter is applied/);
-check("37. AI repair returns a complete pack", generationRoute, /complete synchronized replacement pack/);
+check("37. AI repair returns only targeted corrected sections", generationRoute, /Targeted repair task[\s\S]*requested fields/);
 check("38. Demo Mode remains local", page, /mode === "demo"\s*\?\s*generateDemoPack/);
 test("39. AI request and response schemas share all nine fields", () => {
   for (const key of ["videoTitle", "characterBuildingPrompt", "startFramePrompt", "endFramePrompt", "videoLock", "videoTimeline", "musicPath", "soundEffects", "finalGenerationRule"]) {

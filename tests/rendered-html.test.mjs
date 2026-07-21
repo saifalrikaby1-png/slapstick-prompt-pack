@@ -24,10 +24,18 @@ test("renders the approved five-output workflow in Demo and AI modes", async () 
     "Copy Complete Production Prompt",
     "Copy Visual Portion Only",
     "Copy Audio Portion Only",
-    "Fix and Improve with AI",
+    "Fix Prompts",
   ]) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+test("Fix Prompts is in the Quality Control header before detailed findings", async () => {
+  const page = await source("app/page.tsx");
+  const qualityCard = page.slice(page.indexOf('className="output-card quality-card"'));
+  assert.ok(qualityCard.indexOf("Fix Prompts") < qualityCard.indexOf('className="findings"'));
+  assert.match(qualityCard, /isFixingPrompts/);
+  assert.match(qualityCard, /Quality Target Reached/);
 });
 
 test("uses exactly the new synchronized internal production schema", async () => {

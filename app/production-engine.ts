@@ -783,13 +783,13 @@ Create a full-body front view, full-body side view, optional back view, neutral 
   void lock;
   const compactCast = cast.map((profile) => buildCompactCharacterLock(profile).split(".")[0]).join("\n");
   const conciseLock = `Create a ${duration}-second ${videoRatio} ${style} video for ${model} on ${platform}.
+Model adapter: ${adapter.displayName}. Camera policy: ${adapter.cameraPolicy}.
 Cast: exactly ${cast.length} characters — ${castRoles}. Exact character count: ${cast.length}.
-${compactCast}
-Authorized object: exactly ${objectLedger.length} ${object}. Location: ${location}.
-CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} ${object}. SCENE INVENTORY LOCK and EXACT COUNT LOCK: only this cast, object, and established location. NO-SPAWN / NO-DESPAWN LOCK. STRICT OBJECT PRESENCE LOCK.
-Tone: ${tone} from 0:00. Camera: ${cameraRule}; ${adapter.cameraPolicy}. ${extremeFastChaotic(form) ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""}
-Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK: exact cast remains present. Tone-from-zero lock. Action ownership lock. Natural-motion lock. ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} ${extremeFastChaotic(form) ? `EXTREME SPEED LOCK: Fast and Chaotic Slapstick control from 0:00; compressed anticipation, immediate powerful acceleration, rapid connected beats, instant reactions, high-impact midpoint backfire, no idle time. Profile: ${pacingProfile.displayName}.` : form.tones.includes("Fast") ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""} ${form.tones.includes("Calm") && !extremeFastChaotic(form) ? "Use smooth controlled movement." : ""}
-Use the supplied start and end frames as continuity anchors.`;
+Authorized object: exactly ${objectLedger.length} important object: ${object}. Location: ${location}.
+CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} important object: ${object}. SCENE INVENTORY LOCK, EXACT COUNT LOCK, NO-SPAWN / NO-DESPAWN LOCK, STRICT OBJECT PRESENCE LOCK. No selected character may suddenly appear, disappear, spawn, vanish, or be replaced; no sudden appearances or disappearances.
+OBJECT CONTINUITY LOCK: ${object} start=supported; final position=supported. One visible force and continuous path; no duplication, replacement, or sudden object.
+One continuous shot only; no sudden cuts, scene reset, accidental crop-out, no random gestures, no random spinning, or gliding feet. Natural-motion lock and natural movement lock: anticipation, acceleration, contact, follow-through, deceleration, settling.
+Tone: ${tone} from 0:00. Tone-from-zero lock. Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK. Action ownership lock. Natural movement lock. ${form.tones.includes("Fast") ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""} ${form.tones.includes("Calm") && !extremeFastChaotic(form) ? "Use smooth controlled movement." : ""} ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} Use supplied frames as continuity anchors.`;
   const conciseFinalRule = `This production contains exactly ${cast.length} characters — ${cast.map((profile) => profile.shortName).join(", ")} — and exactly ${objectLedger.length} important object — ${object}. No other character or object may appear. Use only authorized selected characters and objects established in the start frame. Preserve exact counts, identities, roles, colors, clothing, proportions, scale, and environment from start to finish.
 
 NO duplicate characters. NO duplicate objects. NO additional characters or objects. NO unchecked characters, random props, substitutions, spawning, despawning, vanishing, materializing, fading, teleportation, position reset, scene reset, morphing, role swap. NO sudden cut. NO jump cut. NO sudden camera-angle replacement. NO unrequested freeze. NO frozen midair character or object. NO floating, hovering, gliding feet, pose snapping, unusual movement, ownerless movement, or unfinished motion.
@@ -828,8 +828,8 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
   const finalTimeline = extremeFastChaotic(form)
     ? pacedExtremeTimeline.replace(/^0:00/, `At exactly 0:00, ${heroName} begins the first second with immediate visible action; the camera holds a wide action view; no static opening or delayed trigger.\n0:00`).replace("Major midpoint backfire", "Major middle escalation and midpoint backfire")
     : pacedExtremeTimeline;
-  const conciseStartFrame = `Create the opening reference image in ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
-  const conciseEndFrame = `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
+  const conciseStartFrame = `Create the opening reference image in ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
+  const conciseEndFrame = `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, visible support contact, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
     characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",
@@ -844,6 +844,31 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
   return Object.fromEntries(
     Object.entries(generatedPack).map(([key, value]) => [key, removeUncheckedCharacters(value)]),
   ) as ProductionPack;
+}
+
+/** Applies deterministic, section-level Demo Mode corrections. The real
+ * inspector is run again afterwards; this function never changes a score. */
+export function repairDemoPack(
+  pack: ProductionPack,
+  form: ProductionForm,
+  characters: CharacterProfile[],
+  findings: QualityFinding[],
+): ProductionPack {
+  const failed = findings.filter((finding) => finding.status === "Failed").map((finding) => finding.label);
+  if (!failed.length) return pack;
+  const canonical = generateDemoPack(form, characters);
+  const fields = new Set<keyof ProductionPack>();
+  const add = (...keys: (keyof ProductionPack)[]) => keys.forEach((key) => fields.add(key));
+  failed.forEach((label) => {
+    if (/start-frame|beginning|frame perspective/i.test(label)) add("startFramePrompt");
+    if (/end-frame|ending|frame perspective/i.test(label)) add("endFramePrompt");
+    if (/audio|sound|voice/i.test(label)) add("musicPath", "soundEffects", "videoLock");
+    if (/timeline|timing|opening|middle|motion|action|duration/i.test(label)) add("videoTimeline", "videoLock", "finalGenerationRule");
+    if (/character|cast|identity|inventory|object|spawn|scene|camera|cut|teleport|gliding|ground|ratio|model|tone|natural/i.test(label)) add("videoLock", "finalGenerationRule", "startFramePrompt", "endFramePrompt");
+  });
+  const repaired = { ...pack };
+  fields.forEach((field) => { repaired[field] = canonical[field]; });
+  return repaired;
 }
 
 function parseRangesLegacy(text: string) {

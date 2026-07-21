@@ -29,6 +29,7 @@ import {
   completeVideoPrompt,
   generateDemoPack,
   inspectProductionPack,
+  repairDemoPack,
   migrateCharacter,
   migrateForm,
   migrateStoredPack,
@@ -342,6 +343,8 @@ export default function Home() {
   const independentSelectionsRef = useRef<RequestedOutput[]>(["videoPrompt"]);
   const [legacyPack, setLegacyPack] = useState<LegacySavedPack | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isFixingPrompts, setIsFixingPrompts] = useState(false);
+  const [fixSummary, setFixSummary] = useState<{ originalScore: number; improvedScore: number; resolved: number; remaining: number; passes: number } | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestingFields, setSuggestingFields] = useState<Record<CreativeSuggestionKind, boolean>>({
     title: false, location: false, object: false, action: false, payoff: false,
@@ -516,17 +519,14 @@ export default function Home() {
       if (generatedOutputs.length === requestedOutputValues.length) {
         return inspectProductionPack(pack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
       }
-      const findings: QualityFinding[] = generatedOutputs.map((output) => ({
-        label: `${output} generated`,
-        status: "Passed" as const,
-        detail: "The selected output exists and uses the current active-character and production setup.",
-      }));
-      requestedOutputValues.filter((output) => !generatedOutputs.includes(output)).forEach((output) => findings.push({
-        label: `${output} not generated`,
-        status: "Warning" as const,
-        detail: "Not generated because this output was not requested.",
-      }));
-      return { score: 100, findings };
+      return {
+        score: 0,
+        findings: [{
+          label: "Full-pack Quality Control unavailable",
+          status: "Warning" as const,
+          detail: "Generate all production outputs before using the production-wide Quality Control score. Partial output selection remains available.",
+        }],
+      };
     },
     [pack, form, characters, savedPacks, creativeAssets, generatedOutputs],
   );
@@ -1155,6 +1155,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       };
       const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       setPack(nextPack);
+      setFixSummary(null);
       setGeneratedOutputs((current) => [...new Set([...current, ...requestedOutputs])]);
       setLegacyPack(null);
       window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1253,37 +1254,74 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     return `Generate ${outputChoices.find((choice) => choice.id === requestedOutputs[0])?.title || "Selected Output"}`;
   }
 
-  async function fixWithAi() {
-    if (!pack || !qualityReport || mode !== "ai") return;
-    setIsGenerating(true);
+  function correctionOutputs(findings: QualityFinding[]) {
+    const outputs = new Set<RequestedOutput>();
+    findings.filter((finding) => finding.status === "Failed").forEach((finding) => {
+      const label = finding.label.toLowerCase();
+      if (/title/.test(label)) outputs.add("videoTitle");
+      if (/character|identity|cast|role/.test(label)) outputs.add("characterBuildingPrompt");
+      if (/start-frame|beginning/.test(label)) outputs.add("startFramePrompt");
+      if (/end-frame|ending/.test(label)) outputs.add("endFramePrompt");
+      if (/audio|sound|voice/.test(label)) { outputs.add("musicPath"); outputs.add("soundEffects"); }
+      if (/object|scene|camera|motion|timeline|timing|ratio|duration|tone|model|spawn|cut|teleport|ground|inventory|action|gliding/.test(label)) outputs.add("videoPrompt");
+    });
+    const selected = [...outputs].filter((output) => generatedOutputs.includes(output));
+    return selected.length ? selected : generatedOutputs;
+  }
+
+  async function fixPrompts() {
+    if (!pack || !qualityReport || isFixingPrompts || qualityReport.score >= 90 || generatedOutputs.length !== requestedOutputValues.length) return;
+    setIsFixingPrompts(true);
     setError("");
+    const originalScore = qualityReport.score;
+    const originalFailed = qualityReport.findings.filter((finding) => finding.status === "Failed").length;
+    let currentPack = pack;
+    let currentReport = qualityReport;
+    let passes = 0;
     try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "fix",
-          form: formForGeneration(),
-          activeCharacterIds: activeIds,
-          activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
-            id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
-          })),
-          characters: productionCharacters,
-          pack: Object.fromEntries(Object.entries(pack).filter(([key]) =>
-            fieldsForRequestedOutputs(generatedOutputs).includes(key as keyof ProductionPack))),
-          qualityFindings: qualityReport.findings,
-          requestedOutputs: generatedOutputs,
-        }),
-      });
-      const data = await response.json() as { pack?: Partial<ProductionPack>; error?: string };
-      if (!response.ok) throw new Error(data.error || "AI could not improve the pack.");
-      if (!data.pack) throw new Error("AI returned no repaired outputs.");
-      setPack((current) => ({ ...current, ...data.pack } as ProductionPack));
-      setNotice("The complete pack was synchronized and Quality Control reran automatically.");
+      while (passes < 3 && currentReport.score < 90) {
+        const targets = correctionOutputs(currentReport.findings);
+        if (!targets.length) break;
+        if (mode === "demo") {
+          const next = repairDemoPack(currentPack, form, characters, currentReport.findings);
+          const nextReport = inspectProductionPack(next, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
+          if (nextReport.score <= currentReport.score) break;
+          currentPack = next;
+          currentReport = nextReport;
+        } else {
+          const fields = fieldsForRequestedOutputs(targets);
+          const response = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "fix",
+              form: formForGeneration(),
+              activeCharacterIds: activeIds,
+              activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({ id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile })),
+              characters: productionCharacters,
+              pack: Object.fromEntries(Object.entries(currentPack).filter(([key]) => fields.includes(key as keyof ProductionPack))),
+              qualityFindings: currentReport.findings.filter((finding) => finding.status !== "Passed"),
+              requestedOutputs: targets,
+            }),
+          });
+          const data = await response.json() as { pack?: Partial<ProductionPack>; error?: string };
+          if (!response.ok || !data.pack || !fields.every((field) => typeof data.pack?.[field] === "string")) throw new Error(data.error || "AI returned an incomplete prompt correction.");
+          const next = { ...currentPack, ...data.pack } as ProductionPack;
+          const nextReport = inspectProductionPack(next, form, characters, savedPacks.map((saved) => saved.title), creativeAssets);
+          if (nextReport.score <= currentReport.score) break;
+          currentPack = next;
+          currentReport = nextReport;
+        }
+        passes += 1;
+      }
+      setPack(currentPack);
+      const remaining = currentReport.findings.filter((finding) => finding.status === "Failed").length;
+      setFixSummary({ originalScore, improvedScore: currentReport.score, resolved: Math.max(0, originalFailed - remaining), remaining, passes });
+      setNotice(currentReport.score >= 90 ? "Prompts improved and Quality Control reached the target." : "Quality Control reran. Review the remaining issues before publishing.");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "AI improvement failed.");
+      setError(caught instanceof Error ? caught.message : "Prompt correction failed. Your original pack is unchanged.");
     } finally {
-      setIsGenerating(false);
+      setIsFixingPrompts(false);
     }
   }
 
@@ -1876,10 +1914,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <article className="output-card quality-card">
                 <div className="quality-score"><strong>{qualityReport.score}</strong><span>/ 100</span></div>
                 <div className="card-heading"><span>05 · ERROR PREVENTION</span><h3>Quality-Control Report</h3><CopyButton label="Copy Report" value={qualityText(qualityReport)} /></div>
+                <div className="quality-header">
+                  <div className="quality-summary"><span>Errors: {qualityReport.findings.filter((finding) => finding.status === "Failed").length}</span><span>Warnings: {qualityReport.findings.filter((finding) => finding.status === "Warning").length}</span><span>Passed: {qualityReport.findings.filter((finding) => finding.status === "Passed").length}</span></div>
+                  {fixSummary && <div className="fix-summary">Original score: {fixSummary.originalScore} · Improved score: {fixSummary.improvedScore} · Resolved: {fixSummary.resolved} · Remaining: {fixSummary.remaining} · Passes: {fixSummary.passes}</div>}
+                  <button className="fix-button" type="button" onClick={fixPrompts} disabled={isFixingPrompts || qualityReport.score >= 90 || generatedOutputs.length !== requestedOutputValues.length}>{isFixingPrompts ? "Fixing Prompts…" : qualityReport.score >= 90 ? "Quality Target Reached" : fixSummary ? (fixSummary.remaining ? "Review Remaining Issues" : "Prompts Improved") : "Fix Prompts"}</button>
+                </div>
                 <div className="findings">
                   {qualityReport.findings.map((finding) => <div className={finding.status.toLowerCase()} key={finding.label}><b>{finding.status}</b><span><strong>{finding.label}</strong><small>{finding.detail}</small></span></div>)}
                 </div>
-                {mode === "ai" && <button className="fix-button" type="button" onClick={fixWithAi} disabled={isGenerating}>{isGenerating ? "Improving…" : "Fix and Improve with AI"}</button>}
               </article>
             </>
           )}

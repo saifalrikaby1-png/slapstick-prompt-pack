@@ -346,6 +346,7 @@ export default function Home() {
   const [isFixingPrompts, setIsFixingPrompts] = useState(false);
   const [fixSummary, setFixSummary] = useState<{ originalScore: number; improvedScore: number; resolved: number; remaining: number; passes: number } | null>(null);
   const [remainingFixFindings, setRemainingFixFindings] = useState<QualityFinding[]>([]);
+  const [showRemainingIssues, setShowRemainingIssues] = useState(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestingFields, setSuggestingFields] = useState<Record<CreativeSuggestionKind, boolean>>({
     title: false, location: false, object: false, action: false, payoff: false,
@@ -369,6 +370,7 @@ export default function Home() {
   const presetImportRef = useRef<HTMLInputElement>(null);
   const creativeImportRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const remainingIssuesRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -1320,12 +1322,26 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       const remaining = currentReport.findings.filter((finding) => finding.status !== "Passed").length;
       setFixSummary({ originalScore, improvedScore: currentReport.score, resolved: Math.max(0, originalFailed - remaining), remaining, passes });
       setRemainingFixFindings(currentReport.findings.filter((finding) => finding.status !== "Passed"));
+      setShowRemainingIssues(currentReport.findings.some((finding) => finding.status !== "Passed"));
       setNotice(currentReport.score >= 90 ? "Prompts improved and Quality Control reached the target." : "Quality Control reran. Review the remaining issues before publishing.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Prompt correction failed. Your original pack is unchanged.");
     } finally {
       setIsFixingPrompts(false);
     }
+  }
+
+  function reviewRemainingIssues() {
+    if (!remainingFixFindings.length) return;
+    setShowRemainingIssues((open) => !open);
+    window.setTimeout(() => {
+      const target = remainingIssuesRef.current;
+      if (!target) return;
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      target.focus();
+      target.classList.add("issue-highlight");
+      window.setTimeout(() => target.classList.remove("issue-highlight"), 1400);
+    }, 0);
   }
 
   function generateSoundProfiles() {
@@ -1920,8 +1936,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <div className="quality-header">
                   <div className="quality-summary"><span>Errors: {qualityReport.findings.filter((finding) => finding.status === "Failed").length}</span><span>Warnings: {qualityReport.findings.filter((finding) => finding.status === "Warning").length}</span><span>Passed: {qualityReport.findings.filter((finding) => finding.status === "Passed").length}</span></div>
                   {fixSummary && <div className="fix-summary">Original score: {fixSummary.originalScore} · Improved score: {fixSummary.improvedScore} · Resolved: {fixSummary.resolved} · Remaining: {fixSummary.remaining} · Passes: {fixSummary.passes}</div>}
-                  {fixSummary && <div className="remaining-issues">{remainingFixFindings.length ? <>Remaining issues: {remainingFixFindings.map((finding) => <span key={finding.label}>{finding.label} — {finding.detail}</span>)}</> : "Quality target reached. No remaining correctable issues."}</div>}
-                  <button className="fix-button" type="button" onClick={fixPrompts} disabled={isFixingPrompts || qualityReport.score >= 90 || generatedOutputs.length !== requestedOutputValues.length}>{isFixingPrompts ? "Fixing Prompts…" : qualityReport.score >= 90 ? "Quality Target Reached" : fixSummary ? (fixSummary.remaining ? "Review Remaining Issues" : "Prompts Improved") : "Fix Prompts"}</button>
+                  {fixSummary && showRemainingIssues && <div className="remaining-issues" ref={remainingIssuesRef} tabIndex={-1}><h4>Remaining Issues</h4>{remainingFixFindings.length ? remainingFixFindings.map((finding) => <span key={finding.label}><b>{finding.status}</b> · {finding.label} — {finding.detail}</span>) : "Quality target reached. No remaining correctable issues."}</div>}
+                  <button className="fix-button" type="button" onClick={fixSummary?.remaining ? reviewRemainingIssues : fixPrompts} disabled={isFixingPrompts || qualityReport.score >= 90 || generatedOutputs.length !== requestedOutputValues.length}>{isFixingPrompts ? "Fixing Prompts…" : qualityReport.score >= 90 ? "Quality Target Reached" : fixSummary ? (fixSummary.remaining ? (showRemainingIssues ? "Hide Remaining Issues" : "Review Remaining Issues") : "Prompts Improved") : "Fix Prompts"}</button>
                 </div>
                 <div className="findings">
                   {qualityReport.findings.map((finding) => <div className={finding.status.toLowerCase()} key={finding.label}><b>{finding.status}</b><span><strong>{finding.label}</strong><small>{finding.detail}</small></span></div>)}

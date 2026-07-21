@@ -32,6 +32,8 @@ function full(pack) { return Object.values(pack).join("\n"); }
 
 test("grounded lock, gravity, smooth motion, and settled frames are generated", () => {
   const pack = engine.generateDemoPack(form(), characters);
+  const report = engine.inspectProductionPack(pack, form(), characters);
+  assert.ok(report.score >= 90, `Expected genuine first-pass score of at least 90, received ${report.score}`);
   const text = full(pack).toLowerCase();
   assert.match(text, /physical grounding lock/);
   assert.match(text, /object support lock/);
@@ -42,6 +44,17 @@ test("grounded lock, gravity, smooth motion, and settled frames are generated", 
   assert.match(text, /settling/);
   assert.match(pack.startFramePrompt.toLowerCase(), /contact with supporting surfaces/);
   assert.match(pack.endFramePrompt.toLowerCase(), /stable completed pose/);
+});
+
+test("Demo Mode repairs only failed sections and the inspector measures the real improvement", () => {
+  const original = engine.generateDemoPack(form(), characters);
+  const broken = { ...original, videoTimeline: "0:00â€“0:10 Biscuit floats without cause.", endFramePrompt: "unfinished jump" };
+  const before = engine.inspectProductionPack(broken, form({ duration: "10" }), characters);
+  const repaired = engine.repairDemoPack(broken, form({ duration: "10" }), characters, before.findings);
+  const after = engine.inspectProductionPack(repaired, form({ duration: "10" }), characters);
+  assert.ok(after.score > before.score);
+  assert.equal(repaired.videoTitle, broken.videoTitle);
+  assert.equal(repaired.characterBuildingPrompt, broken.characterBuildingPrompt);
 });
 
 test("retention starts immediately, escalates in the middle, and covers ten seconds", () => {

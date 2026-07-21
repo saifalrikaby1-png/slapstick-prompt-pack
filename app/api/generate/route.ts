@@ -125,7 +125,7 @@ Hard requirements:
 - Start frame, video action, and end frame must share environment, lighting, cast placement, object state, scale, color, and story geography.
 
 ${action === "fix"
-    ? "Repair task: review the current complete pack and quality findings. Return a complete synchronized replacement pack. Improve weak sections while preserving every selected setting, character lock, story fact, platform, model adapter, ratio, duration, tone, voice layer, audio choice, narration choice, manually written title, and already-strong section."
+    ? `Targeted repair task: return replacements only for the requested fields (${requestedFields.join(", ")}). Read the supplied non-passing Quality Control findings, repair only the responsible requested sections, and leave all unrequested and already-passing sections untouched. Preserve every selected setting, character lock, story fact, platform, model adapter, ratio, duration, tone, voice layer, audio choice, narration choice, and manually written title. Do not invent a new episode or change user creative choices.`
     : "Generation task: build the complete synchronized pack from the supplied form and character records."}`;
 }
 

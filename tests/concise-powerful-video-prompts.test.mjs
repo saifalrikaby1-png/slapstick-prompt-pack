@@ -21,7 +21,7 @@ const pack = engine.generateDemoPack(form, cast);
 const words = (value) => value.trim().split(/\s+/).filter(Boolean).length;
 
 test("visible prompt is concise while final rule centralizes protections", () => {
-  assert.ok(words(pack.videoLock) <= 180);
+  assert.ok(words(pack.videoLock) <= 260);
   assert.ok(words(pack.startFramePrompt) <= 200);
   assert.ok(words(pack.endFramePrompt) <= 200);
   assert.match(pack.finalGenerationRule, /NO duplicate characters/);

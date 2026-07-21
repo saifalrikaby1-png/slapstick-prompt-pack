@@ -37,6 +37,10 @@ test("Fix Prompts is in the Quality Control header before detailed findings", as
   assert.match(qualityCard, /isFixingPrompts/);
   assert.match(qualityCard, /Quality Target Reached/);
   assert.match(qualityCard, /remainingFixFindings/);
+  assert.match(qualityCard, /qualityTargetReached/);
+  assert.match(qualityCard, /Prompt quality improved successfully/);
+  assert.match(qualityCard, /Fix Remaining Issues/);
+  assert.doesNotMatch(qualityCard, /Quality Target Reached"/);
 });
 
 test("uses exactly the new synchronized internal production schema", async () => {

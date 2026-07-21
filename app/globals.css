@@ -306,6 +306,7 @@ main {
 .fix-button:disabled { opacity: .58; cursor: default; }
 .fix-actions { display: flex; flex-wrap: wrap; gap: 7px; justify-content: end; }
 .review-button { background: white; color: var(--purple); border: 1px solid var(--purple); }
+.quality-success { align-self: center; color: var(--green); font-size: 10px; font-weight: 900; }
 .legacy-note { margin-bottom: 12px; padding: 12px; border: 1px solid #f0c56c; border-radius: 10px; background: #fff6df; color: #77500b; font-size: 10px; }
 .legacy-output article { position: relative; margin-top: 8px; padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .legacy-output h3 { margin: 0 80px 9px 0; font-family: var(--font-fraunces), serif; font-size: 17px; }

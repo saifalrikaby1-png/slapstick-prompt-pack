@@ -536,6 +536,10 @@ export default function Home() {
   const completePrompt = pack ? completeVideoPrompt(pack) : "";
   const visualPrompt = pack ? visualVideoPrompt(pack) : "";
   const audioPrompt = pack ? audioVideoPrompt(pack) : "";
+  const unresolvedFindings = qualityReport?.findings.filter((finding) => finding.status !== "Passed") || [];
+  const fullPackGenerated = generatedOutputs.length === requestedOutputValues.length;
+  const qualityTargetReached = Boolean(qualityReport && qualityReport.score >= 90);
+  const canFixPrompts = Boolean(pack && fullPackGenerated && !qualityTargetReached && unresolvedFindings.length > 0);
   const needsLocation = requestedOutputs.some((output) => output !== "characterBuildingPrompt");
   const needsObject = requestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
   const needsAction = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
@@ -1938,8 +1942,11 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                   {fixSummary && <div className="fix-summary">Original score: {fixSummary.originalScore} · Improved score: {fixSummary.improvedScore} · Resolved: {fixSummary.resolved} · Remaining: {fixSummary.remaining} · Passes: {fixSummary.passes}</div>}
                   {fixSummary && showRemainingIssues && <div className="remaining-issues" ref={remainingIssuesRef} tabIndex={-1}><h4>Remaining Issues</h4>{remainingFixFindings.length ? remainingFixFindings.map((finding) => <span key={finding.label}><b>{finding.status}</b> · {finding.label} — {finding.detail}</span>) : "Quality target reached. No remaining correctable issues."}</div>}
                   <div className="fix-actions">
-                    <button className="fix-button" type="button" onClick={fixPrompts} disabled={isFixingPrompts || qualityReport.score >= 93 || generatedOutputs.length !== requestedOutputValues.length}>{isFixingPrompts ? "Fixing Prompts…" : qualityReport.score >= 93 ? "Quality Target Reached" : fixSummary ? "Fix Remaining Issues" : "Fix Prompts"}</button>
-                    {remainingFixFindings.length > 0 && <button className="fix-button review-button" type="button" onClick={reviewRemainingIssues}>{showRemainingIssues ? "Hide Remaining Issues" : "Review Remaining Issues"}</button>}
+                    {isFixingPrompts && <button className="fix-button" type="button" disabled>Fixing Prompts…</button>}
+                    {!isFixingPrompts && canFixPrompts && <button className="fix-button" type="button" onClick={fixPrompts}>{fixSummary ? "Fix Remaining Issues" : "Fix Prompts"}</button>}
+                    {!isFixingPrompts && qualityTargetReached && <span className="quality-success">Prompt quality improved successfully. Quality Control target reached: {qualityReport.score}/100.</span>}
+                    {!isFixingPrompts && !qualityTargetReached && !canFixPrompts && <span className="quality-success">No additional automatic corrections are available.</span>}
+                    {unresolvedFindings.length > 0 && <button className="fix-button review-button" type="button" onClick={reviewRemainingIssues}>{showRemainingIssues ? "Hide Remaining Issues" : "Review Remaining Issues"}</button>}
                   </div>
                 </div>
                 <div className="findings">

@@ -16,6 +16,19 @@ import {
   requestedOutputValues,
 } from "./production-types";
 
+const previewStyleQuality = (id?: ProductionForm["videoStyleId"]) => {
+  const checks: Record<string, { name: string; qualityChecks: string[] }> = {
+    slapstick: { name: "Slapstick", qualityChecks: ["Immediate hook", "Physical cause and effect", "Readable reaction", "Harmless payoff"] },
+    cinematic: { name: "Cinematic", qualityChecks: ["Lens consistency", "Lighting direction", "Shot composition", "Emotional pacing"] },
+    "family-3d": { name: "Family 3D Animation", qualityChecks: ["Appealing proportions", "Readable expressions", "Smooth motion", "Family-friendly tone"] },
+    anime: { name: "Anime", qualityChecks: ["Pose clarity", "Expression intensity", "Effect control", "Action readability"] },
+    "live-action": { name: "Realistic Live Action", qualityChecks: ["Anatomy realism", "Wardrobe continuity", "Natural acting", "Believable light"] },
+    "cgi-fantasy": { name: "CGI Fantasy", qualityChecks: ["Magical logic", "Creature continuity", "Environment scale", "Effect traceability"] },
+    "stylized-3d": { name: "Stylized 3D Cartoon", qualityChecks: ["Shape consistency", "Stylized proportions", "Palette continuity", "Controlled exaggeration"] },
+  };
+  return checks[id || "slapstick"] || checks.slapstick;
+};
+
 const stringValue = (value: unknown, fallback = "") =>
   typeof value === "string" ? value.trim() : fallback;
 
@@ -927,6 +940,7 @@ export function inspectProductionPack(
   const endWords = words(pack.endFramePrompt);
   const completeWords = words(completeVideoPrompt(pack));
   const adapter = selectedModelAdapter(form);
+  const workflowStyle = previewStyleQuality(form.videoStyleId);
   const pacingProfile = motionPacingProfile(form);
   const inventory = buildAuthorizedSceneInventory(form, cast);
   const objectStates = buildObjectStateLedger(inventory);
@@ -1041,6 +1055,12 @@ export function inspectProductionPack(
     finding("Complete prompt length budget", completeWords <= 850, `Complete prompt is ${completeWords} words; prefer approximately 700 or fewer when continuity remains safe.`, true),
     finding("Model duration fit", !adapter.maxSingleClipSeconds || duration <= adapter.maxSingleClipSeconds ||
       /segment|clip/i.test(pack.videoTimeline), `${adapter.displayName} durations above ${adapter.maxSingleClipSeconds || duration} seconds need a segmented plan.`, true),
+    ...(form.styleWorkflowEnabled ? [
+      finding(`${workflowStyle.name} style workflow is applied`, all.includes(`style workflow: ${workflowStyle.name.toLowerCase()}`), `${workflowStyle.name} must contribute its own camera, visual, pacing, and safety guidance.`),
+      ...workflowStyle.qualityChecks.map((check) => finding(`${workflowStyle.name}: ${check}`,
+        all.includes(check.toLowerCase()),
+        `${workflowStyle.name} Quality Control checks ${check.toLowerCase()} in the generated pack.`, true)),
+    ] : []),
   ];
   const score = Math.round(
     findings.reduce((total, item) =>

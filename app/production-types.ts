@@ -41,6 +41,9 @@ export type CharacterProfile = {
 };
 
 export type ProductionForm = {
+  /** Preview style configuration; omitted legacy data safely migrates to Slapstick. */
+  videoStyleId?: "slapstick" | "cinematic" | "family-3d" | "anime" | "live-action" | "cgi-fantasy" | "stylized-3d";
+  styleWorkflowEnabled?: boolean;
   videoTitle: string;
   locationAssetId: string;
   locationName: string;
@@ -213,6 +216,7 @@ export const productionPackKeys: (keyof ProductionPack)[] = [
 ];
 
 export const defaultProductionForm: ProductionForm = {
+  videoStyleId: "slapstick",
   videoTitle: "",
   locationAssetId: "",
   locationName: "",

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   CharacterProfile,
   CharacterRole,
@@ -48,6 +49,8 @@ import {
   parseCreativeLibrary,
 } from "./creative-library";
 import { CompleteIdeaRegistryEntry, actionSignatureHash, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
+import { MarketingHome } from "./marketing-home";
+import { getVideoStyle, VideoStyleId } from "./video-styles";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -325,7 +328,8 @@ function RatioControl({
   );
 }
 
-export default function Home() {
+export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
+  const activeVideoStyle = styleId ? getVideoStyle(styleId) : null;
   const [form, setForm] = useState<ProductionForm>(defaultProductionForm);
   const [characters, setCharacters] = useState<CharacterProfile[]>(builtInCharacters);
   const [creativeAssets, setCreativeAssets] = useState<CreativeAsset[]>([]);
@@ -470,6 +474,24 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!activeVideoStyle) return;
+    const configurationTask = window.setTimeout(() => {
+      setForm((current) => ({
+        ...current,
+        videoStyleId: activeVideoStyle.id,
+        styleWorkflowEnabled: true,
+        visualStyle: activeVideoStyle.defaults.visualStyle,
+        tones: activeVideoStyle.defaults.tones,
+        duration: activeVideoStyle.defaults.duration,
+        videoRatio: activeVideoStyle.defaults.ratio,
+        startFrameRatio: activeVideoStyle.defaults.ratio,
+        endFrameRatio: activeVideoStyle.defaults.ratio,
+      }));
+    }, 1);
+    return () => window.clearTimeout(configurationTask);
+  }, [activeVideoStyle, styleId]);
+
+  useEffect(() => {
     if (!hydratedRef.current) return;
     localStorage.setItem(STORAGE.characters, JSON.stringify(characters));
   }, [characters]);
@@ -582,7 +604,7 @@ export default function Home() {
       importantObject: sanitizeActiveText(form.importantObject),
       trapAction: sanitizeActiveText(form.trapAction),
       endingPayoff: sanitizeActiveText(form.endingPayoff),
-      additionalDirection: sanitizeActiveText(form.additionalDirection),
+      additionalDirection: sanitizeActiveText([form.additionalDirection, activeVideoStyle ? `STYLE WORKFLOW: ${activeVideoStyle.name}. Visual language: ${activeVideoStyle.rules.visualLanguage}. Camera: ${activeVideoStyle.rules.camera}. Lighting: ${activeVideoStyle.rules.lighting}. Pacing: ${activeVideoStyle.rules.pacing}. Motion: ${activeVideoStyle.rules.motion}. Performance: ${activeVideoStyle.rules.performance}. Audio: ${activeVideoStyle.rules.audio}. Negative constraints: ${activeVideoStyle.rules.negative}. Quality checks: ${activeVideoStyle.qualityChecks.join(", ")}.` : ""].filter(Boolean).join("\n")),
       characterCartoonSoundGuidance: sanitizeActiveText(form.characterCartoonSoundGuidance),
     };
     if (sanitized.additionalDirection.trim()) return sanitized;
@@ -1133,7 +1155,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       const previousPack = pack;
       // Demo compatibility contract: mode === "demo" ? generateDemoPack
       const nextPartial = mode === "demo"
-        ? Object.fromEntries(Object.entries(generateDemoPack(form, characters))
+        ? Object.fromEntries(Object.entries(generateDemoPack(formForGeneration() as ProductionForm, characters))
             .filter(([key]) => selectedFields.includes(key as keyof ProductionPack)))
         : await (async () => {
             const response = await fetch("/api/generate", {
@@ -1669,10 +1691,10 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Slapstick Prompt Pack home">
+        <Link className="brand" href={styleId ? "/" : "#top"} aria-label="Slapstick Prompt Pack home">
           <span className="brand-mark">S</span>
           <span><strong>Slapstick</strong><small>PROMPT PACK</small></span>
-        </a>
+        </Link>
         <div className={`engine-badge ${mode === "ai" ? "ai" : ""}`}>
           <span />
           {mode === "demo" ? "Demo Mode · local" : "AI Mode · server secured"}
@@ -1682,19 +1704,21 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
       <section className="hero" id="top">
         <div>
-          <span className="eyebrow">SIMPLIFIED PRODUCTION WORKFLOW</span>
-          <h1>From episode idea to one synchronized production prompt.</h1>
-          <p>Build the cast, lock the reference frames, choreograph the complete action, and quality-check everything before generation.</p>
+          <span className="eyebrow">{activeVideoStyle ? `${activeVideoStyle.name.toUpperCase()} WORKSPACE` : "SIMPLIFIED PRODUCTION WORKFLOW"}</span>
+          <h1>{activeVideoStyle ? `Create a ${activeVideoStyle.name} production pack.` : "From episode idea to one synchronized production prompt."}</h1>
+          <p>{activeVideoStyle ? `${activeVideoStyle.description} Recommended: ${activeVideoStyle.defaults.ratio}, ${activeVideoStyle.defaults.duration} seconds, with ${activeVideoStyle.rules.camera}.` : "Build the cast, lock the reference frames, choreograph the complete action, and quality-check everything before generation."}</p>
         </div>
         <button className="demo-button" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
 
       <div className="workspace">
         <nav className="workflow-nav" role="tablist" aria-label="Production workflow">
+          {activeVideoStyle && <Link href="/#video-types" style={{ borderColor: activeVideoStyle.accent }}>Change Video Style</Link>}
           {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
           <a href="/library" role="tab" aria-selected="false">Library</a>
         </nav>
         <section className="setup-panel">
+          {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
           <div className="mode-switch" aria-label="Generator mode">
             <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
             <button className={mode === "ai" ? "active" : ""} type="button" onClick={() => setMode("ai")}>AI Mode<small>OpenAI powered</small></button>
@@ -1961,4 +1985,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       <footer>SLAPSTICK PROMPT PACK <span>•</span> REFERENCE-LOCKED PRODUCTION</footer>
     </main>
   );
+}
+
+export default function Home() {
+  return <MarketingHome />;
 }

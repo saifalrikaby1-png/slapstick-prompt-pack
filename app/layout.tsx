@@ -8,7 +8,7 @@ const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Slapstick Prompt Pack",
-  description: "Turn one cartoon idea into a complete short-video production pack.",
+  description: "Style-aware AI-video pre-production with original character building, production packs, and Quality Control.",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
 

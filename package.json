@@ -6,14 +6,15 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "test": "next build && node --test tests/*.test.mjs",
-  "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-  "db:generate": "drizzle-kit generate"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "next build && node --test tests/*.test.mjs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@vercel/analytics": "^2.0.1",
     "docx": "^9.7.1",
     "drizzle-orm": "0.45.2",
     "file-saver": "^2.0.5",

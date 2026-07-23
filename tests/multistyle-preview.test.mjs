@@ -12,6 +12,7 @@ const compactCss = read("app/marketing-compact.module.css");
 const publicSite = read("app/public-site.tsx");
 const sharedCards = read("app/video-type-cards.tsx");
 const publicPages = read("app/public-page-content.tsx");
+const characterBuilder = read("app/character-builder.tsx");
 
 test("all seven preview style cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
@@ -32,7 +33,7 @@ test("style configuration supplies materially different prompt guidance", () => 
 test("character builder is local, live, and connected to the existing library storage", () => {
   assert.match(builder, /slapstick-character-library/);
   assert.match(builder, /Completeness/);
-  assert.match(builder, /LIVE CONSISTENCY OUTPUT/);
+  assert.match(builder, /LIVE CHARACTER PROFILE/);
   assert.match(builder, /Save Character/);
   assert.match(workspace, /activeCharacterIds/);
 });
@@ -90,4 +91,15 @@ test("public navigation uses shared accessible internal routes", () => {
   }
   assert.match(publicSite, /aria-label="Toggle navigation menu"/);
   assert.match(publicSite, /export function PublicFooter/);
+});
+
+test("character builder opens as a separate focused workspace", () => {
+  assert.match(publicPages, /actionHref="\/character-builder\/create"/);
+  assert.match(characterBuilder, /Build a Character That Stays Consistent/);
+  assert.match(characterBuilder, /slapstick-character-library/);
+  assert.match(characterBuilder, /<PublicHeader \/>/);
+  assert.match(characterBuilder, /<PublicFooter \/>/);
+  assert.match(characterBuilder, /window\.confirm\(`Delete/);
+  assert.match(characterBuilder, /\/character-builder\/create\?id=/);
+  assert.doesNotMatch(characterBuilder, /Generation Summary|Generated Prompts|Start Frame Prompt|Music and SFX setup/);
 });

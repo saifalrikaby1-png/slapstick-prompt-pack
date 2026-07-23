@@ -4,14 +4,14 @@ import { PublicFooter, PublicHeader } from "./public-site";
 import compact from "./marketing-compact.module.css";
 
 const workflowStages = [
-  { number: "01", title: "Choose a Video Type", description: "Choose the visual style that best fits your story, audience, and platform.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
-  { number: "02", title: "Build or Select Characters", description: "Create a reusable character or choose one from your saved library.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
-  { number: "03", title: "Define the Creative Idea", description: "Set the location, key object, main action, and final payoff.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
-  { number: "04", title: "Select the Target AI Model", description: "Choose the image or video model that will generate the production.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
-  { number: "05", title: "Choose Production Outputs", description: "Select the exact prompts and instructions required for your project.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
-  { number: "06", title: "Generate the Production Pack", description: "Create the prompts, timeline, camera direction, audio, and consistency rules.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 14%)" },
-  { number: "07", title: "Review and Improve", description: "Check clarity, continuity, pacing, physical logic, and model compatibility.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
-  { number: "08", title: "Save or Export", description: "Save the completed pack or export it for use on your chosen platform.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
+  { number: "01", title: "Choose a Video Type", description: "Select the visual style that fits your story and audience.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
+  { number: "02", title: "Build or Select Characters", description: "Create a character or choose one from your saved library.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
+  { number: "03", title: "Define the Creative Idea", description: "Set the location, key object, main action, and payoff.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
+  { number: "04", title: "Select an AI Model", description: "Choose the model that will generate the image or video.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
+  { number: "05", title: "Choose Production Outputs", description: "Select the prompts and instructions needed for this project.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
+  { number: "06", title: "Generate the Production Pack", description: "Create the prompts, timeline, camera, audio, and consistency rules.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 14%)" },
+  { number: "07", title: "Review and Improve", description: "Check continuity, pacing, physical logic, and model compatibility.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
+  { number: "08", title: "Save or Export", description: "Save the final pack or export it to your chosen platform.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
 ] as const;
 
 function WorkflowStepCard({ stage }: { stage: (typeof workflowStages)[number] }) {

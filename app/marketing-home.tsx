@@ -15,12 +15,12 @@ const examples = [
 
 const plans = [["Starter", "$4.99", "10 AI full packs"], ["Creator", "$11.99", "30 AI full packs"], ["Pro", "$19.99", "60 AI full packs"], ["Studio", "$32.99", "120 AI full packs"]];
 const cardCopy = {
-  slapstick: { badge: "Comedy", description: "Fast visual comedy with clear action, reactions, and harmless payoffs." },
-  cinematic: { badge: "Film", description: "Film-style storytelling with deliberate framing, lighting, and atmosphere." },
+  slapstick: { badge: "Comedy", description: "Fast visual comedy with clear action and harmless payoffs." },
+  cinematic: { badge: "Film", description: "Film-style storytelling with deliberate framing and atmosphere." },
   "family-3d": { badge: "3D Animation", description: "Polished 3D storytelling with expressive characters and smooth motion." },
   anime: { badge: "Anime", description: "Dynamic anime storytelling with dramatic poses and energetic action." },
-  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting and professional camera direction." },
-  "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with magical worlds and cinematic effects." },
+  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting and cinematic direction." },
+  "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with magical worlds and controlled effects." },
   "stylized-3d": { badge: "Stylized 3D", description: "Stylized animation for humorous, educational, and commercial content." },
 } as const;
 

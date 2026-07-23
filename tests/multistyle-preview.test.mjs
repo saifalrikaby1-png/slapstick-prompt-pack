@@ -53,7 +53,7 @@ test("homepage hero is compact, text-focused, and excludes the production mockup
 });
 
 test("style cards remain route-linked and use compact natural-height layout", () => {
-  assert.match(compactCss, /\.styleCard \{ position: relative; min-height: 210px; height: 210px/);
+  assert.match(compactCss, /\.styleCard \{ position: relative; min-height: 156px; height: 156px; max-height: 156px/);
   assert.match(compactCss, /\.styleGrid \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); align-items: stretch/);
   assert.match(compactCss, /\.styleCard \{ min-height: 0; height: auto; padding: 18px 20px/);
   assert.doesNotMatch(compactCss, /margin-top:\s*auto/);

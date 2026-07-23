@@ -46,23 +46,24 @@
 .workflowAction { display: flex; justify-content: center; margin-top: 34px; }
 .characterBuilderPage { min-height: 100vh; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%), #0B1020; }
 .characterBuilderHero { max-width: 1320px; margin: 0 auto; padding: 64px clamp(20px, 5vw, 80px) 42px; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%); }
-.characterBuilderHero h1, .characterFeatureSection > h2, .characterBuilderCta h2 { margin: 0; font-family: var(--font-fraunces), serif; letter-spacing: -.04em; }
-.characterBuilderHero h1 { max-width: 840px; font-size: clamp(42px, 5.4vw, 75px); line-height: .99; }
+.characterBuilderHero h1, .characterFeatureSection > h2, .characterBuilderCta h2 { margin: 0; font-family: var(--font-dm), system-ui, sans-serif; letter-spacing: -.025em; }
+.characterBuilderHero h1 { max-width: 840px; font-size: clamp(42px, 5.4vw, 75px); font-weight: 700; line-height: 1.02; }
 .characterBuilderHero :global(.hero-copy) { max-width: 790px; margin: 18px 0 0; }
 .characterBuilderHeroAction { margin-top: 24px; }
-.characterFeatureSection > h2 { font-size: clamp(30px, 4vw, 50px); line-height: 1.05; }
+.characterFeatureSection > h2 { margin-bottom: 28px; font-size: 44px; font-weight: 700; line-height: 1.08; }
+.characterFeatureSection :global(.section-copy) { max-width: 720px; margin: 0; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 17px; font-weight: 400; line-height: 1.5; }
 .characterFeatureGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 26px; }
-.characterFeatureCard { composes: styleCard; display: flex; flex-direction: column; box-sizing: border-box; border: 1px solid var(--feature-accent); background: radial-gradient(circle at top left, var(--feature-tint), transparent 48%), var(--feature-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--feature-accent) 24%, transparent), 0 10px 24px #0003; }
+.characterFeatureCard { composes: styleCard; display: grid; grid-template-rows: auto 46px minmax(0, 1fr); align-content: start; box-sizing: border-box; border: 1px solid var(--feature-accent); background: radial-gradient(circle at top left, var(--feature-tint), transparent 48%), var(--feature-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--feature-accent) 24%, transparent), 0 10px 24px #0003; }
 .characterFeatureCard:hover { border-color: var(--feature-accent); background: radial-gradient(circle at top left, var(--feature-tint), transparent 48%), var(--feature-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--feature-accent) 48%, transparent), 0 16px 32px var(--feature-tint); }
-.characterFeatureIcon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--feature-accent) 20%, transparent); color: var(--feature-accent); font-size: 17px; font-weight: 800; line-height: 1; }
-.characterFeatureCard h3 { margin: 10px 0 5px; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-size: 20px; line-height: 1.2; }
-.characterFeatureCard p { margin: 0; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 13px; line-height: 1.4; }
+.characterFeatureIcon { display: grid; place-items: center; width: 36px; height: 36px; margin: 0 0 14px; border-radius: 10px; background: color-mix(in srgb, var(--feature-accent) 20%, transparent); color: var(--feature-accent); font-size: 17px; font-weight: 800; line-height: 1; }
+.characterFeatureCard h3 { display: flex; align-items: flex-start; min-height: 46px; margin: 0; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-size: 19px; font-weight: 650; line-height: 1.18; letter-spacing: -.015em; }
+.characterFeatureCard p { margin: 8px 0 0; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 14px; font-weight: 400; letter-spacing: 0; line-height: 1.42; }
 .characterBuilderCta { display: flex; align-items: center; justify-content: space-between; gap: 30px; max-width: 1160px; margin: 0 auto 70px; padding: 30px 34px; border: 1px solid #394462; border-radius: 22px; background: linear-gradient(135deg, #151C2F, #181A3A); box-shadow: 0 12px 28px #0003; }
 .characterBuilderCta h2 { font-size: clamp(26px, 3vw, 38px); line-height: 1.1; }
 .characterBuilderCta p:not(:global(.eyebrow)) { max-width: 650px; margin: 10px 0 0; color: #AAB2C5; line-height: 1.55; }
 .characterBuilderCta > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2 { font-size: 36px; } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2, .characterFeatureSection > h2 { font-size: 36px; } }
 @media (max-width: 640px) {
   .howItWorksHero { padding: 46px 20px 36px; }
   .howItWorksHero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
@@ -75,7 +76,10 @@
   .characterBuilderHero h1 { font-size: clamp(39px, 12vw, 53px); }
   .characterFeatureGrid { grid-template-columns: 1fr; align-items: start; gap: 14px; margin-top: 22px; }
   .characterFeatureCard { min-height: 0; height: auto; padding: 18px 20px; }
-  .characterFeatureCard h3 { font-size: 19px; }
+  .characterFeatureSection > h2 { font-size: 30px; }
+  .characterFeatureSection :global(.section-copy) { font-size: 15px; }
+  .characterFeatureCard h3 { font-size: 18px; line-height: 1.2; }
+  .characterFeatureCard p { font-size: 14px; line-height: 1.45; }
   .characterBuilderCta { display: block; margin: 0 20px 44px; padding: 25px; }
   .characterBuilderCta > div:last-child { justify-content: flex-start; margin-top: 22px; }
   .videoTypesHero { padding: 46px 20px 36px; }

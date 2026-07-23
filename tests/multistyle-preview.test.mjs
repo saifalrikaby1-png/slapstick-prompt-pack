@@ -10,6 +10,7 @@ const builder = read("app/character-builder.tsx");
 const layout = read("app/layout.tsx");
 const compactCss = read("app/marketing-compact.module.css");
 const css = read("app/globals.css");
+const publicSite = read("app/public-site.tsx");
 
 test("all seven preview style cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
@@ -58,7 +59,7 @@ test("homepage no longer renders the extra gradient CTA before its footer", () =
   assert.doesNotMatch(home, /Choose a Video Type/);
   assert.doesNotMatch(home, /Build Your First Character/);
   assert.doesNotMatch(home, /className="final-cta"/);
-  assert.match(home, /marketing-section faq[\s\S]*marketing-footer/);
+  assert.match(home, /marketing-section faq[\s\S]*<PublicFooter \/>/);
 });
 
 test("style cards remain route-linked and use compact natural-height layout", () => {
@@ -71,4 +72,12 @@ test("style cards remain route-linked and use compact natural-height layout", ()
   assert.match(home, /className=\{compact\.styleBadge\}/);
   assert.match(home, /className=\{compact\.styleArrow\}/);
   assert.doesNotMatch(home, /style\.characteristics\.map/);
+});
+
+test("public navigation uses shared accessible internal routes", () => {
+  for (const route of ["/video-types", "/how-it-works", "/character-builder", "/production-packs", "/quality-control", "/models", "/pricing", "/sign-in", "/create"]) {
+    assert.match(publicSite, new RegExp(`"${route.replace(/[/?]/g, "\\$&")}"`));
+  }
+  assert.match(publicSite, /aria-label="Toggle navigation menu"/);
+  assert.match(publicSite, /export function PublicFooter/);
 });

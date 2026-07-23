@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import compact from "./marketing-compact.module.css";
 import { videoStyleIds, videoStyles } from "./video-styles";
+import { PublicFooter, PublicHeader } from "./public-site";
 
 const examples = [
   ["Slapstick", "A delivery robot loses control of bouncing packages."],
@@ -26,17 +27,10 @@ const cardCopy = {
 
 export function MarketingHome() {
   return <main className="marketing-shell">
-    <header className="marketing-nav">
-      <Link href="/" className="product-mark" aria-label="Slapstick Prompt Pack home"><span>SP</span> Slapstick Prompt Pack</Link>
-      <nav aria-label="Main navigation" className="marketing-links">
-        <details className="style-menu"><summary>Video Types</summary><div>{videoStyleIds.map((id) => <Link key={id} href={`/create/${id}`}>{videoStyles[id].name}</Link>)}</div></details>
-        <a href="#how-it-works">How It Works</a><Link href="/characters">Character Builder</Link><a href="#production-packs">Production Packs</a><a href="#quality-control">Quality Control</a><a href="#models">Models</a><Link href="/pricing">Pricing</Link>
-      </nav>
-      <div className="marketing-nav-actions"><button type="button" className="text-button">Sign In <span className="sr-only">(preview placeholder)</span></button><a href="#video-types" className="marketing-button small">Start Creating</a></div>
-    </header>
+    <PublicHeader />
 
     <section className={`marketing-hero ${compact.hero}`} aria-labelledby="hero-title">
-      <div><p className="eyebrow">AI VIDEO PRE-PRODUCTION PLATFORM</p><h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1><p className="hero-copy">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p><div className="hero-actions"><a href="#video-types" className="marketing-button">Choose a Video Style</a><Link href="/characters" className="marketing-button secondary">Build a Character</Link><a href="#how-it-works" className="watch-link">▷ Watch the Demo</a></div><p className="free-note">Free Demo Mode available. No API key required.</p></div>
+      <div><p className="eyebrow">AI VIDEO PRE-PRODUCTION PLATFORM</p><h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1><p className="hero-copy">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p><div className="hero-actions"><Link href="/video-types" className="marketing-button">Choose a Video Style</Link><Link href="/character-builder" className="marketing-button secondary">Build a Character</Link><Link href="/how-it-works" className="watch-link">▷ Watch the Demo</Link></div><p className="free-note">Free Demo Mode available. No API key required.</p></div>
       {/*
         <div className="visual-top"><span>Family 3D Animation</span><b>Production Pack</b><i>Quality 94</i></div><div className="visual-grid"><article><small>CHARACTER PROFILE</small><strong>Identity Lock</strong><p>Appearance · wardrobe · movement</p></article><article><small>CAMERA DIRECTION</small><strong>Continuous arc</strong><p>16:9 · soft key light</p></article><article><small>TIMELINE</small><strong>0:00 → 0:20</strong><div className="visual-timeline"><i /><i /><i /></div></article><article className="visual-quality"><small>QUALITY CONTROL</small><strong>94 / 100</strong><button type="button">Fix Prompts</button></article></div><div className="visual-flow">Video Style <b>→</b> Characters <b>→</b> Production Setup <b>→</b> Production Pack <b>→</b> Quality Control <b>→</b> Video Generator</div>
       */}
@@ -66,6 +60,6 @@ export function MarketingHome() {
 
     <section className="marketing-section faq"><p className="eyebrow">FAQ</p><h2>Questions creators ask</h2>{["Which video styles are supported?", "Does each style have its own workflow?", "Can I build a character from scratch?", "Can one character be reused in multiple styles?", "How are characters connected to prompts?", "Does Demo Mode consume credits?", "Does Quality Control adapt to the style?", "Which video-generation models are supported?", "Can production packs be exported?", "Is an API key required?", "Can the platform create realistic projects?"].map((question) => <details key={question}><summary>{question}</summary><p>Yes. This preview uses a connected, style-aware workflow and keeps Demo Mode available without an API key.</p></details>)}</section>
 
-    <footer className="marketing-footer"><div><b>Slapstick Prompt Pack</b><p>Preview platform for style-aware AI-video pre-production.</p></div><div><b>Product</b><a href="#video-types">Video Types</a><Link href="/characters">Character Builder</Link><a href="#production-packs">Production Packs</a><a href="#quality-control">Quality Control</a><Link href="/pricing">Pricing</Link></div><div><b>Video Types</b>{videoStyleIds.map((id) => <Link key={id} href={`/create/${id}`}>{videoStyles[id].name}</Link>)}</div><div><b>Resources</b><span>Documentation (preview)</span><span>Style Guides (preview)</span><span>Supported Models (preview)</span></div></footer>
+    <PublicFooter />
   </main>;
 }

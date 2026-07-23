@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import compact from "./marketing-compact.module.css";
-import { videoStyleIds, videoStyles } from "./video-styles";
+import { videoStyles } from "./video-styles";
 import { PublicFooter, PublicHeader } from "./public-site";
+import { VideoTypeCards } from "./video-type-cards";
 
 const examples = [
   ["Slapstick", "A delivery robot loses control of bouncing packages."],
@@ -15,16 +16,6 @@ const examples = [
 ];
 
 const plans = [["Starter", "$4.99", "10 AI full packs"], ["Creator", "$11.99", "30 AI full packs"], ["Pro", "$19.99", "60 AI full packs"], ["Studio", "$32.99", "120 AI full packs"]];
-const cardCopy = {
-  slapstick: { badge: "Comedy", description: "Fast visual comedy with clear action and harmless payoffs." },
-  cinematic: { badge: "Film", description: "Film-style storytelling with deliberate framing and atmosphere." },
-  "family-3d": { badge: "3D Animation", description: "Polished 3D storytelling with expressive characters and smooth motion." },
-  anime: { badge: "Anime", description: "Dynamic anime storytelling with dramatic poses and energetic action." },
-  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting and cinematic direction." },
-  "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with magical worlds and controlled effects." },
-  "stylized-3d": { badge: "Stylized 3D", description: "Stylized animation for humorous, educational, and commercial content." },
-} as const;
-
 export function MarketingHome() {
   return <main className="marketing-shell">
     <PublicHeader />
@@ -36,7 +27,7 @@ export function MarketingHome() {
       */}
     </section>
 
-    <section id="video-types" className={`marketing-section ${compact.styleSection}`}><p className="eyebrow">DEDICATED WORKFLOWS</p><h2>Choose the Kind of Video You Want to Create</h2><p className="section-copy">Every video type uses its own production structure, camera language, pacing rules, character behavior, visual guidance, and Quality Control checks.</p><div className={compact.styleGrid}>{videoStyleIds.map((id) => { const style = videoStyles[id]; const copy = cardCopy[id]; return <Link key={id} href={`/create/${id}`} className={compact.styleCard} style={{ "--style-accent": style.accent } as CSSProperties} aria-label={`${style.name}: ${copy.description}`}><div className={compact.cardTopRow}><span className={compact.styleIcon}>{style.icon}</span><span className={compact.styleBadge}>{copy.badge}</span></div><h3>{style.name}</h3><p>{copy.description}</p><span className={compact.styleArrow} aria-hidden="true">→</span></Link>; })}</div></section>
+    <section id="video-types" className={`marketing-section ${compact.styleSection}`}><p className="eyebrow">DEDICATED WORKFLOWS</p><h2>Choose the Kind of Video You Want to Create</h2><p className="section-copy">Every video type uses its own production structure, camera language, pacing rules, character behavior, visual guidance, and Quality Control checks.</p><VideoTypeCards /></section>
 
     <section className="value-strip"><h2>Built for creators who need reliable workflows across multiple visual styles</h2><div>{["Dedicated workflows for seven video types", "Build original characters without complex prompting", "Reuse identities across multiple productions", "Reduce avoidable generation failures", "Generate structured model-ready packs"].map((benefit) => <p key={benefit}>✓ {benefit}</p>)}</div></section>
 

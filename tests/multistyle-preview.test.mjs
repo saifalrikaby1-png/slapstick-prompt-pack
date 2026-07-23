@@ -9,13 +9,14 @@ const workspace = read("app/page.tsx");
 const builder = read("app/character-builder.tsx");
 const layout = read("app/layout.tsx");
 const compactCss = read("app/marketing-compact.module.css");
-const css = read("app/globals.css");
 const publicSite = read("app/public-site.tsx");
+const sharedCards = read("app/video-type-cards.tsx");
+const publicPages = read("app/public-page-content.tsx");
 
 test("all seven preview style cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
     assert.match(styles, new RegExp(`id: "${id}"`));
-    assert.match(home, new RegExp("/create/\\$\\{id\\}"));
+    assert.match(sharedCards, /videoStyleIds\.map/);
   }
   assert.match(home, /Choose the Kind of Video You Want to Create/);
 });
@@ -68,10 +69,19 @@ test("style cards remain route-linked and use compact natural-height layout", ()
   assert.match(compactCss, /\.styleCard \{ min-height: 0; height: auto; padding: 18px 20px/);
   assert.doesNotMatch(compactCss, /margin-top:\s*auto/);
   assert.match(compactCss, /@media \(max-width: 640px\)/);
-  assert.match(home, /className=\{compact\.styleCard\}/);
-  assert.match(home, /className=\{compact\.styleBadge\}/);
-  assert.match(home, /className=\{compact\.styleArrow\}/);
+  assert.match(sharedCards, /className=\{compact\.styleCard\}/);
+  assert.match(sharedCards, /className=\{compact\.styleBadge\}/);
+  assert.match(sharedCards, /className=\{compact\.styleArrow\}/);
+  assert.match(home, /<VideoTypeCards \/>/);
+  assert.match(publicPages, /<VideoTypeCards hrefFor=/);
   assert.doesNotMatch(home, /style\.characteristics\.map/);
+});
+
+test("video types page reuses exactly the homepage's seven cards and requested create links", () => {
+  assert.match(publicPages, /Explore Video Types/);
+  assert.match(publicPages, /Ready to Build Your Production Pack/);
+  assert.doesNotMatch(publicPages, /Product Advertising|Educational Videos|Social Media Shorts/);
+  for (const href of ["/create?type=slapstick", "/create?type=cinematic", "/create?type=anime", "/create?type=live-action", "/create?type=fantasy", "/create?type=family-animation", "/create?type=stylized-3d"]) assert.match(publicPages, new RegExp(href.replace(/[?]/g, "\\$&")));
 });
 
 test("public navigation uses shared accessible internal routes", () => {

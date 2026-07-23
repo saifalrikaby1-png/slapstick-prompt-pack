@@ -19,7 +19,7 @@ const cardCopy = {
   cinematic: { badge: "Film", description: "Film-style storytelling with deliberate framing, lighting, and atmosphere." },
   "family-3d": { badge: "3D Animation", description: "Expressive, polished 3D storytelling with smooth motion and warm visual appeal." },
   anime: { badge: "Anime", description: "Dynamic stylized storytelling with dramatic poses, framing, and energetic action." },
-  "live-action": { badge: "Live Action", description: "Photorealistic scenes with believable actors, natural motion, and professional camera direction." },
+  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting, believable motion, and professional camera direction." },
   "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with creatures, magical worlds, and controlled cinematic effects." },
   "stylized-3d": { badge: "Stylized 3D", description: "Flexible stylized animation for humorous, educational, commercial, and story-driven content." },
 } as const;

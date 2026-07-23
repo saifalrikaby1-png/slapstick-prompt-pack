@@ -1,2 +1,2 @@
-import { VideoTypesPage } from "../public-page-content";
-export default function Page() { return <VideoTypesPage />; }
+import { VideoTypesSignaturePage } from "../public-page-content";
+export default function Page() { return <VideoTypesSignaturePage />; }

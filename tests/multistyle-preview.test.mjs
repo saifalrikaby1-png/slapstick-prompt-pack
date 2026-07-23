@@ -70,7 +70,8 @@ test("style cards remain route-linked and use compact natural-height layout", ()
   assert.match(compactCss, /\.styleCard \{ min-height: 0; height: auto; padding: 18px 20px/);
   assert.doesNotMatch(compactCss, /margin-top:\s*auto/);
   assert.match(compactCss, /@media \(max-width: 640px\)/);
-  assert.match(sharedCards, /className=\{compact\.styleCard\}/);
+  assert.match(sharedCards, /compact\.styleCard/);
+  assert.match(sharedCards, /appearance === "signature" \? compact\.signatureCard/);
   assert.match(sharedCards, /className=\{compact\.styleBadge\}/);
   assert.match(sharedCards, /className=\{compact\.styleArrow\}/);
   assert.match(home, /<VideoTypeCards \/>/);

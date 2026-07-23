@@ -15,7 +15,11 @@ export function DedicatedPricingPage() {
   return <main className={styles.page}>
     <PublicHeader />
     <div className={styles.content}>
-      <section className={page.hero}><p className={page.eyebrow}>SIMPLE MONTHLY PLANS · CLEAR PRODUCTION CAPACITY</p><h1>Choose the Plan That Fits Your Creative Workflow</h1><p className={page.intro}>Generate structured AI-video ideas, reusable characters, and complete production packs with a plan designed for your production volume.</p></section>
+      <section className={styles.pricingHero}>
+        <p className={styles.pricingEyebrow}>SIMPLE MONTHLY PLANS · CLEAR PRODUCTION CAPACITY</p>
+        <h1>Choose the Plan That Fits Your Creative Workflow</h1>
+        <p className={styles.pricingIntro}>Generate structured AI-video ideas, reusable characters, and complete production packs with a plan designed for your production volume.</p>
+      </section>
       <section className={styles.plans} aria-label="Pricing plans">
         {pricingPlans.map((plan) => { const details = planDetails[plan.id]; const badge = plan.featured ? "Most Popular" : plan.id === "pro" ? "Highest Capacity" : ""; return <article key={plan.id} className={`${styles.plan} ${styles[plan.id]}`}>
           <span className={`${styles.badge} ${badge ? "" : styles.badgePlaceholder}`}>{badge || "Reserved badge space"}</span>

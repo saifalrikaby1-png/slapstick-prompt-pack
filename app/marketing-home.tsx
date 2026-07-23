@@ -15,7 +15,6 @@ const examples = [
   ["Stylized 3D Cartoon", "An office mascot delivers an oversized presentation folder."],
 ];
 
-const plans = [["Starter", "$4.99", "10 AI full packs"], ["Creator", "$11.99", "30 AI full packs"], ["Pro", "$19.99", "60 AI full packs"], ["Studio", "$32.99", "120 AI full packs"]];
 export function MarketingHome() {
   return <main className="marketing-shell">
     <PublicHeader />
@@ -47,7 +46,6 @@ export function MarketingHome() {
 
     <section className="marketing-section"><p className="eyebrow">PRODUCT DEMONSTRATIONS</p><h2>See each workflow in motion</h2><div className="example-grid">{examples.map(([style, idea]) => { const item = Object.values(videoStyles).find((entry) => entry.name === style)!; return <article key={style} style={{ "--style-accent": item.accent } as CSSProperties}><span>{style}</span><p>{idea}</p><small>Demo quality score · 92/100</small><Link href={`/create/${item.slug}`}>View Example →</Link></article>; })}</div></section>
 
-    <section id="pricing" className="marketing-section"><p className="eyebrow">PRICING PREVIEW</p><h2>Simple plans for launch</h2><p className="section-copy">Preview only—payments are not connected in this phase.</p><div className="pricing-grid">{plans.map(([name, price, quantity]) => <article key={name} className={name === "Creator" ? "popular" : ""}>{name === "Creator" && <span>Most Popular</span>}<h3>{name}</h3><b>{price}</b><p>{quantity}</p><small>All seven styles · Character Builder · Identity locks · Quality Control · export</small><button type="button">Coming Soon</button></article>)}</div></section>
 
     <section className="marketing-section faq"><p className="eyebrow">FAQ</p><h2>Questions creators ask</h2>{["Which video styles are supported?", "Does each style have its own workflow?", "Can I build a character from scratch?", "Can one character be reused in multiple styles?", "How are characters connected to prompts?", "Does Demo Mode consume credits?", "Does Quality Control adapt to the style?", "Which video-generation models are supported?", "Can production packs be exported?", "Is an API key required?", "Can the platform create realistic projects?"].map((question) => <details key={question}><summary>{question}</summary><p>Yes. This preview uses a connected, style-aware workflow and keeps Demo Mode available without an API key.</p></details>)}</section>
 

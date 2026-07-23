@@ -53,9 +53,10 @@ test("homepage hero is compact, text-focused, and excludes the production mockup
 });
 
 test("style cards remain route-linked and use compact natural-height layout", () => {
-  assert.match(compactCss, /:global\(\.style-card\) \{ min-height: 0/);
-  assert.match(compactCss, /:global\(\.style-card-grid\) \{ gap: 20px/);
-  assert.match(css, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(compactCss, /\.styleCard \{ min-height: 0; height: auto/);
+  assert.match(compactCss, /\.styleGrid \{ display: grid; grid-template-columns: repeat\(3, minmax\(0, 1fr\)\); align-items: start/);
+  assert.doesNotMatch(compactCss, /margin-top:\s*auto/);
+  assert.doesNotMatch(compactCss, /min-height:\s*(?:3\d{2}|4\d{2})px/);
   assert.match(compactCss, /@media \(max-width: 640px\)/);
-  assert.equal((home.match(/className="style-card"/g) || []).length, 1);
+  assert.match(home, /className=\{compact\.styleCard\}/);
 });

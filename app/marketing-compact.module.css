@@ -11,23 +11,25 @@
 .hero :global(.free-note) { margin: 14px 0 0; }
 
 .styleSection { padding-top: 62px; padding-bottom: 58px; }
-.styleSection :global(.style-card-grid) { gap: 20px; margin-top: 24px; }
-.styleSection :global(.style-card) { min-height: 0; padding: 21px 22px; border-radius: 15px; }
-.styleSection :global(.style-icon) { width: 42px; height: 42px; border-radius: 11px; font-size: 19px; }
-.styleSection :global(.style-card h3) { margin: 13px 0 8px; font-size: 24px; line-height: 1.15; }
-.styleSection :global(.style-card p) { line-height: 1.45; }
-.styleSection :global(.style-card ul) { margin: 10px 0 11px; padding-left: 16px; line-height: 1.5; }
-.styleSection :global(.style-card li + li) { margin-top: 3px; }
-.styleSection :global(.style-card b) { margin-top: 0; padding-top: 2px; }
+.styleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 20px; margin-top: 24px; }
+.styleCard { min-height: 0; height: auto; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 21px 22px; border: 1px solid #2b3550; border-top: 3px solid var(--style-accent); border-radius: 15px; background: linear-gradient(145deg, #151c2f, #111729); color: #f7f8fc; text-decoration: none; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.styleCard:hover, .styleCard:focus-visible { transform: translateY(-4px); border-color: var(--style-accent); box-shadow: 0 16px 35px #0004; outline: none; }
+.styleIcon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 11px; background: color-mix(in srgb, var(--style-accent) 20%, transparent); color: var(--style-accent); font-size: 19px; }
+.styleCard h3 { margin: 13px 0 8px; font-size: 24px; line-height: 1.15; }
+.styleCard p { margin: 0; color: #aab2c5; font-size: 13px; line-height: 1.45; }
+.styleCard ul { margin: 10px 0 11px; padding-left: 16px; color: #d8dde9; font-size: 11px; line-height: 1.5; }
+.styleCard li + li { margin-top: 3px; }
+.styleCard b { margin-top: 0; padding-top: 2px; color: var(--style-accent); font-size: 12px; }
+.styleCard b span { float: right; margin-left: 10px; font-size: 18px; }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
   .hero { padding: 46px 20px 40px; }
   .hero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
   .hero :global(.hero-copy) { font-size: 15px; line-height: 1.55; }
   .hero :global(.hero-actions) { gap: 10px; }
   .styleSection { padding-top: 48px; padding-bottom: 46px; }
-  .styleSection :global(.style-card-grid) { gap: 15px; margin-top: 20px; }
-  .styleSection :global(.style-card) { min-height: 0; padding: 20px; }
-  .styleSection :global(.style-card h3) { font-size: 23px; }
+  .styleGrid { grid-template-columns: 1fr; gap: 15px; margin-top: 20px; }
+  .styleCard { min-height: 0; padding: 20px; }
+  .styleCard h3 { font-size: 23px; }
 }

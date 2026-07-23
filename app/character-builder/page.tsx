@@ -1,2 +1,2 @@
-import { CharacterBuilderPage } from "../public-page-content";
-export default function Page() { return <CharacterBuilderPage />; }
+import { CharacterBuilderPublicPage } from "../character-builder-public";
+export default function Page() { return <CharacterBuilderPublicPage />; }

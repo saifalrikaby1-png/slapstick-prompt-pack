@@ -21,7 +21,7 @@ const cardCopy = {
   anime: { badge: "Anime", description: "Dynamic stylized storytelling with dramatic poses, framing, and energetic action." },
   "live-action": { badge: "Live Action", description: "Photorealistic scenes with believable actors, natural motion, and professional camera direction." },
   "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with creatures, magical worlds, and controlled cinematic effects." },
-  "stylized-3d": { badge: "Stylized 3D", description: "Flexible stylized animation for humorous, educational, commercial, or story-driven content." },
+  "stylized-3d": { badge: "Stylized 3D", description: "Flexible stylized animation for humorous, educational, commercial, and story-driven content." },
 } as const;
 
 export function MarketingHome() {

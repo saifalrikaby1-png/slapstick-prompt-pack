@@ -11,8 +11,8 @@
 .hero :global(.free-note) { margin: 14px 0 0; }
 
 .styleSection { padding-top: 52px; padding-bottom: 46px; }
-.styleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; margin-top: 26px; }
-.styleCard { position: relative; min-height: 0; height: auto; display: block; padding: 20px 22px 18px; border: 1px solid #2b3550; border-top: 3px solid var(--style-accent); border-radius: 20px; background: linear-gradient(145deg, #151c2f, #111729); color: #f7f8fc; text-decoration: none; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.styleGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 26px; }
+.styleCard { position: relative; min-height: 210px; height: 210px; display: block; padding: 20px 22px 18px; border: 1px solid #2b3550; border-top: 3px solid var(--style-accent); border-radius: 20px; background: linear-gradient(145deg, #151c2f, #111729); color: #f7f8fc; text-decoration: none; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease; }
 .styleCard:hover, .styleCard:focus-visible { transform: translateY(-3px); border-color: var(--style-accent); background: #19213a; box-shadow: 0 10px 24px #0003; outline: 3px solid color-mix(in srgb, var(--style-accent) 36%, transparent); outline-offset: 3px; }
 .cardTopRow { display: flex; align-items: center; justify-content: space-between; }
 .styleIcon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--style-accent) 20%, transparent); color: var(--style-accent); font-size: 22px; }
@@ -22,15 +22,15 @@
 .styleArrow { position: absolute; right: 20px; bottom: 18px; color: var(--style-accent); font-size: 20px; line-height: 1; transition: transform .2s ease; }
 .styleCard:hover .styleArrow, .styleCard:focus-visible .styleArrow { transform: translateX(4px); }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 220px; height: 220px; } }
 @media (max-width: 640px) {
   .hero { padding: 46px 20px 40px; }
   .hero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
   .hero :global(.hero-copy) { font-size: 15px; line-height: 1.55; }
   .hero :global(.hero-actions) { gap: 10px; }
   .styleSection { padding-top: 44px; padding-bottom: 40px; }
-  .styleGrid { grid-template-columns: 1fr; gap: 14px; margin-top: 22px; }
-  .styleCard { min-height: 0; padding: 18px 20px; }
+  .styleGrid { grid-template-columns: 1fr; align-items: start; gap: 14px; margin-top: 22px; }
+  .styleCard { min-height: 0; height: auto; padding: 18px 20px; }
   .styleCard h3 { font-size: 19px; }
   .styleArrow { right: 18px; bottom: 18px; }
 }

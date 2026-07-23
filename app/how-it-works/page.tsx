@@ -1,2 +1,2 @@
-import { HowItWorksPage } from "../public-page-content";
-export default function Page() { return <HowItWorksPage />; }
+import { HowItWorksSignaturePage } from "../how-it-works";
+export default function Page() { return <HowItWorksSignaturePage />; }

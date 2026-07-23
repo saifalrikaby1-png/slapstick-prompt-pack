@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import compact from "./marketing-compact.module.css";
 import { videoStyleIds, videoStyles } from "./video-styles";
 
 const examples = [
@@ -25,14 +26,14 @@ export function MarketingHome() {
       <div className="marketing-nav-actions"><button type="button" className="text-button">Sign In <span className="sr-only">(preview placeholder)</span></button><a href="#video-types" className="marketing-button small">Start Creating</a></div>
     </header>
 
-    <section className="marketing-hero" aria-labelledby="hero-title">
+    <section className={`marketing-hero ${compact.hero}`} aria-labelledby="hero-title">
       <div><p className="eyebrow">AI VIDEO PRE-PRODUCTION PLATFORM</p><h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1><p className="hero-copy">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p><div className="hero-actions"><a href="#video-types" className="marketing-button">Choose a Video Style</a><Link href="/characters" className="marketing-button secondary">Build a Character</Link><a href="#how-it-works" className="watch-link">▷ Watch the Demo</a></div><p className="free-note">Free Demo Mode available. No API key required.</p></div>
-      <div className="product-visual" aria-label="Production pack interface preview">
+      {/*
         <div className="visual-top"><span>Family 3D Animation</span><b>Production Pack</b><i>Quality 94</i></div><div className="visual-grid"><article><small>CHARACTER PROFILE</small><strong>Identity Lock</strong><p>Appearance · wardrobe · movement</p></article><article><small>CAMERA DIRECTION</small><strong>Continuous arc</strong><p>16:9 · soft key light</p></article><article><small>TIMELINE</small><strong>0:00 → 0:20</strong><div className="visual-timeline"><i /><i /><i /></div></article><article className="visual-quality"><small>QUALITY CONTROL</small><strong>94 / 100</strong><button type="button">Fix Prompts</button></article></div><div className="visual-flow">Video Style <b>→</b> Characters <b>→</b> Production Setup <b>→</b> Production Pack <b>→</b> Quality Control <b>→</b> Video Generator</div>
-      </div>
+      */}
     </section>
 
-    <section id="video-types" className="marketing-section"><p className="eyebrow">DEDICATED WORKFLOWS</p><h2>Choose the Kind of Video You Want to Create</h2><p className="section-copy">Every video type uses its own production structure, camera language, pacing rules, character behavior, visual guidance, and Quality Control checks.</p><div className="style-card-grid">{videoStyleIds.map((id) => { const style = videoStyles[id]; return <Link key={id} href={`/create/${id}`} className="style-card" style={{ "--style-accent": style.accent } as CSSProperties}><span className="style-icon">{style.icon}</span><h3>{style.name}</h3><p>{style.description}</p><ul>{style.characteristics.map((item) => <li key={item}>{item}</li>)}</ul><b>{style.action} <span>→</span></b></Link>; })}</div></section>
+    <section id="video-types" className={`marketing-section ${compact.styleSection}`}><p className="eyebrow">DEDICATED WORKFLOWS</p><h2>Choose the Kind of Video You Want to Create</h2><p className="section-copy">Every video type uses its own production structure, camera language, pacing rules, character behavior, visual guidance, and Quality Control checks.</p><div className="style-card-grid">{videoStyleIds.map((id) => { const style = videoStyles[id]; return <Link key={id} href={`/create/${id}`} className="style-card" style={{ "--style-accent": style.accent } as CSSProperties}><span className="style-icon">{style.icon}</span><h3>{style.name}</h3><p>{style.description}</p><ul>{style.characteristics.map((item) => <li key={item}>{item}</li>)}</ul><b>{style.action} <span>→</span></b></Link>; })}</div></section>
 
     <section className="value-strip"><h2>Built for creators who need reliable workflows across multiple visual styles</h2><div>{["Dedicated workflows for seven video types", "Build original characters without complex prompting", "Reuse identities across multiple productions", "Reduce avoidable generation failures", "Generate structured model-ready packs"].map((benefit) => <p key={benefit}>✓ {benefit}</p>)}</div></section>
 

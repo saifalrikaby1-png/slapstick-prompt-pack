@@ -8,6 +8,8 @@ const home = read("app/marketing-home.tsx");
 const workspace = read("app/page.tsx");
 const builder = read("app/character-builder.tsx");
 const layout = read("app/layout.tsx");
+const compactCss = read("app/marketing-compact.module.css");
+const css = read("app/globals.css");
 
 test("all seven preview style cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
@@ -36,4 +38,24 @@ test("character builder is local, live, and connected to the existing library st
 test("preview preserves one root Analytics component", () => {
   assert.equal((layout.match(/<Analytics\s*\/>/g) || []).length, 1);
   assert.equal((home.match(/<Analytics\s*\/>/g) || []).length, 0);
+});
+
+test("homepage hero is compact, text-focused, and excludes the production mockup from rendered JSX", () => {
+  assert.match(home, /Build Better AI Videos Before You Generate Them/);
+  assert.match(home, /Choose your creative style, build original characters from scratch/);
+  assert.match(home, /Choose a Video Style/);
+  assert.match(home, /Build a Character/);
+  assert.match(home, /Watch the Demo/);
+  assert.match(home, /Free Demo Mode available\. No API key required\./);
+  assert.match(home, /\{\/\*[\s\S]*Family 3D Animation[\s\S]*\*\/\}/);
+  assert.match(compactCss, /display: block/);
+  assert.match(compactCss, /max-width: 1240px/);
+});
+
+test("style cards remain route-linked and use compact natural-height layout", () => {
+  assert.match(compactCss, /:global\(\.style-card\) \{ min-height: 0/);
+  assert.match(compactCss, /:global\(\.style-card-grid\) \{ gap: 20px/);
+  assert.match(css, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(compactCss, /@media \(max-width: 640px\)/);
+  assert.equal((home.match(/className="style-card"/g) || []).length, 1);
 });

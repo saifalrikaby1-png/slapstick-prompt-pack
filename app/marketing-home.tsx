@@ -17,11 +17,11 @@ const plans = [["Starter", "$4.99", "10 AI full packs"], ["Creator", "$11.99", "
 const cardCopy = {
   slapstick: { badge: "Comedy", description: "Fast visual comedy with clear action, reactions, and harmless payoffs." },
   cinematic: { badge: "Film", description: "Film-style storytelling with deliberate framing, lighting, and atmosphere." },
-  "family-3d": { badge: "3D Animation", description: "Expressive, polished 3D storytelling with smooth motion and warm visual appeal." },
-  anime: { badge: "Anime", description: "Dynamic stylized storytelling with dramatic poses, framing, and energetic action." },
-  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting, believable motion, and professional camera direction." },
-  "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with creatures, magical worlds, and controlled cinematic effects." },
-  "stylized-3d": { badge: "Stylized 3D", description: "Flexible stylized animation for humorous, educational, commercial, and story-driven content." },
+  "family-3d": { badge: "3D Animation", description: "Polished 3D storytelling with expressive characters and smooth motion." },
+  anime: { badge: "Anime", description: "Dynamic anime storytelling with dramatic poses and energetic action." },
+  "live-action": { badge: "Live Action", description: "Photorealistic scenes with natural acting and professional camera direction." },
+  "cgi-fantasy": { badge: "Fantasy", description: "Epic fantasy scenes with magical worlds and cinematic effects." },
+  "stylized-3d": { badge: "Stylized 3D", description: "Stylized animation for humorous, educational, and commercial content." },
 } as const;
 
 export function MarketingHome() {

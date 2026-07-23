@@ -18,11 +18,11 @@
 .styleIcon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: color-mix(in srgb, var(--style-accent) 20%, transparent); color: var(--style-accent); font-size: 22px; }
 .styleBadge { padding: 4px 8px; border: 1px solid color-mix(in srgb, var(--style-accent) 55%, transparent); border-radius: 999px; color: var(--style-accent); font-size: 11px; font-weight: 800; line-height: 1; }
 .styleCard h3 { margin: 12px 0 6px; font-size: 20px; line-height: 1.2; }
-.styleCard p { max-width: calc(100% - 24px); margin: 0; color: #aab2c5; font-size: 14px; line-height: 1.45; }
+.styleCard p { max-width: calc(100% - 24px); min-height: 41px; margin: 0; overflow: hidden; color: #aab2c5; font-size: 14px; line-height: 1.45; }
 .styleArrow { position: absolute; right: 20px; bottom: 18px; color: var(--style-accent); font-size: 20px; line-height: 1; transition: transform .2s ease; }
 .styleCard:hover .styleArrow, .styleCard:focus-visible .styleArrow { transform: translateX(4px); }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 220px; height: 220px; } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 210px; height: 210px; } }
 @media (max-width: 640px) {
   .hero { padding: 46px 20px 40px; }
   .hero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
@@ -31,6 +31,7 @@
   .styleSection { padding-top: 44px; padding-bottom: 40px; }
   .styleGrid { grid-template-columns: 1fr; align-items: start; gap: 14px; margin-top: 22px; }
   .styleCard { min-height: 0; height: auto; padding: 18px 20px; }
+  .styleCard p { min-height: 0; overflow: visible; }
   .styleCard h3 { font-size: 19px; }
   .styleArrow { right: 18px; bottom: 18px; }
 }

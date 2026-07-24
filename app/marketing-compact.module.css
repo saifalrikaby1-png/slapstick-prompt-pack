@@ -138,7 +138,6 @@
 .modelFeatureArrowRow { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
 .modelFeatureArrow { color: var(--model-accent); font-size: 17px; line-height: 1; transition: transform .2s ease; }
 .modelFeatureCard:hover .modelFeatureArrow, .modelFeatureCard:focus-visible .modelFeatureArrow { transform: translateX(4px); }
-.modelFeatureGrid > :nth-child(5) { grid-column: 2; }
 .modelDisclaimer { display: flex; align-items: center; gap: 10px; max-width: 100%; margin: 30px 0 0; padding: 14px 18px; border: 1px solid #394462; border-radius: 14px; background: #151c2f; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 13.5px; line-height: 1.45; }
 .modelDisclaimer span { display: grid; flex: 0 0 auto; place-items: center; width: 18px; height: 18px; border: 1px solid #6b7690; border-radius: 50%; color: #DDE3F1; font-size: 11px; font-weight: 800; }
 .modelGuidanceSection { padding-top: 38px; }
@@ -211,7 +210,6 @@
   .modelFeatureContent { grid-template-rows: 36px 26px minmax(0, 1fr) 18px; gap: 2px; height: auto; }
   .modelFeatureCard h3 { font-size: 17px; line-height: 1.2; }
   .modelFeatureCard p { font-size: 14px; line-height: 1.4; }
-  .modelFeatureGrid > :nth-child(5) { grid-column: auto; }
   .modelDisclaimer { align-items: flex-start; margin-top: 28px; }
   .modelGuidanceGrid { grid-template-columns: 1fr; gap: 14px; margin-top: 22px; }
   .modelGuidanceCard { min-height: 0; padding: 20px; }

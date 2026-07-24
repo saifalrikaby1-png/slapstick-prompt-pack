@@ -4,21 +4,23 @@ import { PublicFooter, PublicHeader } from "./public-site";
 import compact from "./marketing-compact.module.css";
 
 const characterFeatures = [
-  { id: "identity", icon: "ID", title: "Character Identity", description: "Define the name, type, age style, role, and core identity.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
-  { id: "appearance", icon: "◉", title: "Visual Appearance", description: "Set proportions, facial details, colors, hair, fur, or surface style.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
-  { id: "personality", icon: "✦", title: "Personality and Role", description: "Choose personality traits, emotional range, role, and default expression.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
-  { id: "clothing", icon: "◇", title: "Clothing and Accessories", description: "Lock the outfit, footwear, accessories, and signature props.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
-  { id: "voice", icon: "≈", title: "Voice and Vocal Lock", description: "Define tone, pitch, rhythm, vocal age, and nonverbal sounds.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
-  { id: "movement", icon: "↗", title: "Movement Style", description: "Set posture, energy, gestures, reactions, and performance style.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
-  { id: "locks", icon: "◆", title: "Consistency Locks", description: "Protect identity, proportions, colors, clothing, and movement.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
-  { id: "library", icon: "▤", title: "Character Library", description: "Save, edit, duplicate, and reuse characters across future projects.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 14%)" },
+  { id: "identity", icon: "ID", title: "Character Identity", description: "Name, type, age style, role, and core identity.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
+  { id: "appearance", icon: "◉", title: "Visual Appearance", description: "Proportions, facial features, colors, hair, fur, and surface style.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
+  { id: "personality", icon: "✦", title: "Personality and Role", description: "Traits, emotional range, story role, and default expression.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
+  { id: "clothing", icon: "◇", title: "Clothing and Accessories", description: "Outfit, footwear, accessories, and signature props.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
+  { id: "voice", icon: "≈", title: "Voice and Vocal Lock", description: "Tone, pitch, rhythm, vocal age, and nonverbal sounds.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
+  { id: "movement", icon: "↗", title: "Movement Style", description: "Posture, energy, gestures, reactions, and performance style.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
+  { id: "locks", icon: "◆", title: "Consistency Locks", description: "Identity, proportions, colors, clothing, and movement rules.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
+  { id: "library", icon: "▤", title: "Character Library", description: "Save, edit, duplicate, and reuse characters across projects.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 14%)" },
 ] as const;
 
 function CharacterFeatureCard({ feature }: { feature: (typeof characterFeatures)[number] }) {
   return <article className={compact.characterFeatureCard} style={{ "--feature-accent": feature.accent, "--feature-tint": feature.tint, "--feature-surface": "#11182d" } as CSSProperties}>
-    <span className={compact.characterFeatureIcon} aria-hidden="true">{feature.icon}</span>
-    <h3>{feature.title}</h3>
-    <p>{feature.description}</p>
+    <div className={compact.characterFeatureContent}>
+      <span className={compact.characterFeatureIcon} aria-hidden="true">{feature.icon}</span>
+      <h3>{feature.title}</h3>
+      <p>{feature.description}</p>
+    </div>
   </article>;
 }
 

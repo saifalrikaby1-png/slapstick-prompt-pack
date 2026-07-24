@@ -13,6 +13,9 @@ const publicSite = read("app/public-site.tsx");
 const sharedCards = read("app/video-type-cards.tsx");
 const publicPages = read("app/public-page-content.tsx");
 const characterBuilder = read("app/character-builder.tsx");
+const signIn = read("app/sign-in/sign-in-public.tsx");
+const signInPage = read("app/sign-in/page.tsx");
+const pricingPlans = read("app/pricing-plans.ts");
 
 test("all seven preview style cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
@@ -103,4 +106,29 @@ test("character builder opens as a separate focused workspace", () => {
   assert.match(characterBuilder, /window\.confirm\(`Delete/);
   assert.match(characterBuilder, /\/character-builder\/create\?id=/);
   assert.doesNotMatch(characterBuilder, /Generation Summary|Generated Prompts|Start Frame Prompt|Music and SFX setup/);
+});
+
+test("sign in uses the shared public shell with honest account-access controls", () => {
+  assert.match(signIn, /<PublicHeader\s*\/>/);
+  assert.match(signIn, /<PublicFooter\s*\/>/);
+  assert.equal((signIn.match(/<h1[\s>]/g) || []).length, 1);
+  assert.match(signIn, /compact\.modelsPage/);
+  assert.match(signIn, /Email Address/);
+  assert.match(signIn, /autoComplete="email"/);
+  assert.match(signIn, /autoComplete="current-password"/);
+  assert.match(signIn, /Show password/);
+  assert.match(signIn, /Hide password/);
+  assert.match(signIn, /Remember me/);
+  assert.match(signIn, /Account authentication will be enabled before public launch\./);
+  assert.match(signIn, /disabled aria-describedby="authentication-notice"/);
+  assert.doesNotMatch(signIn, /localStorage|sessionStorage|console\.log|href="#"|Google Sign In/);
+});
+
+test("sign in validates plan slugs from the central pricing configuration", () => {
+  assert.match(signIn, /pricingPlans\.find/);
+  assert.match(signInPage, /searchParams/);
+  assert.match(pricingPlans, /id: "starter"/);
+  assert.match(pricingPlans, /id: "creator"/);
+  assert.match(pricingPlans, /id: "studio"/);
+  assert.match(pricingPlans, /id: "pro"/);
 });

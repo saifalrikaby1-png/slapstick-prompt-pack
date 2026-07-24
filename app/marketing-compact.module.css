@@ -63,8 +63,38 @@
 .characterBuilderCta h2 { font-size: clamp(26px, 3vw, 38px); line-height: 1.1; }
 .characterBuilderCta p:not(:global(.eyebrow)) { max-width: 650px; margin: 10px 0 0; color: #AAB2C5; line-height: 1.55; }
 .characterBuilderCta > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.productionPacksPage { min-height: 100vh; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%), #0B1020; }
+.productionPacksHero { max-width: 1320px; margin: 0 auto; padding: 64px clamp(20px, 5vw, 80px) 42px; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%); }
+.productionPacksHero h1 { margin: 0; color: #F7F8FC; font-family: var(--font-fraunces), serif; font-weight: 700; letter-spacing: -.04em; }
+.productionPackFeatureSection > h2, .productionPackMethodsSection > h2, .productionPacksCta h2 { margin: 0; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-weight: 700; letter-spacing: -.025em; }
+.productionPacksHero h1 { max-width: 800px; font-size: clamp(42px, 5.4vw, 75px); line-height: 1.02; }
+.productionPacksHero :global(.hero-copy) { max-width: 790px; margin: 18px 0 0; }
+.productionPacksHeroActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.productionPackFeatureSection > h2, .productionPackMethodsSection > h2 { font-size: 44px; line-height: 1.08; }
+.productionPackFeatureSection :global(.section-copy), .productionPackMethodsSection :global(.section-copy) { max-width: 760px; margin: 12px 0 0; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 17px; line-height: 1.5; }
+.productionPackFeatureGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 26px; }
+.productionPackFeatureCard { composes: styleCard; position: relative; overflow: hidden; box-sizing: border-box; border: 1px solid var(--pack-accent); background: radial-gradient(circle at top left, var(--pack-tint), transparent 48%), var(--pack-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pack-accent) 24%, transparent), 0 10px 24px #0003; }
+.productionPackFeatureCard:hover { border-color: var(--pack-accent); background: radial-gradient(circle at top left, var(--pack-tint), transparent 48%), var(--pack-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pack-accent) 48%, transparent), 0 16px 32px var(--pack-tint); transform: translateY(-3px); }
+.productionPackFeatureContent { position: relative; z-index: 1; display: grid; grid-template-rows: 36px 44px minmax(0, 1fr); gap: 5px; align-content: start; height: calc(100% + 16px); min-height: 0; margin-block: -8px; }
+.productionPackFeatureIcon { display: grid; place-items: center; width: 36px; height: 36px; margin: 0; border-radius: 10px; background: color-mix(in srgb, var(--pack-accent) 20%, transparent); color: var(--pack-accent); font-size: 17px; font-weight: 800; line-height: 1; }
+.productionPackFeatureCard h3 { display: flex; align-items: flex-start; min-height: 44px; margin: 0; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-size: 18px; font-weight: 650; line-height: 1.18; letter-spacing: -.015em; }
+.productionPackFeatureCard p { min-height: 0; margin: 0; align-self: start; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 13.5px; font-weight: 400; letter-spacing: 0; line-height: 1.35; }
+.productionPackMethodsSection { padding-top: 38px; }
+.productionPackMethodGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 26px; }
+.productionPackMethodCard { position: relative; display: flex; flex-direction: column; box-sizing: border-box; min-height: 290px; padding: 24px; border: 1px solid var(--method-accent); border-radius: 20px; background: radial-gradient(circle at top left, var(--method-tint), transparent 54%), #11182d; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--method-accent) 20%, transparent), 0 10px 24px #0003; }
+.productionPackMethodCard h3, .productionPackMethodCard p, .productionPackMethodCard ul { margin: 0; font-family: var(--font-dm), system-ui, sans-serif; }
+.productionPackMethodCard h3 { color: #F7F8FC; font-size: 22px; line-height: 1.15; letter-spacing: -.02em; }
+.productionPackMethodCard p { margin-top: 12px; color: #AAB2C5; font-size: 14px; line-height: 1.45; }
+.productionPackMethodCard ul { display: grid; flex: 1; gap: 5px; margin-top: 16px; padding-left: 17px; color: #DDE3F1; font-size: 12px; line-height: 1.35; }
+.productionPackMethodCard .marketing-button { align-self: flex-start; }
+.productionPackMethodFeatured { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--method-accent) 48%, transparent), 0 16px 32px var(--method-tint); }
+.productionPackMethodBadge { align-self: flex-start; margin-bottom: 12px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--method-accent) 58%, transparent); border-radius: 999px; color: var(--method-accent); font-size: 11px; font-weight: 800; line-height: 1; }
+.productionPacksCta { display: flex; align-items: center; justify-content: space-between; gap: 30px; max-width: 1160px; margin: 0 auto 70px; padding: 30px 34px; border: 1px solid #394462; border-radius: 22px; background: linear-gradient(135deg, #151C2F, #181A3A); box-shadow: 0 12px 28px #0003; }
+.productionPacksCta h2 { font-size: clamp(26px, 3vw, 38px); line-height: 1.1; }
+.productionPacksCta p:not(:global(.eyebrow)) { max-width: 650px; margin: 10px 0 0; color: #AAB2C5; line-height: 1.55; }
+.productionPacksCta > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2, .characterFeatureSection > h2 { font-size: 36px; } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid, .productionPackFeatureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2, .characterFeatureSection > h2, .productionPackFeatureSection > h2, .productionPackMethodsSection > h2 { font-size: 36px; } }
 @media (max-width: 640px) {
   .howItWorksHero { padding: 46px 20px 36px; }
   .howItWorksHero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
@@ -84,6 +114,19 @@
   .characterFeatureCard p { font-size: 14px; line-height: 1.45; }
   .characterBuilderCta { display: block; margin: 0 20px 44px; padding: 25px; }
   .characterBuilderCta > div:last-child { justify-content: flex-start; margin-top: 22px; }
+  .productionPacksHero { padding: 46px 20px 36px; }
+  .productionPacksHero h1 { font-size: clamp(39px, 12vw, 53px); }
+  .productionPackFeatureSection > h2, .productionPackMethodsSection > h2 { font-size: 30px; }
+  .productionPackFeatureSection :global(.section-copy), .productionPackMethodsSection :global(.section-copy) { font-size: 15px; }
+  .productionPackFeatureGrid { grid-template-columns: 1fr; align-items: start; gap: 14px; margin-top: 22px; }
+  .productionPackFeatureCard { min-height: 0; height: auto; padding: 18px 20px; }
+  .productionPackFeatureContent { grid-template-rows: 36px 44px minmax(0, 1fr); gap: 5px; height: auto; margin-block: 0; }
+  .productionPackFeatureCard h3 { font-size: 17px; line-height: 1.2; }
+  .productionPackFeatureCard p { font-size: 14px; line-height: 1.4; }
+  .productionPackMethodGrid { grid-template-columns: 1fr; gap: 14px; margin-top: 22px; }
+  .productionPackMethodCard { min-height: 0; padding: 20px; }
+  .productionPacksCta { display: block; margin: 0 20px 44px; padding: 25px; }
+  .productionPacksCta > div:last-child { justify-content: flex-start; margin-top: 22px; }
   .videoTypesHero { padding: 46px 20px 36px; }
   .videoTypesHero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
   .videoTypesCta { display: block; margin: 0 20px 44px; padding: 25px; }

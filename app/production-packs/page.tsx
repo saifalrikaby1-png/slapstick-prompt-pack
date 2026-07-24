@@ -1,2 +1,3 @@
-import { ProductionPacksPage } from "../public-page-content";
-export default function Page() { return <ProductionPacksPage />; }
+import { ProductionPacksPublicPage } from "../production-packs-public";
+
+export default function Page() { return <ProductionPacksPublicPage />; }

@@ -15,7 +15,7 @@ const productionPackFeatures = [
   { id: "music", icon: "♪", title: "Music Direction", description: "Defines mood, tempo, rhythm, intensity, and musical changes across the scene.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
   { id: "sound", icon: "≋", title: "Sound and Vocal Direction", description: "Maps sound effects, impacts, reactions, vocal sounds, and audio timing.", accent: "#C95F82", tint: "rgb(201 95 130 / 14%)" },
   { id: "rules", icon: "◆", title: "Consistency and Model Rules", description: "Prevents visual errors and adapts the instructions to the selected AI model.", accent: "#7A63F6", tint: "rgb(122 99 246 / 14%)" },
-  { id: "export", icon: "⇩", title: "Exportable Final Pack", description: "Organizes the completed outputs into one reusable, saveable production package.", accent: "#F47C6B", tint: "rgb(244 124 107 / 14%)" },
+  { id: "export", icon: "⇩", title: "Exportable Final Pack", description: "Organizes the completed outputs into one reusable, saveable production package.", accent: "#B56BE8", tint: "rgb(181 107 232 / 14%)" },
 ] as const;
 
 const generationMethods = [

@@ -1,2 +1,3 @@
-import { QualityControlPage } from "../public-page-content";
-export default function Page() { return <QualityControlPage />; }
+import { QualityControlPublicPage } from "../quality-control-public";
+
+export default function Page() { return <QualityControlPublicPage />; }

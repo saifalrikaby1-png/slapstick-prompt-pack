@@ -93,8 +93,34 @@
 .productionPacksCta h2 { font-size: clamp(26px, 3vw, 38px); line-height: 1.1; }
 .productionPacksCta p:not(:global(.eyebrow)) { max-width: 650px; margin: 10px 0 0; color: #AAB2C5; line-height: 1.55; }
 .productionPacksCta > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.qualityControlPage { min-height: 100vh; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%), #0B1020; }
+.qualityControlHero { max-width: 1320px; margin: 0 auto; padding: 64px clamp(20px, 5vw, 80px) 42px; background: radial-gradient(circle at 78% 25%, #8B7CFF2e, transparent 30%), radial-gradient(circle at 15% 80%, #FF7A3D21, transparent 34%); }
+.qualityControlHero h1 { margin: 0; color: #F7F8FC; font-family: var(--font-fraunces), serif; font-weight: 700; letter-spacing: -.04em; }
+.qualityControlHero h1 { max-width: 800px; font-size: clamp(42px, 5.4vw, 75px); line-height: 1.02; }
+.qualityControlHero :global(.hero-copy) { max-width: 790px; margin: 18px 0 0; }
+.qualityControlHeroActions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.qualityControlFeatureSection > h2, .qualityReviewSection > h2, .qualityControlCta h2 { margin: 0 0 16px; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-size: 44px; font-weight: 700; line-height: 1.08; letter-spacing: -.025em; }
+.qualityControlFeatureSection :global(.section-copy), .qualityReviewSection :global(.section-copy) { max-width: 760px; margin: 0; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 17px; line-height: 1.5; }
+.qualityControlFeatureGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 30px; }
+.qualityControlFeatureCard { composes: styleCard; position: relative; overflow: hidden; box-sizing: border-box; border: 1px solid var(--quality-accent); background: radial-gradient(circle at top left, var(--quality-tint), transparent 48%), var(--quality-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--quality-accent) 24%, transparent), 0 10px 24px #0003; }
+.qualityControlFeatureCard:hover { border-color: var(--quality-accent); background: radial-gradient(circle at top left, var(--quality-tint), transparent 48%), var(--quality-surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--quality-accent) 48%, transparent), 0 16px 32px var(--quality-tint); transform: translateY(-3px); }
+.qualityControlFeatureContent { position: relative; z-index: 1; display: grid; grid-template-rows: 36px 44px minmax(0, 1fr); gap: 5px; align-content: start; height: calc(100% + 16px); min-height: 0; }
+.qualityControlFeatureIcon { display: grid; place-items: center; width: 36px; height: 36px; margin: 0; border-radius: 10px; background: color-mix(in srgb, var(--quality-accent) 20%, transparent); color: var(--quality-accent); font-size: 17px; font-weight: 800; line-height: 1; }
+.qualityControlFeatureCard h3 { display: flex; align-items: flex-start; min-height: 44px; margin: 0; color: #F7F8FC; font-family: var(--font-dm), system-ui, sans-serif; font-size: 18px; font-weight: 650; line-height: 1.18; letter-spacing: -.015em; }
+.qualityControlFeatureCard p { width: calc(100% + 24px); max-width: none; min-height: 0; max-height: none; margin: 0; overflow: visible; align-self: start; color: #AAB2C5; font-family: var(--font-dm), system-ui, sans-serif; font-size: 13.5px; font-weight: 400; letter-spacing: -.4px; line-height: 1.35; }
+.qualityReviewSection { padding-top: 38px; }
+.qualityReviewGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 16px; margin-top: 30px; }
+.qualityReviewCard { display: grid; grid-template-rows: 20px 26px 1fr; gap: 10px; min-height: 194px; padding: 22px 24px; border: 1px solid #394462; border-radius: 20px; background: radial-gradient(circle at top left, #8B7CFF14, transparent 48%), #11182d; box-shadow: 0 10px 24px #0003; }
+.qualityReviewCard span { color: #FF925F; font-family: var(--font-dm), system-ui, sans-serif; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.qualityReviewCard h3, .qualityReviewCard p { margin: 0; font-family: var(--font-dm), system-ui, sans-serif; }
+.qualityReviewCard h3 { color: #F7F8FC; font-size: 18px; font-weight: 650; line-height: 1.2; }
+.qualityReviewCard p { color: #AAB2C5; font-size: 14px; line-height: 1.4; }
+.qualityControlCta { display: flex; align-items: center; justify-content: space-between; gap: 30px; max-width: 1160px; margin: 0 auto 70px; padding: 30px 34px; border: 1px solid #394462; border-radius: 22px; background: linear-gradient(135deg, #151C2F, #181A3A); box-shadow: 0 12px 28px #0003; }
+.qualityControlCta h2 { font-size: clamp(26px, 3vw, 38px); line-height: 1.1; }
+.qualityControlCta p:not(:global(.eyebrow)) { max-width: 650px; margin: 10px 0 0; color: #AAB2C5; line-height: 1.55; }
+.qualityControlCta > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 
-@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid, .productionPackFeatureGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2, .characterFeatureSection > h2, .productionPackFeatureSection > h2, .productionPackMethodsSection > h2 { font-size: 36px; } }
+@media (max-width: 1050px) { .hero { padding-top: 54px; padding-bottom: 48px; } .styleGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .styleCard { min-height: 164px; height: 164px; max-height: 164px; } .workflowGrid, .characterFeatureGrid, .productionPackFeatureGrid, .qualityControlFeatureGrid, .qualityReviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .workflowSection > h2, .characterFeatureSection > h2, .productionPackFeatureSection > h2, .productionPackMethodsSection > h2, .qualityControlFeatureSection > h2, .qualityReviewSection > h2 { font-size: 36px; } }
 @media (max-width: 640px) {
   .howItWorksHero { padding: 46px 20px 36px; }
   .howItWorksHero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
@@ -127,6 +153,19 @@
   .productionPackMethodCard { min-height: 0; padding: 20px; }
   .productionPacksCta { display: block; margin: 0 20px 44px; padding: 25px; }
   .productionPacksCta > div:last-child { justify-content: flex-start; margin-top: 22px; }
+  .qualityControlHero { padding: 46px 20px 36px; }
+  .qualityControlHero h1 { font-size: clamp(39px, 12vw, 53px); }
+  .qualityControlFeatureSection > h2, .qualityReviewSection > h2 { font-size: 30px; }
+  .qualityControlFeatureSection :global(.section-copy), .qualityReviewSection :global(.section-copy) { font-size: 15px; }
+  .qualityControlFeatureGrid { grid-template-columns: 1fr; align-items: start; gap: 14px; margin-top: 22px; }
+  .qualityControlFeatureCard { min-height: 0; height: auto; padding: 18px 20px; }
+  .qualityControlFeatureContent { grid-template-rows: 36px 44px minmax(0, 1fr); gap: 5px; height: auto; }
+  .qualityControlFeatureCard h3 { font-size: 17px; line-height: 1.2; }
+  .qualityControlFeatureCard p { font-size: 14px; line-height: 1.4; }
+  .qualityReviewGrid { grid-template-columns: 1fr; gap: 14px; margin-top: 22px; }
+  .qualityReviewCard { min-height: 0; padding: 20px; }
+  .qualityControlCta { display: block; margin: 0 20px 44px; padding: 25px; }
+  .qualityControlCta > div:last-child { justify-content: flex-start; margin-top: 22px; }
   .videoTypesHero { padding: 46px 20px 36px; }
   .videoTypesHero :global(h1) { font-size: clamp(39px, 12vw, 53px); }
   .videoTypesCta { display: block; margin: 0 20px 44px; padding: 25px; }

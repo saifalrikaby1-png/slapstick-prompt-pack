@@ -1,2 +1,3 @@
-import { ModelsPage } from "../public-page-content";
-export default function Page() { return <ModelsPage />; }
+import { ModelsPublicPage } from "../models-public";
+
+export default function Page() { return <ModelsPublicPage />; }

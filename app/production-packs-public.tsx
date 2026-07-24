@@ -4,18 +4,18 @@ import { PublicFooter, PublicHeader } from "./public-site";
 import compact from "./marketing-compact.module.css";
 
 const productionPackFeatures = [
-  { id: "idea", icon: "✦", title: "Complete Video Idea", description: "Defines the location, key object, main action, escalation, and final payoff.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
-  { id: "brief", icon: "▤", title: "Title and Creative Brief", description: "Provides a concise title and clear summary of the complete production concept.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
-  { id: "characters", icon: "ID", title: "Character Instructions", description: "Locks each character’s identity, appearance, role, proportions, and behavior.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
-  { id: "start-frame", icon: "◫", title: "Start Frame Prompt", description: "Describes the precise opening image, composition, characters, and scene state.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
-  { id: "end-frame", icon: "◧", title: "End Frame Prompt", description: "Defines the final visual state, character positions, result, and closing payoff.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
-  { id: "video", icon: "▶", title: "Main Video Prompt", description: "Combines the complete action, visual direction, timing, and continuity rules.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 16%)" },
-  { id: "timeline", icon: "◷", title: "Action Timeline", description: "Organizes movements, reactions, events, and transitions across the video duration.", accent: "#B98A4A", tint: "rgb(185 138 74 / 14%)" },
-  { id: "camera", icon: "◉", title: "Camera and Motion", description: "Sets framing, camera movement, subject focus, action clarity, and pacing.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
-  { id: "music", icon: "♪", title: "Music Direction", description: "Defines mood, tempo, rhythm, intensity, and musical changes across the scene.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
-  { id: "sound", icon: "≋", title: "Sound and Vocal Direction", description: "Maps sound effects, impacts, reactions, vocal sounds, and audio timing.", accent: "#C95F82", tint: "rgb(201 95 130 / 14%)" },
-  { id: "rules", icon: "◆", title: "Consistency and Model Rules", description: "Prevents visual errors and adapts the instructions to the selected AI model.", accent: "#7A63F6", tint: "rgb(122 99 246 / 14%)" },
-  { id: "export", icon: "⇩", title: "Exportable Final Pack", description: "Organizes the completed outputs into one reusable, saveable production package.", accent: "#B56BE8", tint: "rgb(181 107 232 / 14%)" },
+  { id: "idea", icon: "✦", title: "Complete Video Idea", description: "Defines the setting, key object, main action, escalation, and payoff.", accent: "#FF7043", tint: "rgb(255 112 67 / 14%)" },
+  { id: "brief", icon: "▤", title: "Creative Brief", description: "Provides a clear title and concise summary of the production concept.", accent: "#F47C6B", tint: "rgb(244 124 107 / 13%)" },
+  { id: "characters", icon: "ID", title: "Character Instructions", description: "Locks character identity, appearance, proportions, role, and behavior.", accent: "#D6A33D", tint: "rgb(214 163 61 / 14%)" },
+  { id: "start-frame", icon: "◫", title: "Start Frame Prompt", description: "Defines the opening image, framing, characters, and scene state.", accent: "#D96A8D", tint: "rgb(217 106 141 / 14%)" },
+  { id: "end-frame", icon: "◧", title: "End Frame Prompt", description: "Defines the final image, character positions, result, and payoff.", accent: "#E84D8A", tint: "rgb(232 77 138 / 14%)" },
+  { id: "video", icon: "▶", title: "Main Video Prompt", description: "Combines action, timing, visual direction, and continuity rules.", accent: "#FF6B4A", tint: "rgb(255 107 74 / 16%)" },
+  { id: "timeline", icon: "◷", title: "Action Timeline", description: "Organizes movements, reactions, events, and transitions by time.", accent: "#B98A4A", tint: "rgb(185 138 74 / 14%)" },
+  { id: "camera", icon: "◉", title: "Camera and Motion", description: "Sets framing, camera movement, focus, pacing, and action clarity.", accent: "#8A6CF6", tint: "rgb(138 108 246 / 14%)" },
+  { id: "music", icon: "♪", title: "Music Direction", description: "Defines mood, tempo, rhythm, intensity, and musical changes.", accent: "#A66BE8", tint: "rgb(166 107 232 / 14%)" },
+  { id: "sound", icon: "≋", title: "Sound and Vocal Direction", description: "Maps sound effects, reactions, vocal sounds, and audio timing.", accent: "#C95F82", tint: "rgb(201 95 130 / 14%)" },
+  { id: "rules", icon: "◆", title: "Consistency and Model Rules", description: "Prevents visual errors and adapts prompts to the selected model.", accent: "#7A63F6", tint: "rgb(122 99 246 / 14%)" },
+  { id: "export", icon: "⇩", title: "Exportable Final Pack", description: "Organizes all selected outputs into one reusable production package.", accent: "#B56BE8", tint: "rgb(181 107 232 / 14%)" },
 ] as const;
 
 const generationMethods = [
@@ -46,7 +46,7 @@ export function ProductionPacksPublicPage() {
 
     <section className={`marketing-section ${compact.productionPackFeatureSection}`}>
       <h2>Inside Every Production Pack</h2>
-      <p className="section-copy">Choose the outputs you need or generate a complete pack containing the core creative and technical instructions for one AI-video concept.</p>
+      <p className="section-copy">Choose the exact outputs you need or generate the complete creative and technical pack for one AI-video concept.</p>
       <div className={compact.productionPackFeatureGrid}>{productionPackFeatures.map((feature) => <ProductionPackFeatureCard key={feature.id} feature={feature} />)}</div>
     </section>
 

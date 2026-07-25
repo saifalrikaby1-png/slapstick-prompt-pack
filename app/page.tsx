@@ -596,6 +596,18 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     productionCharacters.length > 0 &&
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
+  const conceptComplete = Boolean(form.videoTitle.trim() && form.location.trim() && form.importantObject.trim() && form.trapAction.trim() && form.endingPayoff.trim());
+  const workflowSteps = [
+    { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
+    { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
+    { id: "scene", tabId: "workflow-tab-setup", title: "Scene Setup", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
+    { id: "motion", tabId: undefined, title: "Motion & Camera", status: activeWorkflowTab === "setup" && productionTab === "motion" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("motion"); } },
+    { id: "audio", tabId: undefined, title: "Audio", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
+    { id: "output", tabId: "workflow-tab-outputs", title: "Output Package", status: activeWorkflowTab === "outputs" ? "active" : requestedOutputs.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("outputs") },
+    { id: "review", tabId: undefined, title: "Review & Generate", status: activeWorkflowTab === "setup" && productionTab === "advanced" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("advanced"); } },
+  ] as const;
+  const completedWorkflowSteps = workflowSteps.filter((step) => step.status === "completed").length;
+  const workflowProgress = Math.round((completedWorkflowSteps / workflowSteps.length) * 100);
 
   function update<K extends keyof ProductionForm>(key: K, value: ProductionForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -1710,15 +1722,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
   return (
     <main className="video-production-page">
-      <nav className="workflow-nav production-sidebar production-nav" role="tablist" aria-label="Production workflow">
-        <Link className="brand production-brand" href={styleId ? "/" : "#top"} aria-label="Slapstick Prompt Pack home">
-          <span className="brand-mark">S</span>
-          <span><strong>Slapstick</strong><small>PROMPT PACK</small></span>
-        </Link>
-        {activeVideoStyle && <Link className="production-nav-link" href="/#video-types" style={{ borderColor: activeVideoStyle.accent }}>Change Video Style</Link>}
-        {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={`production-nav-link ${activeWorkflowTab === tab ? "active" : ""}`} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
-        <a className="production-nav-link" href="/library" role="tab" aria-selected="false">Library</a>
-      </nav>
       <header className="topbar production-topbar">
         <div className={`engine-badge ${mode === "ai" ? "ai" : ""}`}>
           <span />
@@ -1743,6 +1746,22 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       </section>
 
       <div className="workspace production-workspace studio-layout">
+        <aside className="studio-workflow-rail" aria-label="Production workflow">
+          <div className="studio-workflow-heading">Workflow</div>
+          <nav className="studio-workflow-list" aria-label="Production workflow">
+            {workflowSteps.map((step, index) => <button key={step.id} id={step.tabId} type="button" className={`studio-workflow-step is-${step.status}`} onClick={step.activate} aria-current={step.status === "active" ? "step" : undefined}>
+              <span className="studio-workflow-number">{String(index + 1).padStart(2, "0")}</span>
+              <span className="studio-workflow-copy"><strong>{step.title}</strong><small>{step.status === "completed" ? "Completed" : step.status === "active" ? "In Progress" : "Pending"}</small></span>
+              <span className="studio-workflow-status-icon" aria-hidden="true">{step.status === "completed" ? "✓" : null}</span>
+            </button>)}
+          </nav>
+          <div className="studio-workflow-divider" />
+          <section className="studio-overall-progress">
+            <header className="studio-overall-progress-header"><span>Overall Progress</span><strong>{workflowProgress}%</strong></header>
+            <div className="studio-progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={workflowProgress} aria-label="Production progress"><span className="studio-progress-bar" style={{ width: `${workflowProgress}%` }} /></div>
+            <p>{completedWorkflowSteps} of {workflowSteps.length} steps completed</p>
+          </section>
+        </aside>
         <section className="setup-panel production-card production-selection-panel studio-step-workspace">
           <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}

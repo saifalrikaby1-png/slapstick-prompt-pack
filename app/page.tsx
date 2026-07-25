@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CharacterProfile,
@@ -325,6 +325,26 @@ function RatioControl({
         </div>
       )}
     </div>
+  );
+}
+
+function ProductionPartialBorder() {
+  const gradientId = `production-border-${useId().replace(/:/g, "")}`;
+
+  return (
+    <svg className="production-partial-border" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1="0" y1="250" x2="500" y2="0">
+          <stop offset="0%" stopColor="#d49b35" stopOpacity="0" />
+          <stop offset="18%" stopColor="#e7b348" stopOpacity="0.38" />
+          <stop offset="42%" stopColor="#f4c65d" stopOpacity="0.76" />
+          <stop offset="66%" stopColor="#ffe18c" stopOpacity="0.82" />
+          <stop offset="84%" stopColor="#e9b64c" stopOpacity="0.36" />
+          <stop offset="100%" stopColor="#d49b35" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d="M 1 250 L 1 18 Q 1 1 18 1 L 500 1" fill="none" stroke={`url(#${gradientId})`} strokeWidth="1.3" strokeLinecap="butt" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
@@ -1689,8 +1709,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   return (
-    <main>
-      <header className="topbar">
+    <main className="video-production-page">
+      <header className="topbar production-topbar">
         <Link className="brand" href={styleId ? "/" : "#top"} aria-label="Slapstick Prompt Pack home">
           <span className="brand-mark">S</span>
           <span><strong>Slapstick</strong><small>PROMPT PACK</small></span>
@@ -1702,7 +1722,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <a className="library-link" href="/library">My Prompt Library</a>
       </header>
 
-      <section className="hero" id="top">
+      <section className="hero production-page-hero" id="top">
         <div>
           <span className="eyebrow">{activeVideoStyle ? `${activeVideoStyle.name.toUpperCase()} WORKSPACE` : "SIMPLIFIED PRODUCTION WORKFLOW"}</span>
           <h1>{activeVideoStyle ? `Create a ${activeVideoStyle.name} production pack.` : "From episode idea to one synchronized production prompt."}</h1>
@@ -1711,13 +1731,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <button className="demo-button" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
 
-      <div className="workspace">
-        <nav className="workflow-nav" role="tablist" aria-label="Production workflow">
+      <div className="workspace production-workspace">
+        <nav className="workflow-nav production-sidebar" role="tablist" aria-label="Production workflow">
           {activeVideoStyle && <Link href="/#video-types" style={{ borderColor: activeVideoStyle.accent }}>Change Video Style</Link>}
           {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
           <a href="/library" role="tab" aria-selected="false">Library</a>
         </nav>
-        <section className="setup-panel">
+        <section className="setup-panel production-card">
+          <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
           <div className="mode-switch" aria-label="Generator mode">
             <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
@@ -1914,7 +1935,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
         </section>
 
-        <section className="output-panel" ref={outputRef}>
+        <section className="output-panel production-card" ref={outputRef}>
+          <ProductionPartialBorder />
           <div className="output-heading">
             <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
             <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>

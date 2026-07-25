@@ -75,7 +75,7 @@ export function MarketingHome() {
         <h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1>
         <p className="home-hero-description">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p>
         <div className="home-hero-actions">
-          <Link href="/video-types" className="home-primary-button">Choose a Video Style</Link>
+              <Link href="/video-types" className="home-video-style-button"><span>Choose a Video Style</span><span className="home-video-style-arrow" aria-hidden="true">→</span></Link>
           <Link href="/character-builder/create" className="home-secondary-button">Build a Character</Link>
           <Link href="/how-it-works" className="home-text-button">▷ Watch the Demo</Link>
         </div>

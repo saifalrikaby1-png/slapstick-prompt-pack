@@ -613,6 +613,25 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function updateGlobalRatio(key: "ratio" | "width" | "height", value: string) {
+    setForm((current) => key === "ratio" ? {
+      ...current,
+      videoRatio: value,
+      startFrameRatio: value,
+      endFrameRatio: value,
+    } : key === "width" ? {
+      ...current,
+      videoCustomWidth: value,
+      startCustomWidth: value,
+      endCustomWidth: value,
+    } : {
+      ...current,
+      videoCustomHeight: value,
+      startCustomHeight: value,
+      endCustomHeight: value,
+    });
+  }
+
   function sanitizeActiveText(value: string) {
     const inactive = characters.filter((profile) => !activeIds.includes(profile.id));
     let result = value;
@@ -629,6 +648,12 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   function formForGeneration() {
     const sanitized = {
       ...form,
+      startFrameRatio: form.videoRatio,
+      endFrameRatio: form.videoRatio,
+      startCustomWidth: form.videoCustomWidth,
+      startCustomHeight: form.videoCustomHeight,
+      endCustomWidth: form.videoCustomWidth,
+      endCustomHeight: form.videoCustomHeight,
       activeCharacterIds: activeIds,
       heroId: hero?.id || form.heroId,
       selectedCharacterIds: productionCharacters.filter((profile) => profile.role !== "Hero").map((profile) => profile.id),
@@ -1598,9 +1623,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         setting("Generator mode", mode === "demo" ? "Demo" : "AI"),
         setting("Selected model", selectedModel(form)),
         setting("Duration", `${form.duration} seconds`),
-        setting("Video ratio", form.videoRatio),
-        setting("Start-frame ratio", form.startFrameRatio),
-        setting("End-frame ratio", form.endFrameRatio),
+        setting("Video ratio", exportForm.videoRatio),
+        setting("Start-frame ratio", exportForm.startFrameRatio),
+        setting("End-frame ratio", exportForm.endFrameRatio),
         setting("Visual style", selectedStyle(form)),
         setting("Selected tones", selectedTone(form)),
         setting("Motion pacing profile", form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick") ? "Extreme Fast-Chaotic Motion — frame-zero action, compressed anticipation, rapid beats" : form.tones.includes("Fast") ? "Fast" : "Standard"),
@@ -1680,6 +1705,15 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   const silentMode = form.voiceLayers.includes("No Spoken Dialogue");
   const toneConflict = form.tones.includes("Calm") &&
     (form.tones.includes("Fast") || form.tones.includes("Chaotic slapstick"));
+  const globalRatioControl = <RatioControl
+    label="Video ratio"
+    value={form.videoRatio}
+    width={form.videoCustomWidth}
+    height={form.videoCustomHeight}
+    onRatio={(value) => updateGlobalRatio("ratio", value)}
+    onWidth={(value) => updateGlobalRatio("width", value)}
+    onHeight={(value) => updateGlobalRatio("height", value)}
+  />;
 
   function creativeEditor(kind: CreativeAssetKind, label: string) {
     const keys = creativeFields[kind];
@@ -1721,7 +1755,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   return (
-    <main className="video-production-page">
+    <main className="video-production-page production-studio-workflow">
       <header className="topbar production-topbar">
         <div className={`engine-badge ${mode === "ai" ? "ai" : ""}`}>
           <span />
@@ -1886,7 +1920,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <article className="scene-element-card"><div className="scene-element-label"><span aria-hidden="true">↗</span><span>Main Action</span></div><input className="scene-input" value={form.trapAction} onChange={(event) => update("trapAction", event.target.value)} placeholder="Describe the action or trap" /><div className="scene-element-image" aria-hidden="true" /></article>
               </div><div className="scene-ending-field"><div className="scene-ending-label"><span aria-hidden="true">⚑</span><span>Ending / Payoff</span></div><div className="scene-ending-control"><textarea className="scene-textarea" value={form.endingPayoff} onChange={(event) => update("endingPayoff", event.target.value)} placeholder="Describe the clear final payoff" maxLength={300} /><span className="scene-character-count">{form.endingPayoff.length}/300</span></div></div></section>
               <section className="scene-panel scene-tone-panel"><h2>Tone &amp; Energy</h2><div className="scene-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`scene-tone-chip ${selected ? "is-selected" : ""}`} key={tone}><input className="scene-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="scene-tone-icon" aria-hidden="true">{selected ? "✓" : "•"}</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input className="scene-input" value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}</section>
-              <section className="scene-panel scene-ratio-panel"><h2>Frame Ratios</h2><div className="scene-ratio-grid"><div className="scene-ratio-field"><label>Video ratio</label><RatioControl label="Video ratio" value={form.videoRatio} width={form.videoCustomWidth} height={form.videoCustomHeight} onRatio={(value) => update("videoRatio", value)} onWidth={(value) => update("videoCustomWidth", value)} onHeight={(value) => update("videoCustomHeight", value)} /></div><div className="scene-ratio-field"><label>Start-frame ratio</label><RatioControl label="Start-frame ratio" value={form.startFrameRatio} width={form.startCustomWidth} height={form.startCustomHeight} onRatio={(value) => update("startFrameRatio", value)} onWidth={(value) => update("startCustomWidth", value)} onHeight={(value) => update("startCustomHeight", value)} /></div><div className="scene-ratio-field"><label>End-frame ratio</label><RatioControl label="End-frame ratio" value={form.endFrameRatio} width={form.endCustomWidth} height={form.endCustomHeight} onRatio={(value) => update("endFrameRatio", value)} onWidth={(value) => update("endCustomWidth", value)} onHeight={(value) => update("endCustomHeight", value)} /></div></div></section>
+              <section className="scene-panel scene-ratio-panel"><h2>Video Ratio</h2><p>Start and End Frames inherit this ratio.</p><div className="scene-ratio-grid"><div className="scene-ratio-field">{globalRatioControl}</div></div></section>
             </div>}
             {productionTab === "core" && <footer className="scene-editor__footer"><button className="scene-editor__continue" type="button" onClick={() => setActiveWorkflowTab("outputs")}><span>Save &amp; Continue</span><span aria-hidden="true">→</span></button></footer>}
             </main>
@@ -1899,7 +1933,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <section className="production-control-group wide"><header className="production-control-header"><div><h3>Video Tones</h3><p>Select one or more creative directions.</p></div></header><fieldset className="choice-field production-tone-container"><legend className="sr-only">Video tones</legend><div className="choice-grid production-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`production-tone-chip ${selected ? "selected" : ""}`} key={tone}><input className="production-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="production-tone-check" aria-hidden="true">✓</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}{toneConflict && <p className="conflict-note">Tone warning: Calm combined with Fast or Chaotic slapstick needs deliberate pacing. Your selections are preserved.</p>}</fieldset></section>
               {form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick") && <div className="silent-lock wide"><strong>EXTREME FAST-CHAOTIC MOTION ACTIVE</strong><br />Uses immediate movement from frame zero, compressed anticipation, rapid acceleration, frequent visual beats, fast reactions, and a high-impact payoff.</div>}
               <label className="production-feature-toggle wide"><div className="production-feature-copy"><strong>Ultra Retention Mode</strong><span>Immediate opening hook, continuous visual micro-beats, a mid-video escalation, and a strong payoff.</span></div><span className="production-switch"><input type="checkbox" checked={form.ultraRetentionMode} onChange={(event) => update("ultraRetentionMode", event.target.checked)} /><span className="production-switch-track" /></span></label>
-              <section className="production-control-group production-ratio-group wide"><header className="production-control-header"><div><h3>Frame Ratios</h3><p>Control the video and reference-frame proportions.</p></div></header><div className="production-ratio-grid"><RatioControl label="Video ratio" value={form.videoRatio} width={form.videoCustomWidth} height={form.videoCustomHeight} onRatio={(value) => update("videoRatio", value)} onWidth={(value) => update("videoCustomWidth", value)} onHeight={(value) => update("videoCustomHeight", value)} /><RatioControl label="Start-frame ratio" value={form.startFrameRatio} width={form.startCustomWidth} height={form.startCustomHeight} onRatio={(value) => update("startFrameRatio", value)} onWidth={(value) => update("startCustomWidth", value)} onHeight={(value) => update("startCustomHeight", value)} /><RatioControl label="End-frame ratio" value={form.endFrameRatio} width={form.endCustomWidth} height={form.endCustomHeight} onRatio={(value) => update("endFrameRatio", value)} onWidth={(value) => update("endCustomWidth", value)} onHeight={(value) => update("endCustomHeight", value)} /></div></section>
+              <section className="production-control-group production-ratio-group wide"><header className="production-control-header"><div><h3>Video Ratio</h3><p>Start and End Frames inherit this ratio.</p></div></header><div className="production-ratio-grid">{globalRatioControl}</div></section>
               <label className="production-feature-toggle production-character-toggle wide"><div className="production-feature-copy"><strong>Include Character-Building Prompt</strong><span>Generate a dedicated identity and consistency prompt for the selected cast.</span></div><span className="production-switch"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></span></label>
             </div>
 

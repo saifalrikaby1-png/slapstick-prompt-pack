@@ -48,16 +48,16 @@ test("preview preserves one root Analytics component", () => {
   assert.equal((home.match(/<Analytics\s*\/>/g) || []).length, 0);
 });
 
-test("homepage hero is compact, text-focused, and excludes the production mockup from rendered JSX", () => {
+test("homepage uses the scoped navy-and-gold visual system while preserving its actions", () => {
   assert.match(home, /Build Better AI Videos Before You Generate Them/);
   assert.match(home, /Choose your creative style, build original characters from scratch/);
   assert.match(home, /Choose a Video Style/);
   assert.match(home, /Build a Character/);
   assert.match(home, /Watch the Demo/);
   assert.match(home, /Free Demo Mode available\. No API key required\./);
-  assert.match(home, /\{\/\*[\s\S]*Family 3D Animation[\s\S]*\*\/\}/);
-  assert.match(compactCss, /display: block/);
-  assert.match(compactCss, /max-width: 1240px/);
+  assert.match(home, /marketing-shell marketing-home/);
+  assert.match(home, /home-hero/);
+  assert.match(home, /home-premium-section/);
   assert.match(home, /creator-benefits-section/);
   assert.match(home, /BUILT FOR SERIOUS CREATORS/);
   assert.match(home, /Dedicated workflows for seven video types\./);
@@ -66,7 +66,9 @@ test("homepage hero is compact, text-focused, and excludes the production mockup
   assert.match(home, /Reduce avoidable generation failures\./);
   assert.match(home, /Generate structured model-ready packs\./);
   assert.doesNotMatch(home, /value-strip/);
-  assert.match(globalCss, /\.creator-benefits-section/);
+  assert.match(globalCss, /\.marketing-home \.home-premium-section/);
+  assert.match(globalCss, /\.marketing-shell\.marketing-home \{ --home-bg:#060d1a/);
+  assert.doesNotMatch(globalCss, /^\.home-premium-section/m);
   assert.doesNotMatch(globalCss, /\.value-strip\s*\{/);
 });
 
@@ -79,7 +81,7 @@ test("homepage excludes removed FAQ and Production Packs sections before its foo
   assert.doesNotMatch(home, /Questions creators ask|Which video styles are supported\?|className="marketing-section faq"/);
   assert.doesNotMatch(home, /id="production-packs"|Everything Your Selected Video Style Needs, in One Connected Pack|pack-showcase/);
   assert.doesNotMatch(home, /#faq|#production-packs/);
-  assert.match(home, /dark-feature[\s\S]*<PublicFooter \/>/);
+  assert.match(home, /home-examples-section[\s\S]*<PublicFooter \/>/);
 });
 
 test("style cards remain route-linked and use compact natural-height layout", () => {

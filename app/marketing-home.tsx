@@ -3,7 +3,6 @@ import type { CSSProperties } from "react";
 import compact from "./marketing-compact.module.css";
 import { videoStyles } from "./video-styles";
 import { PublicFooter, PublicHeader } from "./public-site";
-import { VideoTypeCards } from "./video-type-cards";
 
 const examples = [
   ["Slapstick", "A delivery robot loses control of bouncing packages."],
@@ -25,8 +24,6 @@ export function MarketingHome() {
         <div className="visual-top"><span>Family 3D Animation</span><b>Production Pack</b><i>Quality 94</i></div><div className="visual-grid"><article><small>CHARACTER PROFILE</small><strong>Identity Lock</strong><p>Appearance · wardrobe · movement</p></article><article><small>CAMERA DIRECTION</small><strong>Continuous arc</strong><p>16:9 · soft key light</p></article><article><small>TIMELINE</small><strong>0:00 → 0:20</strong><div className="visual-timeline"><i /><i /><i /></div></article><article className="visual-quality"><small>QUALITY CONTROL</small><strong>94 / 100</strong><button type="button">Fix Prompts</button></article></div><div className="visual-flow">Video Style <b>→</b> Characters <b>→</b> Production Setup <b>→</b> Production Pack <b>→</b> Quality Control <b>→</b> Video Generator</div>
       */}
     </section>
-
-    <section id="video-types" className={`marketing-section ${compact.styleSection}`}><p className="eyebrow">DEDICATED WORKFLOWS</p><h2>Choose the Kind of Video You Want to Create</h2><p className="section-copy">Every video type uses its own production structure, camera language, pacing rules, character behavior, visual guidance, and Quality Control checks.</p><VideoTypeCards /></section>
 
     <section className="value-strip"><h2>Built for creators who need reliable workflows across multiple visual styles</h2><div>{["Dedicated workflows for seven video types", "Build original characters without complex prompting", "Reuse identities across multiple productions", "Reduce avoidable generation failures", "Generate structured model-ready packs"].map((benefit) => <p key={benefit}>✓ {benefit}</p>)}</div></section>
 

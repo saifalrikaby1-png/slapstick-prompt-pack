@@ -17,12 +17,13 @@ const signIn = read("app/sign-in/sign-in-public.tsx");
 const signInPage = read("app/sign-in/page.tsx");
 const pricingPlans = read("app/pricing-plans.ts");
 
-test("all seven preview style cards and routes are defined", () => {
+test("all seven dedicated Video Types cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
     assert.match(styles, new RegExp(`id: "${id}"`));
     assert.match(sharedCards, /videoStyleIds\.map/);
   }
-  assert.match(home, /Choose the Kind of Video You Want to Create/);
+  assert.doesNotMatch(home, /Choose the Kind of Video You Want to Create|DEDICATED WORKFLOWS|<VideoTypeCards/);
+  assert.match(publicPages, /Explore Video Types/);
 });
 
 test("style configuration supplies materially different prompt guidance", () => {
@@ -80,7 +81,6 @@ test("style cards remain route-linked and use compact natural-height layout", ()
   assert.match(sharedCards, /appearance === "signature" \? compact\.signatureCard/);
   assert.match(sharedCards, /className=\{compact\.styleBadge\}/);
   assert.match(sharedCards, /className=\{compact\.styleArrow\}/);
-  assert.match(home, /<VideoTypeCards \/>/);
   assert.match(publicPages, /<VideoTypeCards hrefFor=/);
   assert.doesNotMatch(home, /style\.characteristics\.map/);
 });

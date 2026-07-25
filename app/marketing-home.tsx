@@ -98,7 +98,7 @@ export function MarketingHome() {
       </div>
     </PremiumSection>
 
-    <PremiumSection className="home-split-section" innerClassName="home-split-inner">
+    <PremiumSection className="home-split-section style-specific-section" innerClassName="home-split-inner">
       <div className="home-split-copy"><SectionHeading eyebrow="WHY STYLE-SPECIFIC?" title="Stop Using One Generic Prompt for Every Kind of Video" copy="Generic prompts lose camera intent, pacing, character consistency, and model adaptation. This platform adapts production logic before a prompt is generated." /></div>
       <div className="home-comparison-grid">
         <article className="home-premium-card"><span className="home-icon" aria-hidden="true">01</span><div><h3>Generic workflow</h3><p>One prompt structure · weak camera instructions · incorrect pacing · higher retry risk</p></div></article>

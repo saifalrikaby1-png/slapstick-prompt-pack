@@ -16,7 +16,6 @@ const examples = [
 function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: string; copy?: string }) {
   return <header className="home-section-heading">
     <span className="home-section-eyebrow">{eyebrow}</span>
-    <div className="home-heading-divider" aria-hidden="true"><span>◆</span></div>
     <h2>{title}</h2>
     {copy ? <p>{copy}</p> : null}
   </header>;

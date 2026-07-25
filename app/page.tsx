@@ -1727,6 +1727,12 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <a className="library-link" href="/library">My Prompt Library</a>
       </header>
 
+      <header className="studio-toolbar">
+        <div className="studio-project-identity"><span className="studio-project-icon" aria-hidden="true">▣</span><div className="studio-project-name"><span>Project:</span><strong>{form.videoTitle || "Untitled Production"}</strong></div><span className="studio-save-status"><span className="studio-save-dot" />Saved locally</span></div>
+        <div className="studio-project-metadata"><div><span>Style</span><strong>{selectedStyle(form)}</strong></div><div><span>Duration</span><strong>{form.duration} Seconds</strong></div><div><span>Model</span><strong>{selectedModel(form)}</strong></div><div><span>Ratio</span><strong>{form.videoRatio}</strong></div><div className="studio-output-summary"><span>◆</span><span><small>Outputs</small><strong>{requestedOutputs.length} selected</strong></span></div></div>
+        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
+      </header>
+
       <section className="hero production-page-hero production-page-header" id="top">
         <div className="production-heading-copy">
           <span className="eyebrow">{activeVideoStyle ? `${activeVideoStyle.name.toUpperCase()} WORKSPACE` : "SIMPLIFIED PRODUCTION WORKFLOW"}</span>
@@ -1736,8 +1742,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <button className="demo-button production-load-demo" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
 
-      <div className="workspace production-workspace">
-        <section className="setup-panel production-card production-selection-panel">
+      <div className="workspace production-workspace studio-layout">
+        <section className="setup-panel production-card production-selection-panel studio-step-workspace">
           <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
           <div className="mode-switch production-generation-modes" aria-label="Generator mode">
@@ -1932,7 +1938,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
         </section>
 
-        <section className="output-panel production-card production-output-panel" ref={outputRef}>
+        <section className="output-panel production-card production-output-panel studio-live-preview" ref={outputRef}>
           <ProductionPartialBorder />
           <div className="output-heading production-output-header">
             <div className="production-panel-heading"><span className="production-step-number">02</span><div><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>

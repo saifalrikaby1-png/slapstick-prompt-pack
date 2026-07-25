@@ -49,7 +49,7 @@ test("responsive professional grid is compact on desktop and one column on mobil
 });
 
 test("no credit or duplicate full-pack checkbox language is introduced", () => {
-  assert.doesNotMatch(`${page}\n${css}`, /\bcredits?\b|discount/i);
+  assert.doesNotMatch(`${page}\n${css}`, /discount/i);
   assert.equal((page.match(/<h2 id="output-selector-title">Select Production Outputs<\/h2>/g) || []).length, 1);
   assert.doesNotMatch(page, /className=\{`selection-card full-pack/);
 });

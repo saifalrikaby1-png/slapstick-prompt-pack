@@ -6,8 +6,8 @@ const page = fs.readFileSync("app/page.tsx", "utf8");
 const css = fs.readFileSync("app/globals.css", "utf8");
 
 test("output selector is the single first workflow step", () => {
-  assert.ok(page.indexOf("Choose What to Generate") < page.indexOf(">Complete Video Idea<"));
-  assert.match(page, /<span>01<\/span>[\s\S]{0,160}Choose What to Generate/);
+  assert.ok(page.indexOf("Select Production Outputs") < page.indexOf(">Complete Video Idea<"));
+  assert.match(page, /production-step-number">01<\/span>[\s\S]{0,180}Select Production Outputs/);
   assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
   assert.match(page, /<span>04<\/span>[\s\S]{0,100}Production Setup/);
@@ -41,15 +41,15 @@ test("compact toolbar, summary, persistence, and accessible controls exist", () 
 });
 
 test("responsive professional grid is compact on desktop and one column on mobile", () => {
-  assert.match(css, /repeat\(auto-fit, minmax\(220px, 1fr\)\)/);
-  assert.match(css, /min-height: 96px/);
-  assert.match(css, /@media \(max-width: 720px\)[\s\S]*\.selection-grid \{ grid-template-columns: 1fr; \}/);
-  assert.match(css, /\.selection-card:focus-within/);
-  assert.match(css, /\.check-indicator/);
+  assert.match(css, /grid-template-columns:minmax\(500px,\.95fr\) minmax\(560px,1\.05fr\)/);
+  assert.match(css, /\.production-output-option\{display:grid;grid-template-columns:34px minmax\(0,1fr\) 24px/);
+  assert.match(css, /@media\(max-width:1200px\)\{\.video-production-page[\s\S]*\.production-workspace\{grid-template-columns:1fr\}/);
+  assert.match(css, /\.production-output-option\.selected/);
+  assert.match(page, /production-output-checkbox/);
 });
 
 test("no credit or duplicate full-pack checkbox language is introduced", () => {
   assert.doesNotMatch(`${page}\n${css}`, /\bcredits?\b|discount/i);
-  assert.equal((page.match(/<h2 id="output-selector-title">Choose What to Generate<\/h2>/g) || []).length, 1);
+  assert.equal((page.match(/<h2 id="output-selector-title">Select Production Outputs<\/h2>/g) || []).length, 1);
   assert.doesNotMatch(page, /className=\{`selection-card full-pack/);
 });

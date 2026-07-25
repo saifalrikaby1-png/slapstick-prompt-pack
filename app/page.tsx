@@ -88,12 +88,12 @@ const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: 
 
 const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
   { id: "videoTitle", icon: "T", title: "Ultra-Unique Video Title", short: "Video Title", description: "Original editable title for this production." },
-  { id: "characterBuildingPrompt", icon: "C", title: "Character-Building Prompt", short: "Character Building", description: "Identity-safe design prompt for every active character." },
-  { id: "startFramePrompt", icon: "S", title: "Start-Frame Image Prompt", short: "Start Frame", description: "Model-aware opening reference frame." },
-  { id: "endFramePrompt", icon: "E", title: "End-Frame Image Prompt", short: "End Frame", description: "Matching final reference frame and payoff." },
-  { id: "videoPrompt", icon: "V", title: "Video-Generation Prompt", short: "Video Prompt", description: "Video Lock, timed action, and Final Generation Rule." },
-  { id: "musicPath", icon: "M", title: "Music Path", short: "Music", description: "Synchronized music direction across the duration." },
-  { id: "soundEffects", icon: "FX", title: "Sound-Effects Path", short: "Sound Effects", description: "Timed physical and nonverbal character sounds." },
+  { id: "characterBuildingPrompt", icon: "C", title: "Character Consistency Prompt", short: "Character Building", description: "Maintain character look, proportions, and behavior." },
+  { id: "startFramePrompt", icon: "S", title: "Start Frame Prompt", short: "Start Frame", description: "Opening composition and character identity." },
+  { id: "endFramePrompt", icon: "E", title: "End Frame Prompt", short: "End Frame", description: "Closing composition and scene resolution." },
+  { id: "videoPrompt", icon: "V", title: "Video Generation Prompt", short: "Video Prompt", description: "Complete motion, camera, and action guidance." },
+  { id: "musicPath", icon: "M", title: "Music Path", short: "Music", description: "Music mood, timing, and intensity guidance." },
+  { id: "soundEffects", icon: "FX", title: "Sound Effects Path", short: "Sound Effects", description: "Scene-by-scene effects and ambience guidance." },
 ];
 
 const emptyCharacter: CharacterProfile = {
@@ -1710,11 +1710,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
   return (
     <main className="video-production-page">
-      <header className="topbar production-topbar">
-        <Link className="brand" href={styleId ? "/" : "#top"} aria-label="Slapstick Prompt Pack home">
+      <nav className="workflow-nav production-sidebar production-nav" role="tablist" aria-label="Production workflow">
+        <Link className="brand production-brand" href={styleId ? "/" : "#top"} aria-label="Slapstick Prompt Pack home">
           <span className="brand-mark">S</span>
           <span><strong>Slapstick</strong><small>PROMPT PACK</small></span>
         </Link>
+        {activeVideoStyle && <Link className="production-nav-link" href="/#video-types" style={{ borderColor: activeVideoStyle.accent }}>Change Video Style</Link>}
+        {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={`production-nav-link ${activeWorkflowTab === tab ? "active" : ""}`} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
+        <a className="production-nav-link" href="/library" role="tab" aria-selected="false">Library</a>
+      </nav>
+      <header className="topbar production-topbar">
         <div className={`engine-badge ${mode === "ai" ? "ai" : ""}`}>
           <span />
           {mode === "demo" ? "Demo Mode · local" : "AI Mode · server secured"}
@@ -1722,52 +1727,46 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <a className="library-link" href="/library">My Prompt Library</a>
       </header>
 
-      <section className="hero production-page-hero" id="top">
-        <div>
+      <section className="hero production-page-hero production-page-header" id="top">
+        <div className="production-heading-copy">
           <span className="eyebrow">{activeVideoStyle ? `${activeVideoStyle.name.toUpperCase()} WORKSPACE` : "SIMPLIFIED PRODUCTION WORKFLOW"}</span>
           <h1>{activeVideoStyle ? `Create a ${activeVideoStyle.name} production pack.` : "From episode idea to one synchronized production prompt."}</h1>
           <p>{activeVideoStyle ? `${activeVideoStyle.description} Recommended: ${activeVideoStyle.defaults.ratio}, ${activeVideoStyle.defaults.duration} seconds, with ${activeVideoStyle.rules.camera}.` : "Build the cast, lock the reference frames, choreograph the complete action, and quality-check everything before generation."}</p>
         </div>
-        <button className="demo-button" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
+        <button className="demo-button production-load-demo" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
 
       <div className="workspace production-workspace">
-        <nav className="workflow-nav production-sidebar" role="tablist" aria-label="Production workflow">
-          {activeVideoStyle && <Link href="/#video-types" style={{ borderColor: activeVideoStyle.accent }}>Change Video Style</Link>}
-          {(["outputs", "videoIdea", "characters", "setup"] as const).map((tab) => <button key={tab} id={`workflow-tab-${tab}`} type="button" role="tab" aria-selected={activeWorkflowTab === tab} aria-controls={`workflow-panel-${tab}`} className={activeWorkflowTab === tab ? "active" : ""} onClick={() => setActiveWorkflowTab(tab)}>{tab === "videoIdea" ? "Video Idea" : tab === "setup" ? "Setup" : tab[0].toUpperCase() + tab.slice(1)}{tab === "outputs" && requestedOutputs.length > 0 ? <small>✓</small> : null}{tab === "characters" && productionCharacters.length > 0 ? <small>{productionCharacters.length}</small> : null}{tab === "setup" && isReady ? <small>Ready</small> : null}</button>)}
-          <a href="/library" role="tab" aria-selected="false">Library</a>
-        </nav>
-        <section className="setup-panel production-card">
+        <section className="setup-panel production-card production-selection-panel">
           <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
-          <div className="mode-switch" aria-label="Generator mode">
-            <button className={mode === "demo" ? "active" : ""} type="button" onClick={() => setMode("demo")}>Demo Mode<small>No API</small></button>
-            <button className={mode === "ai" ? "active" : ""} type="button" onClick={() => setMode("ai")}>AI Mode<small>OpenAI powered</small></button>
+          <div className="mode-switch production-generation-modes" aria-label="Generator mode">
+            <button className={`production-generation-mode ${mode === "demo" ? "active" : ""}`} type="button" onClick={() => setMode("demo")}><span><b className="production-generation-mode-title">Demo Mode</b><small className="production-generation-mode-note">No API</small></span></button>
+            <button className={`production-generation-mode ${mode === "ai" ? "active" : ""}`} type="button" onClick={() => setMode("ai")}><span><b className="production-generation-mode-title">AI Mode</b><small className="production-generation-mode-note">OpenAI powered</small></span></button>
           </div>
 
           <section className="form-section output-picker compact-selector" id="choose-outputs" role="tabpanel" aria-labelledby="workflow-tab-outputs" hidden={activeWorkflowTab !== "outputs"}>
-            <div className="selector-header">
-              <div className="section-heading"><span>01</span><div><h2 id="output-selector-title">Choose What to Generate</h2><p>Select one output, several outputs, or the complete synchronized production pack.</p></div></div>
-              <strong className="selected-count" aria-live="polite">{selectionMode === "fullPack" ? "7 outputs included" : `${requestedOutputs.length} output${requestedOutputs.length === 1 ? "" : "s"} selected`}</strong>
+            <div className="selector-header production-panel-header">
+              <div className="section-heading production-panel-heading"><span className="production-step-number">01</span><div><h2 id="output-selector-title">Select Production Outputs</h2><p>Choose individual assets or generate the complete synchronized production pack.</p></div></div>
+              <strong className="selected-count production-selection-count" aria-live="polite">{selectionMode === "fullPack" ? "7 outputs included" : `${requestedOutputs.length} output${requestedOutputs.length === 1 ? "" : "s"} selected`}</strong>
             </div>
-            <div className="selection-mode" role="group" aria-label="Output selection mode">
-              <button type="button" aria-pressed={selectionMode === "custom"} className={selectionMode === "custom" ? "active" : ""} onClick={() => setOutputMode("custom")}>Custom Selection</button>
-              <button type="button" aria-pressed={selectionMode === "fullPack"} className={selectionMode === "fullPack" ? "active" : ""} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
+            <div className="selection-mode production-package-switch" role="group" aria-label="Output selection mode">
+              <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option ${selectionMode === "custom" ? "active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
+              <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option ${selectionMode === "fullPack" ? "active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
             </div>
             {selectionMode === "custom" ? <>
-              <div className="selector-toolbar">
-                <button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select All</button>
-                <button type="button" onClick={() => setCustomOutputs([])}>Clear Selection</button>
-                <button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended Setup</button>
+              <div className="selector-toolbar production-selection-actions">
+                <button className="production-selection-action" type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select All</button>
+                <button className="production-selection-action" type="button" onClick={() => setCustomOutputs([])}>Clear Selection</button>
+                <button className="production-selection-action" type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended Setup</button>
               </div>
-              <div className="selection-grid">
+              <div className="selection-grid production-output-list">
                 {outputChoices.map((choice) => {
                   const included = requestedOutputs.includes(choice.id);
-                  return <label className={`selection-card ${included ? "selected" : ""}`} key={choice.id} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); toggleRequestedOutput(choice.id); } }}>
-                    <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
-                    <span className="output-icon" aria-hidden="true">{choice.icon}</span>
-                    <span className="choice-copy"><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
-                    <span className="check-indicator" aria-hidden="true">{included ? "✓" : ""}</span>
+                  return <label className={`selection-card production-output-option ${included ? "selected" : ""}`} key={choice.id} tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); toggleRequestedOutput(choice.id); } }}>
+                    <input className="production-output-checkbox" type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                    <span className="output-icon production-output-icon" aria-hidden="true">{choice.icon}</span>
+                    <span className="choice-copy production-output-copy"><strong>{choice.title}</strong><small>{choice.description}</small>{generatedOutputs.includes(choice.id) && <em>Already generated · select to regenerate</em>}</span>
                   </label>;
                 })}
               </div>
@@ -1776,9 +1775,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <div><strong>All production outputs included</strong><p>One synchronized generation containing every available output exactly once.</p><div className="included-chips">{outputChoices.map((choice) => <span key={choice.id}>{choice.short}</span>)}</div></div>
               <button type="button" onClick={() => setOutputMode("custom")}>Customize Outputs</button>
             </div>}
-            <div className="selection-summary">
-              <div>{requestedOutputs.length ? <><strong>{selectionMode === "fullPack" ? "Full Production Pack:" : `${requestedOutputs.length} selected:`}</strong> {outputChoices.filter((choice) => requestedOutputs.includes(choice.id)).map((choice) => choice.short).join(", ")}</> : <strong className="selection-warning">Select at least one output to continue.</strong>}</div>
-              <button type="button" onClick={scrollToEpisodeIdea}>Continue to Production Setup</button>
+            <div className="selection-summary production-selection-footer">
+              <div className="production-selection-summary">{requestedOutputs.length ? <><strong>{selectionMode === "fullPack" ? "Full Production Pack:" : `${requestedOutputs.length} selected:`}</strong> {outputChoices.filter((choice) => requestedOutputs.includes(choice.id)).map((choice) => choice.short).join(", ")}</> : <strong className="selection-warning">Select at least one output to continue.</strong>}</div>
+              <button className="production-continue-button" type="button" onClick={scrollToEpisodeIdea}>Continue to Production Setup</button>
             </div>
           </section>
 
@@ -1935,16 +1934,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
         </section>
 
-        <section className="output-panel production-card" ref={outputRef}>
+        <section className="output-panel production-card production-output-panel" ref={outputRef}>
           <ProductionPartialBorder />
-          <div className="output-heading">
-            <div><span className="eyebrow">07 · GENERATED OUTPUTS</span><h2>{pack ? "Ready for production" : legacyPack ? "Legacy pack" : "Your selected outputs will appear here."}</h2></div>
-            <div className="output-actions"><button type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
+          <div className="output-heading production-output-header">
+            <div className="production-panel-heading"><span className="production-step-number">02</span><div><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>
+            <div className="output-actions"><button className="production-save-library" type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
           {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}
           {pack && <button className="dynamic-word-button" type="button" disabled={isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Word document…" : generatedOutputs.length === requestedOutputValues.length ? "Download Full Pack as Word" : "Download Selected Outputs as Word"}</button>}
 
-          {!pack && !legacyPack && <div className="empty-output"><span>✦</span><h3>Six clear outputs. One continuous production plan.</h3><p>Complete the episode idea and characters, then generate.</p></div>}
+          {!pack && !legacyPack && <div className="empty-output production-empty-output"><div className="production-empty-visual" aria-hidden="true">▣</div><h3>Your production pack is ready to take shape.</h3><p>Complete the setup and generate to view your selected prompts, frames, audio guidance, and Quality Control results.</p><div className="production-output-preview-heading"><span>What you&apos;ll see here</span></div><div className="production-output-preview-grid">{["Start Frame", "End Frame", "Video Prompt", "Character Consistency", "Music Path", "Sound Effects", "Quality Control"].map((item) => <div className={`production-output-preview-item ${item === "Quality Control" ? "quality-control" : ""}`} key={item}><strong>{item}</strong></div>)}</div><div className="production-pro-tip"><strong>Pro Tip:</strong> Use Recommended Setup for the best balance of quality and consistency.</div></div>}
 
           {legacyPack && (
             <div className="legacy-output">

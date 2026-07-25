@@ -28,7 +28,7 @@ test("stable selectable-output contract expands video prompt without duplicates"
 });
 
 test("interface contains selection, partial generation, regeneration, and no credit system", () => {
-  for (const text of ["Choose What to Generate", "Full Production Pack", "Generate More Outputs", "Select at least one output to generate.", "Already generated · select to regenerate", "Download Selected Outputs as Word"]) {
+  for (const text of ["Select Production Outputs", "Full Production Pack", "Generate More Outputs", "Select at least one output to generate.", "Already generated · select to regenerate", "Download Selected Outputs as Word"]) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const source of [page, route, engine, typesSource]) {

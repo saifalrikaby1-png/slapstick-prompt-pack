@@ -38,9 +38,11 @@ export function MarketingHome() {
   return <main className="marketing-shell marketing-home">
     <PublicHeader />
 
-    <section className="home-hero" aria-labelledby="hero-title">
-      <div className="home-hero-content">
-        <p className="home-section-eyebrow">AI VIDEO PRE-PRODUCTION PLATFORM</p>
+    <div className="home-section-wrap home-hero-wrap">
+      <section className="home-premium-section home-hero-section" aria-labelledby="hero-title">
+        <div className="home-premium-section-inner home-hero-inner">
+          <div className="home-hero-content">
+        <p className="home-section-eyebrow home-hero-eyebrow">AI VIDEO PRE-PRODUCTION PLATFORM</p>
         <h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1>
         <p className="home-hero-description">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p>
         <div className="home-hero-actions">
@@ -48,13 +50,16 @@ export function MarketingHome() {
           <Link href="/character-builder/create" className="home-secondary-button">Build a Character</Link>
           <Link href="/how-it-works" className="home-text-button">▷ Watch the Demo</Link>
         </div>
-        <p className="home-muted-text home-free-note">Free Demo Mode available. No API key required.</p>
-      </div>
-      <div className="home-hero-glow" aria-hidden="true" />
-    </section>
+        <p className="home-muted-text home-free-note home-hero-note">Free Demo Mode available. No API key required.</p>
+          </div>
+          <div className="home-dot-pattern home-dot-pattern-top" aria-hidden="true" />
+          <div className="home-gold-curves" aria-hidden="true"><span /><span /><span /><span /><span /></div>
+        </div>
+      </section>
+    </div>
 
     <PremiumSection className="creator-benefits-section" dots curves>
-      <SectionHeading eyebrow="BUILT FOR SERIOUS CREATORS" title="Built for creators who need reliable workflows across multiple visual styles" copy="Create structured, reusable and model-ready production packs through one consistent professional workflow." />
+      <SectionHeading eyebrow="BUILT FOR SERIOUS CREATORS" title="Built for creators who need reliable workflows across multiple visual styles" copy="Structured workflows, reusable identities, and model-ready production packs." />
       <div className="home-card-grid home-card-grid-five">
         {[
           ["Dedicated workflows", "Dedicated workflows for seven video types."],

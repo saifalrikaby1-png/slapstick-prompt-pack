@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import { videoStyles } from "./video-styles";
 import { PublicFooter, PublicHeader } from "./public-site";
 
@@ -22,10 +22,28 @@ function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: stri
   </header>;
 }
 
+function HomePartialBorder() {
+  const id = useId().replace(/:/g, "");
+  return <svg className="home-partial-border" viewBox="0 0 1000 500" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="0" y1="250" x2="500" y2="0">
+        <stop offset="0%" stopColor="#d49b35" stopOpacity="0" />
+        <stop offset="18%" stopColor="#e7b348" stopOpacity="0.48" />
+        <stop offset="42%" stopColor="#f4c65d" stopOpacity="0.92" />
+        <stop offset="66%" stopColor="#ffe18c" stopOpacity="0.96" />
+        <stop offset="84%" stopColor="#e9b64c" stopOpacity="0.46" />
+        <stop offset="100%" stopColor="#d49b35" stopOpacity="0" />
+      </linearGradient>
+    </defs>
+    <path d="M 1 250 L 1 24 Q 1 1 24 1 L 500 1" fill="none" stroke={`url(#${id})`} strokeWidth="1.5" strokeLinecap="butt" vectorEffect="non-scaling-stroke" />
+  </svg>;
+}
+
 function PremiumSection({ children, className = "", innerClassName = "", dots = false, curves = false, id }: { children: ReactNode; className?: string; innerClassName?: string; dots?: boolean; curves?: boolean; id?: string }) {
   return <div className="home-section-wrap">
     <section id={id} className={`home-premium-section ${className}`}>
       <div className={`home-premium-section-inner ${innerClassName}`}>
+        <HomePartialBorder />
         {dots ? <><div className="home-dot-pattern home-dot-pattern-top" aria-hidden="true" /><div className="home-dot-pattern home-dot-pattern-bottom" aria-hidden="true" /></> : null}
         {children}
         {curves ? <div className="home-gold-curves" aria-hidden="true"><span /><span /><span /><span /><span /></div> : null}

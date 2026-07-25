@@ -58,13 +58,16 @@ test("homepage hero is compact, text-focused, and excludes the production mockup
   assert.match(compactCss, /max-width: 1240px/);
 });
 
-test("homepage no longer renders the extra gradient CTA before its footer", () => {
+test("homepage excludes removed FAQ and Production Packs sections before its footer", () => {
   assert.doesNotMatch(home, /Choose the Style\. Build the Character\. Plan the Production\./);
   assert.doesNotMatch(home, /Create complete AI-video production packs/);
   assert.doesNotMatch(home, /Choose a Video Type/);
   assert.doesNotMatch(home, /Build Your First Character/);
   assert.doesNotMatch(home, /className="final-cta"/);
-  assert.match(home, /marketing-section faq[\s\S]*<PublicFooter \/>/);
+  assert.doesNotMatch(home, /Questions creators ask|Which video styles are supported\?|className="marketing-section faq"/);
+  assert.doesNotMatch(home, /id="production-packs"|Everything Your Selected Video Style Needs, in One Connected Pack|pack-showcase/);
+  assert.doesNotMatch(home, /#faq|#production-packs/);
+  assert.match(home, /dark-feature[\s\S]*<PublicFooter \/>/);
 });
 
 test("style cards remain route-linked and use compact natural-height layout", () => {

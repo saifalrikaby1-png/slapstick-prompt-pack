@@ -22,10 +22,10 @@ function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: stri
   </header>;
 }
 
-function PremiumSection({ children, className = "", dots = false, curves = false, id }: { children: ReactNode; className?: string; dots?: boolean; curves?: boolean; id?: string }) {
+function PremiumSection({ children, className = "", innerClassName = "", dots = false, curves = false, id }: { children: ReactNode; className?: string; innerClassName?: string; dots?: boolean; curves?: boolean; id?: string }) {
   return <div className="home-section-wrap">
     <section id={id} className={`home-premium-section ${className}`}>
-      <div className="home-premium-section-inner">
+      <div className={`home-premium-section-inner ${innerClassName}`}>
         {dots ? <><div className="home-dot-pattern home-dot-pattern-top" aria-hidden="true" /><div className="home-dot-pattern home-dot-pattern-bottom" aria-hidden="true" /></> : null}
         {children}
         {curves ? <div className="home-gold-curves" aria-hidden="true"><span /><span /><span /><span /><span /></div> : null}
@@ -66,7 +66,7 @@ export function MarketingHome() {
       </div>
     </PremiumSection>
 
-    <PremiumSection className="home-split-section" dots>
+    <PremiumSection className="home-split-section" innerClassName="home-split-inner" dots>
       <div className="home-split-copy"><SectionHeading eyebrow="WHY STYLE-SPECIFIC?" title="Stop Using One Generic Prompt for Every Kind of Video" copy="Generic prompts lose camera intent, pacing, character consistency, and model adaptation. This platform adapts production logic before a prompt is generated." /></div>
       <div className="home-comparison-grid">
         <article className="home-premium-card"><span className="home-icon" aria-hidden="true">01</span><div><h3>Generic workflow</h3><p>One prompt structure · weak camera instructions · incorrect pacing · higher retry risk</p></div></article>
@@ -79,29 +79,29 @@ export function MarketingHome() {
       <div className="home-card-grid home-process-grid">{[["01", "Choose a video type", "Select one visual language with its own production rules."], ["02", "Define the concept", "Set the title, location, object, action, ending, and tone."], ["03", "Build or select characters", "Create original identities or reuse a saved profile."], ["04", "Generate the complete production pack", "Receive frames, lock, timeline, camera, and audio guidance."], ["05", "Review with Quality Control", "Catch continuity risks and repair weak sections before generation."]].map(([number, title, copy]) => <article key={number} className="home-premium-card home-process-card"><span className="home-icon" aria-hidden="true">{number}</span><h3>{title}</h3><p>{copy}</p></article>)}</div>
     </PremiumSection>
 
-    <PremiumSection className="home-character-section" curves>
+    <PremiumSection className="home-character-section" innerClassName="home-split-inner home-character-inner" curves>
       <div><SectionHeading eyebrow="CHARACTER-FIRST" title="Every Character Detail Travels Into the Selected Video Workflow" copy="When a character is selected, its appearance, role, proportions, wardrobe, personality, movement, and sound profile are automatically connected to every relevant production output." /><Link href="/character-builder/create" className="home-primary-button">Open Character Builder</Link></div>
       <div className="home-premium-card home-connection-card"><span className="home-section-eyebrow">CHARACTER PROFILE</span><b>Identity lock</b><p>Appearance · colors · wardrobe · movement · sound</p><div><span>↘ Frames</span><span>↘ Timeline</span><span>↘ Audio</span><span>↘ Quality Control</span></div></div>
     </PremiumSection>
 
-    <PremiumSection id="quality-control" className="home-centered-section" dots curves>
+    <PremiumSection id="quality-control" className="home-centered-section home-tag-section" dots curves>
       <SectionHeading eyebrow="QUALITY CONTROL" title="Protect continuity before you send a prompt to a video model" copy="Checks adapt to the selected style while preserving identity, roles, wardrobe, accessories, object traceability, duration, camera clarity, audio synchronization, reference frames, and model compatibility." />
-      <div className="home-pill-list">{["Identity consistency", "Object traceability", "Camera clarity", "Audio synchronization", "Style-specific checks"].map((item) => <span key={item}>{item}</span>)}</div>
+      <div className="home-pill-list home-tag-list">{["Identity consistency", "Object traceability", "Camera clarity", "Audio synchronization", "Style-specific checks"].map((item) => <span className="home-tag" key={item}>{item}</span>)}</div>
     </PremiumSection>
 
-    <PremiumSection id="models" className="home-centered-section">
+    <PremiumSection id="models" className="home-centered-section home-tag-section">
       <SectionHeading eyebrow="MODEL COMPATIBILITY" title="Built Around the Video Models Creators Already Use" copy="Adapters can influence duration, reference-frame strategy, camera behavior, motion density, audio, aspect ratio, and segmentation." />
-      <div className="home-pill-list">{["OpenArt", "Kling", "Seedance", "Veo", "Runway", "PixVerse", "Higgsfield", "Custom workflow"].map((model) => <span key={model}>{model}</span>)}</div>
+      <div className="home-pill-list home-tag-list">{["OpenArt", "Kling", "Seedance", "Veo", "Runway", "PixVerse", "Higgsfield", "Custom workflow"].map((model) => <span className="home-tag" key={model}>{model}</span>)}</div>
     </PremiumSection>
 
-    <PremiumSection dots>
+    <PremiumSection className="home-mode-section" dots>
       <SectionHeading eyebrow="DEMO OR AI" title="Choose the right generation mode" />
       <div className="home-card-grid home-mode-grid"><article className="home-premium-card home-mode-card"><span className="home-section-eyebrow">DEMO MODE</span><h3>Instant structured output</h3><p>No API request. All styles, local character creation, and reliable workflow testing.</p><a href="#video-types">Try Demo Mode →</a></article><article className="home-premium-card home-mode-card"><span className="home-section-eyebrow">AI MODE</span><h3>Personalized refinement</h3><p>OpenAI-powered generation for original content and targeted corrections, using your secure server-side key.</p><a href="#video-types">Explore AI Mode →</a></article></div>
     </PremiumSection>
 
     <PremiumSection className="home-examples-section" dots curves>
       <SectionHeading eyebrow="PRODUCT DEMONSTRATIONS" title="See each workflow in motion" />
-      <div className="home-card-grid home-example-grid">{examples.map(([style, idea]) => { const item = Object.values(videoStyles).find((entry) => entry.name === style)!; return <article key={style} className="home-premium-card home-example-card" style={{ "--style-accent": item.accent } as CSSProperties}><span>{style}</span><p>{idea}</p><small>Demo quality score · 92/100</small><Link href={`/create/${item.slug}`}>View Example →</Link></article>; })}</div>
+      <div className="home-card-grid home-example-grid home-demo-grid">{examples.map(([style, idea]) => { const item = Object.values(videoStyles).find((entry) => entry.name === style)!; return <article key={style} className="home-premium-card home-example-card home-demo-card" style={{ "--style-accent": item.accent } as CSSProperties}><span>{style}</span><p>{idea}</p><small className="demo-score">Demo quality score · 92/100</small><Link className="demo-link" href={`/create/${item.slug}`}>View Example →</Link></article>; })}</div>
     </PremiumSection>
 
     <PublicFooter />

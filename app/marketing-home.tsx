@@ -25,7 +25,24 @@ export function MarketingHome() {
       */}
     </section>
 
-    <section className="value-strip"><h2>Built for creators who need reliable workflows across multiple visual styles</h2><div>{["Dedicated workflows for seven video types", "Build original characters without complex prompting", "Reuse identities across multiple productions", "Reduce avoidable generation failures", "Generate structured model-ready packs"].map((benefit) => <p key={benefit}>✓ {benefit}</p>)}</div></section>
+    <section className="creator-benefits-section">
+      <div className="creator-benefits-border">
+        <div className="creator-benefits-inner">
+          <div className="creator-benefits-heading">
+            <span className="creator-benefits-eyebrow">BUILT FOR SERIOUS CREATORS</span>
+            <h2>Built for creators who need reliable workflows<br className="creator-benefits-desktop-break" />across multiple visual styles</h2>
+            <p>Create structured, reusable and model-ready production packs through one consistent professional workflow.</p>
+          </div>
+          <div className="creator-benefits-grid">
+            <article className="creator-benefit-item"><span className="creator-benefit-check" aria-hidden="true">✓</span><div><h3>Dedicated workflows</h3><p>Dedicated workflows for seven video types.</p></div></article>
+            <article className="creator-benefit-item"><span className="creator-benefit-check" aria-hidden="true">✓</span><div><h3>Original characters</h3><p>Build original characters without complex prompting.</p></div></article>
+            <article className="creator-benefit-item"><span className="creator-benefit-check" aria-hidden="true">✓</span><div><h3>Reusable identities</h3><p>Reuse identities across multiple productions.</p></div></article>
+            <article className="creator-benefit-item"><span className="creator-benefit-check" aria-hidden="true">✓</span><div><h3>Fewer generation failures</h3><p>Reduce avoidable generation failures.</p></div></article>
+            <article className="creator-benefit-item"><span className="creator-benefit-check" aria-hidden="true">✓</span><div><h3>Model-ready output</h3><p>Generate structured model-ready packs.</p></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section className="marketing-section split-section"><div><p className="eyebrow">WHY STYLE-SPECIFIC?</p><h2>Stop Using One Generic Prompt for Every Kind of Video</h2><p className="section-copy">Generic prompts lose camera intent, pacing, character consistency, and model adaptation. This platform adapts production logic before a prompt is generated.</p></div><div className="comparison"><article><b>Generic workflow</b><p>One prompt structure · weak camera instructions · incorrect pacing · higher retry risk</p></article><article><b>Dedicated workflow</b><p>Style-specific structure · reusable profiles · camera and lighting guidance · connected timelines</p></article></div></section>
 

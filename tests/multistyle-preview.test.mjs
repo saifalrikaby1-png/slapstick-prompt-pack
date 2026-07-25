@@ -16,6 +16,7 @@ const characterBuilder = read("app/character-builder.tsx");
 const signIn = read("app/sign-in/sign-in-public.tsx");
 const signInPage = read("app/sign-in/page.tsx");
 const pricingPlans = read("app/pricing-plans.ts");
+const globalCss = read("app/globals.css");
 
 test("all seven dedicated Video Types cards and routes are defined", () => {
   for (const id of ["slapstick", "cinematic", "family-3d", "anime", "live-action", "cgi-fantasy", "stylized-3d"]) {
@@ -57,6 +58,16 @@ test("homepage hero is compact, text-focused, and excludes the production mockup
   assert.match(home, /\{\/\*[\s\S]*Family 3D Animation[\s\S]*\*\/\}/);
   assert.match(compactCss, /display: block/);
   assert.match(compactCss, /max-width: 1240px/);
+  assert.match(home, /creator-benefits-section/);
+  assert.match(home, /BUILT FOR SERIOUS CREATORS/);
+  assert.match(home, /Dedicated workflows for seven video types\./);
+  assert.match(home, /Build original characters without complex prompting\./);
+  assert.match(home, /Reuse identities across multiple productions\./);
+  assert.match(home, /Reduce avoidable generation failures\./);
+  assert.match(home, /Generate structured model-ready packs\./);
+  assert.doesNotMatch(home, /value-strip/);
+  assert.match(globalCss, /\.creator-benefits-section/);
+  assert.doesNotMatch(globalCss, /\.value-strip\s*\{/);
 });
 
 test("homepage excludes removed FAQ and Production Packs sections before its footer", () => {

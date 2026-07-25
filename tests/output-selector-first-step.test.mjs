@@ -10,7 +10,7 @@ test("output selector is the single first workflow step", () => {
   assert.match(page, /production-step-number">01<\/span>[\s\S]{0,180}Select Production Outputs/);
   assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
-  assert.match(page, /scene-setup-workspace[\s\S]{0,300}Scene Setup/);
+  assert.match(page, /scene-editor[\s\S]{0,300}Scene Setup/);
   assert.doesNotMatch(page, /Voice, Music, and Saved Settings/);
   assert.match(page, /Narration, Voices, Music &amp; Sound[\s\S]{0,160}Configure spoken audio, cartoon vocals, music, and SFX/);
   assert.match(page, /Project Presets and Saved Packs/);

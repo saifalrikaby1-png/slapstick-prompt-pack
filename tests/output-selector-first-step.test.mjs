@@ -5,9 +5,9 @@ import fs from "node:fs";
 const page = fs.readFileSync("app/page.tsx", "utf8");
 const css = fs.readFileSync("app/globals.css", "utf8");
 
-test("output selector is the single first workflow step", () => {
-  assert.ok(page.indexOf("Select Production Outputs") < page.indexOf(">Complete Video Idea<"));
-  assert.match(page, /production-step-number">01<\/span>[\s\S]{0,180}Select Production Outputs/);
+test("configuration studio is the single first workflow step", () => {
+  assert.ok(page.indexOf(">Configuration<") < page.indexOf(">Complete Video Idea<"));
+  assert.match(page, /studio-config-card[\s\S]{0,180}<span>01<\/span>[\s\S]{0,120}Configuration/);
   assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
   assert.match(page, /scene-editor[\s\S]{0,300}Scene Setup/);
@@ -17,39 +17,42 @@ test("output selector is the single first workflow step", () => {
   assert.match(page, /workflow-tab-setup/);
   assert.match(page, /Generation Summary[\s\S]{0,600}Generate \$\{requestedOutputs\.length\} Selected Outputs/);
   assert.equal((page.match(/id="choose-outputs"/g) || []).length, 1);
+  for (const panel of ["Generated Prompt", "Action Timeline", "Start Frame &amp; End Frame", "Camera &amp; Motion", "Visual &amp; Scene Settings"]) {
+    assert.match(page, new RegExp(panel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
 });
 
 test("custom and full-pack modes remain mutually exclusive presets", () => {
   assert.match(page, /type OutputSelectionMode = "custom" \| "fullPack"/);
   assert.match(page, /useState<OutputSelectionMode>\("custom"\)/);
   assert.match(page, /useState<RequestedOutput\[]>\(\["videoPrompt"\]\)/);
-  assert.match(page, /selectionMode === "custom" \? <>/);
+  assert.match(page, /selectionMode === "custom" && <div className="studio-quick-actions">/);
   assert.match(page, /selectionMode === "fullPack"/);
   assert.match(page, /setRequestedOutputs\(\[\.\.\.requestedOutputValues\]\)/);
   assert.match(page, /independentSelectionsRef\.current = requestedOutputs/);
-  assert.match(page, /Customize Outputs/);
+  assert.match(page, /Full Production Pack/);
   assert.doesNotMatch(page, /fullPackSelected|toggleFullPack/);
 });
 
 test("compact toolbar, summary, persistence, and accessible controls exist", () => {
-  for (const value of ["Select All", "Clear Selection", "Recommended Setup", "Continue to Production Setup", "aria-live=\"polite\"", "aria-pressed", "prefers-reduced-motion", "slapstick-output-selection"]) {
+  for (const value of ["Select all", "Clear", "Recommended", "Edit production setup", "aria-pressed", "slapstick-output-selection", "studio-generation-dock"]) {
     assert.match(page, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(page, /tabIndex=\{0\}/);
-  assert.match(page, /event\.key === "Enter"/);
   assert.match(page, /id="episode-idea"/);
+  assert.match(page, /Frames are generated automatically based on the selected video ratio/);
 });
 
-test("responsive professional grid is compact on desktop and one column on mobile", () => {
-  assert.match(css, /grid-template-columns:minmax\(500px,\.95fr\) minmax\(560px,1\.05fr\)/);
-  assert.match(css, /\.production-output-option\{display:grid;grid-template-columns:34px minmax\(0,1fr\) 24px/);
-  assert.match(css, /@media\(max-width:1200px\)\{\.video-production-page[\s\S]*\.production-workspace\{grid-template-columns:1fr\}/);
-  assert.match(css, /\.production-output-option\.selected/);
-  assert.match(page, /production-output-checkbox/);
+test("responsive professional studio uses three columns and one column on mobile", () => {
+  assert.match(css, /\.production-studio-workflow \.production-studio-dashboard\{display:grid;grid-template-columns:minmax\(260px,300px\) minmax\(320px,1fr\) minmax\(300px,340px\)/);
+  assert.match(css, /@media\(max-width:760px\)[\s\S]*\.production-studio-workflow \.production-studio-dashboard\{grid-template-columns:1fr/);
+  assert.match(css, /\.production-studio-workflow \.studio-generation-dock\{position:fixed/);
+  assert.match(page, /studio-output-checklist/);
 });
 
-test("no credit or duplicate full-pack checkbox language is introduced", () => {
+test("credit estimate is display-only and full-pack selection stays singular", () => {
   assert.doesNotMatch(`${page}\n${css}`, /discount/i);
-  assert.equal((page.match(/<h2 id="output-selector-title">Select Production Outputs<\/h2>/g) || []).length, 1);
+  assert.equal((page.match(/<RatioControl[\s\S]{0,80}label="Video ratio"/g) || []).length, 1);
+  assert.match(page, /Estimated credits/);
+  assert.match(page, /Demo mode · no credits used/);
   assert.doesNotMatch(page, /className=\{`selection-card full-pack/);
 });

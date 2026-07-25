@@ -75,7 +75,7 @@ export function MarketingHome() {
         <h1 id="hero-title">Build Better AI Videos Before You Generate Them</h1>
         <p className="home-hero-description">Choose your creative style, build original characters from scratch, and generate complete model-ready production packs with frames, timelines, camera direction, audio guidance, continuity rules, and built-in Quality Control.</p>
         <div className="home-hero-actions">
-              <Link href="/video-types" className="home-video-style-button"><span>Choose a Video Style</span><span className="home-video-style-arrow" aria-hidden="true">→</span></Link>
+              <Link href="/video-types" className="home-emerald-cta"><span>Choose a Video Style</span><span className="home-emerald-cta-arrow" aria-hidden="true">→</span></Link>
           <Link href="/character-builder/create" className="home-secondary-button">Build a Character</Link>
           <Link href="/how-it-works" className="home-text-button">▷ Watch the Demo</Link>
         </div>
@@ -112,7 +112,7 @@ export function MarketingHome() {
     </PremiumSection>
 
     <PremiumSection className="home-character-section" innerClassName="home-split-inner home-character-inner" curves>
-      <div><SectionHeading eyebrow="CHARACTER-FIRST" title="Every Character Detail Travels Into the Selected Video Workflow" copy="When a character is selected, its appearance, role, proportions, wardrobe, personality, movement, and sound profile are automatically connected to every relevant production output." /><Link href="/character-builder/create" className="home-primary-button">Open Character Builder</Link></div>
+      <div><SectionHeading eyebrow="CHARACTER-FIRST" title="Every Character Detail Travels Into the Selected Video Workflow" copy="When a character is selected, its appearance, role, proportions, wardrobe, personality, movement, and sound profile are automatically connected to every relevant production output." /><Link href="/character-builder/create" className="home-emerald-cta home-character-cta"><span>Open Character Builder</span><span className="home-emerald-cta-arrow" aria-hidden="true">→</span></Link></div>
       <div className="home-premium-card home-connection-card"><span className="home-section-eyebrow">CHARACTER PROFILE</span><b>Identity lock</b><p>Appearance · colors · wardrobe · movement · sound</p><div><span>↘ Frames</span><span>↘ Timeline</span><span>↘ Audio</span><span>↘ Quality Control</span></div></div>
     </PremiumSection>
 

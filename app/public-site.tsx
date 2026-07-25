@@ -21,7 +21,7 @@ export function PublicHeader() {
     <nav className={`${styles.nav} ${open ? styles.open : ""}`} aria-label="Main navigation">
       {publicNavigation.map(([label, href]) => <Link key={href} href={href} onClick={() => setOpen(false)} className={pathname === href ? styles.active : ""}>{label}</Link>)}
       <Link href="/sign-in" onClick={() => setOpen(false)} className={pathname === "/sign-in" ? styles.active : ""}>Sign In</Link>
-      <Link href="/create" onClick={() => setOpen(false)} className={styles.start}>Start Creating</Link>
+      <Link href="/create" onClick={() => setOpen(false)} className={`${styles.start} home-nav-cta`}>Start Creating <span className="home-emerald-cta-arrow" aria-hidden="true">→</span></Link>
     </nav>
   </header>;
 }

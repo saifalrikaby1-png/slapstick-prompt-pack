@@ -45,7 +45,7 @@ test("custom validation is field-local and generation payload is resolved", () =
   for (const message of ["Describe your custom visual mood.", "Describe your custom camera style.", "Describe your custom pacing style."]) assert.match(page, new RegExp(message));
   assert.match(page, /creativeDirection: resolveCreativeDirection\(form\.creativeDirection\)/);
   assert.match(route, /Legacy Scene Setup inputs are not accepted/);
-  assert.match(route, /creativeDirection\?: \{[\s\S]*visualMood: string;[\s\S]*cameraStyle: string;[\s\S]*pacingStyle: string;[\s\S]*creativeRules: string/);
+  assert.match(route, /creativeDirection\?: \{[\s\S]*visualMood: string;[\s\S]*cameraMotion: \{[\s\S]*cameraStyle: string;[\s\S]*subjectMotion: string;[\s\S]*qualityRules: string\[\];[\s\S]*pacingStyle: string;[\s\S]*creativeRules: string/);
 });
 
 test("prompt generation derives scene facts and applies the one global ratio", () => {
@@ -60,5 +60,5 @@ test("migration, persistence, and export include Creative Direction", () => {
   assert.match(engine, /creativeDirection: migrateCreativeDirection\(item\.creativeDirection\)/);
   assert.match(page, /form: \{ \.\.\.form \}/);
   assert.match(page, /heading\("CREATIVE DIRECTION"\)/);
-  for (const label of ["Visual Mood & Atmosphere", "Camera & Motion Style", "Pacing & Performance", "Creative Rules & Restrictions"]) assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  for (const label of ["Visual Mood & Atmosphere", "Camera Style", "Framing", "Movement Intensity", "Camera Stability", "Subject Motion", "Motion Quality Rules", "Pacing & Performance", "Creative Rules & Restrictions"]) assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });

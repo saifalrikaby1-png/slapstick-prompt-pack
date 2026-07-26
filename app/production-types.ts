@@ -15,11 +15,73 @@ export const ruleChipIds = [
 
 export type RuleChipId = (typeof ruleChipIds)[number];
 
+export type CameraStyleValue =
+  | "smooth-cinematic"
+  | "dynamic-energetic"
+  | "locked-stable"
+  | "character-follow"
+  | "slow-push-in"
+  | "orbit-subject"
+  | "handheld-realistic"
+  | "fast-action-camera"
+  | "overhead-top-down"
+  | "custom";
+
+export type CameraFramingValue = "automatic" | "wide-shot" | "medium-shot" | "close-up" | "full-body" | "over-the-shoulder";
+export type MovementIntensityValue = "subtle" | "balanced" | "dynamic";
+export type CameraStabilityValue = "stable" | "natural" | "expressive";
+export type SubjectMotionValue = "natural-controlled" | "smooth-cinematic" | "fast-energetic" | "exaggerated-comedic" | "realistic-physical" | "custom";
+export type MotionQualityRuleId =
+  | "smooth-continuous-movement"
+  | "no-sudden-camera-jumps"
+  | "no-unrequested-cuts"
+  | "preserve-screen-direction"
+  | "keep-characters-visible"
+  | "realistic-ground-contact"
+  | "avoid-floating-sliding"
+  | "objects-physically-connected"
+  | "match-motion-to-pacing";
+
+export type CameraMotionState = {
+  cameraStyle: CameraStyleValue;
+  cameraStyleCustom: string;
+  cameraCustomInstructions: string;
+  framing: CameraFramingValue;
+  movementIntensity: MovementIntensityValue;
+  cameraStability: CameraStabilityValue;
+  subjectMotion: SubjectMotionValue;
+  subjectMotionCustom: string;
+  motionQualityRuleIds: MotionQualityRuleId[];
+};
+
+export const motionQualityRuleIds: MotionQualityRuleId[] = [
+  "smooth-continuous-movement",
+  "no-sudden-camera-jumps",
+  "no-unrequested-cuts",
+  "preserve-screen-direction",
+  "keep-characters-visible",
+  "realistic-ground-contact",
+  "avoid-floating-sliding",
+  "objects-physically-connected",
+  "match-motion-to-pacing",
+];
+
+export const DEFAULT_CAMERA_MOTION: CameraMotionState = {
+  cameraStyle: "smooth-cinematic",
+  cameraStyleCustom: "",
+  cameraCustomInstructions: "",
+  framing: "automatic",
+  movementIntensity: "balanced",
+  cameraStability: "stable",
+  subjectMotion: "natural-controlled",
+  subjectMotionCustom: "",
+  motionQualityRuleIds: [...motionQualityRuleIds],
+};
+
 export type CreativeDirectionState = {
   visualMood: string;
   visualMoodCustom: string;
-  cameraStyle: string;
-  cameraStyleCustom: string;
+  cameraMotion: CameraMotionState;
   pacingStyle: string;
   pacingStyleCustom: string;
   creativeRulesManual: string;
@@ -29,8 +91,7 @@ export type CreativeDirectionState = {
 export const defaultCreativeDirection: CreativeDirectionState = {
   visualMood: "bright-colorful",
   visualMoodCustom: "",
-  cameraStyle: "smooth-cinematic",
-  cameraStyleCustom: "",
+  cameraMotion: { ...DEFAULT_CAMERA_MOTION, motionQualityRuleIds: [...DEFAULT_CAMERA_MOTION.motionQualityRuleIds] },
   pacingStyle: "fast-energetic",
   pacingStyleCustom: "",
   creativeRulesManual: "",

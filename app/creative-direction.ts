@@ -1,7 +1,16 @@
 import {
+  CameraMotionState,
+  CameraStabilityValue,
+  CameraFramingValue,
+  CameraStyleValue,
   CreativeDirectionState,
+  DEFAULT_CAMERA_MOTION,
+  MotionQualityRuleId,
+  MovementIntensityValue,
   RuleChipId,
+  SubjectMotionValue,
   defaultCreativeDirection,
+  motionQualityRuleIds,
   ruleChipIds,
 } from "./production-types";
 
@@ -25,17 +34,59 @@ export const VISUAL_MOOD_OPTIONS = [
 ] as const satisfies readonly CreativeDirectionOption[];
 
 export const CAMERA_STYLE_OPTIONS = [
-  { value: "smooth-cinematic", label: "Smooth & Cinematic", description: "Smooth tracking movement, stable framing, gentle push-ins, and polished cinematic motion." },
-  { value: "dynamic-energetic", label: "Dynamic & Energetic", description: "Active camera movement, dynamic framing, responsive tracking, and energetic visual motion." },
-  { value: "locked-stable", label: "Locked & Stable", description: "Stable camera placement, controlled framing, minimal movement, and clear subject visibility." },
-  { value: "slow-push-in", label: "Slow Push-In", description: "A gradual camera move toward the subject to build focus, emotion, or anticipation." },
-  { value: "orbit-subject", label: "Orbit Around Subject", description: "The camera moves smoothly around the main subject while keeping the subject clearly framed." },
-  { value: "fast-action-camera", label: "Fast Action Camera", description: "Quick tracking, responsive reframing, energetic movement, and action-focused composition." },
-  { value: "overhead-top-down", label: "Overhead / Top-Down", description: "Elevated or top-down framing that clearly presents movement, layout, and spatial relationships." },
-  { value: "handheld-realistic", label: "Handheld & Realistic", description: "Natural handheld movement with restrained shake and realistic documentary-style framing." },
-  { value: "character-follow", label: "Character Follow", description: "The camera follows the primary character while preserving clear movement and spatial continuity." },
+  { value: "smooth-cinematic", label: "Smooth Cinematic", description: "Smooth tracking, stable framing, gentle push-ins, and polished cinematic movement." },
+  { value: "dynamic-energetic", label: "Dynamic & Energetic", description: "Active tracking, responsive reframing, and energetic camera movement." },
+  { value: "locked-stable", label: "Locked & Stable", description: "Fixed or highly controlled framing with minimal camera movement." },
+  { value: "character-follow", label: "Character Follow", description: "The camera follows the main character while preserving visibility and screen direction." },
+  { value: "slow-push-in", label: "Slow Push-In", description: "A gradual camera move toward the subject to create emphasis or anticipation." },
+  { value: "orbit-subject", label: "Orbit Around Subject", description: "The camera moves smoothly around the focal subject while keeping it clearly framed." },
+  { value: "handheld-realistic", label: "Handheld Realistic", description: "Subtle natural camera movement with restrained realistic shake." },
+  { value: "fast-action-camera", label: "Fast Action Camera", description: "Responsive tracking and energetic reframing for fast movement and action." },
+  { value: "overhead-top-down", label: "Overhead / Top-Down", description: "Elevated framing that clearly presents spatial movement and scene layout." },
   { value: "custom", label: "Custom", description: "" },
 ] as const satisfies readonly CreativeDirectionOption[];
+
+export const CAMERA_FRAMING_OPTIONS = [
+  { value: "automatic", label: "Automatic", description: "Let the AI choose and adjust framing based on the scene and action." },
+  { value: "wide-shot", label: "Wide Shot", description: "Show the environment, characters, and full spatial relationship clearly." },
+  { value: "medium-shot", label: "Medium Shot", description: "Balance character performance with enough visible environmental context." },
+  { value: "close-up", label: "Close-Up", description: "Prioritize facial expressions, reactions, and important visual detail." },
+  { value: "full-body", label: "Full Body", description: "Keep the complete character body visible for physical action and movement." },
+  { value: "over-the-shoulder", label: "Over-the-Shoulder", description: "Frame interaction from behind or beside one subject toward another." },
+] as const satisfies readonly CreativeDirectionOption[];
+
+export const MOVEMENT_INTENSITY_OPTIONS = [
+  { value: "subtle", label: "Subtle", description: "Restrained camera movement that supports the scene without drawing attention." },
+  { value: "balanced", label: "Balanced", description: "Professional camera movement with clear energy and controlled readability." },
+  { value: "dynamic", label: "Dynamic", description: "Stronger, more energetic movement for action, comedy, or heightened intensity." },
+] as const satisfies readonly CreativeDirectionOption[];
+
+export const CAMERA_STABILITY_OPTIONS = [
+  { value: "stable", label: "Stable", description: "Smooth and controlled camera behavior with minimal shake." },
+  { value: "natural", label: "Natural", description: "Gentle realistic camera variation while maintaining clear framing." },
+  { value: "expressive", label: "Expressive", description: "More pronounced camera behavior that responds visibly to action and performance." },
+] as const satisfies readonly CreativeDirectionOption[];
+
+export const SUBJECT_MOTION_OPTIONS = [
+  { value: "natural-controlled", label: "Natural & Controlled", description: "Believable character and object motion with controlled timing and weight." },
+  { value: "smooth-cinematic", label: "Smooth & Cinematic", description: "Polished subject movement with fluid transitions and restrained physical performance." },
+  { value: "fast-energetic", label: "Fast & Energetic", description: "Quick, active subject movement with continuous energy and clear direction." },
+  { value: "exaggerated-comedic", label: "Exaggerated & Comedic", description: "Amplified poses, reactions, timing, and physical comedy while preserving readability." },
+  { value: "realistic-physical", label: "Realistic Physical Motion", description: "Weight, momentum, balance, contact, and object interaction should remain physically believable." },
+  { value: "custom", label: "Custom", description: "" },
+] as const satisfies readonly CreativeDirectionOption[];
+
+export const MOTION_QUALITY_RULES = [
+  { id: "smooth-continuous-movement", label: "Smooth continuous movement", prompt: "Keep camera, character, and object motion smooth and continuous." },
+  { id: "no-sudden-camera-jumps", label: "No sudden camera jumps", prompt: "Do not introduce sudden camera jumps or unexplained reframing." },
+  { id: "no-unrequested-cuts", label: "No unrequested cuts", prompt: "Do not add cuts unless explicitly required by the selected production structure." },
+  { id: "preserve-screen-direction", label: "Preserve screen direction", prompt: "Preserve consistent screen direction and spatial continuity." },
+  { id: "keep-characters-visible", label: "Keep selected characters visible", prompt: "Keep all selected characters visible whenever required by the scene action." },
+  { id: "realistic-ground-contact", label: "Maintain realistic ground contact", prompt: "Maintain realistic foot placement, body balance, and ground contact." },
+  { id: "avoid-floating-sliding", label: "Avoid floating or sliding", prompt: "Prevent characters and objects from floating, drifting, or sliding unnaturally." },
+  { id: "objects-physically-connected", label: "Keep objects physically connected", prompt: "Keep held, attached, or interacting objects physically connected to the correct character or surface." },
+  { id: "match-motion-to-pacing", label: "Match movement speed to pacing", prompt: "Match camera and subject movement speed to the selected pacing and performance style." },
+] as const;
 
 export const PACING_STYLE_OPTIONS = [
   { value: "fast-energetic", label: "Fast & Energetic", description: "Quick pacing, high character energy, strong reactions, and continuous visual movement." },
@@ -76,10 +127,25 @@ export function resolveCreativeRules(manualRules: string, selectedChipIds: reado
   return [manualRules.trim(), ...chipRules].filter(Boolean).join(" ").trim();
 }
 
+export function resolveCameraMotion(cameraMotion: CameraMotionState) {
+  return {
+    cameraStyle: resolveCreativeDirectionValue(cameraMotion.cameraStyle, cameraMotion.cameraStyleCustom, CAMERA_STYLE_OPTIONS),
+    customInstructions: cameraMotion.cameraCustomInstructions.trim(),
+    framing: resolveCreativeDirectionValue(cameraMotion.framing, "", CAMERA_FRAMING_OPTIONS),
+    movementIntensity: cameraMotion.movementIntensity,
+    cameraStability: cameraMotion.cameraStability,
+    subjectMotion: resolveCreativeDirectionValue(cameraMotion.subjectMotion, cameraMotion.subjectMotionCustom, SUBJECT_MOTION_OPTIONS),
+    qualityRules: cameraMotion.motionQualityRuleIds.flatMap((id) => {
+      const prompt = MOTION_QUALITY_RULES.find((rule) => rule.id === id)?.prompt;
+      return prompt ? [prompt] : [];
+    }),
+  };
+}
+
 export function resolveCreativeDirection(state: CreativeDirectionState) {
   return {
     visualMood: resolveCreativeDirectionValue(state.visualMood, state.visualMoodCustom, VISUAL_MOOD_OPTIONS),
-    cameraStyle: resolveCreativeDirectionValue(state.cameraStyle, state.cameraStyleCustom, CAMERA_STYLE_OPTIONS),
+    cameraMotion: resolveCameraMotion(state.cameraMotion),
     pacingStyle: resolveCreativeDirectionValue(state.pacingStyle, state.pacingStyleCustom, PACING_STYLE_OPTIONS),
     creativeRules: resolveCreativeRules(state.creativeRulesManual, state.selectedRuleChipIds),
   };
@@ -87,14 +153,38 @@ export function resolveCreativeDirection(state: CreativeDirectionState) {
 
 export function migrateCreativeDirection(value: unknown): CreativeDirectionState {
   const item = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const cameraItem = item.cameraMotion && typeof item.cameraMotion === "object" && !Array.isArray(item.cameraMotion)
+    ? item.cameraMotion as Record<string, unknown>
+    : item;
   const validRuleIds = Array.isArray(item.selectedRuleChipIds)
     ? item.selectedRuleChipIds.filter((id): id is RuleChipId => typeof id === "string" && ruleChipIds.includes(id as RuleChipId))
     : [];
   return {
     visualMood: typeof item.visualMood === "string" && VISUAL_MOOD_OPTIONS.some((option) => option.value === item.visualMood) ? item.visualMood : defaultCreativeDirection.visualMood,
     visualMoodCustom: typeof item.visualMoodCustom === "string" ? item.visualMoodCustom.slice(0, 200) : "",
-    cameraStyle: typeof item.cameraStyle === "string" && CAMERA_STYLE_OPTIONS.some((option) => option.value === item.cameraStyle) ? item.cameraStyle : defaultCreativeDirection.cameraStyle,
-    cameraStyleCustom: typeof item.cameraStyleCustom === "string" ? item.cameraStyleCustom.slice(0, 200) : "",
+    cameraMotion: {
+      cameraStyle: typeof cameraItem.cameraStyle === "string" && CAMERA_STYLE_OPTIONS.some((option) => option.value === cameraItem.cameraStyle)
+        ? cameraItem.cameraStyle as CameraStyleValue
+        : DEFAULT_CAMERA_MOTION.cameraStyle,
+      cameraStyleCustom: typeof cameraItem.cameraStyleCustom === "string" ? cameraItem.cameraStyleCustom.slice(0, 200) : "",
+      cameraCustomInstructions: typeof cameraItem.cameraCustomInstructions === "string" ? cameraItem.cameraCustomInstructions.slice(0, 300) : "",
+      framing: typeof cameraItem.framing === "string" && CAMERA_FRAMING_OPTIONS.some((option) => option.value === cameraItem.framing)
+        ? cameraItem.framing as CameraFramingValue
+        : DEFAULT_CAMERA_MOTION.framing,
+      movementIntensity: typeof cameraItem.movementIntensity === "string" && MOVEMENT_INTENSITY_OPTIONS.some((option) => option.value === cameraItem.movementIntensity)
+        ? cameraItem.movementIntensity as MovementIntensityValue
+        : DEFAULT_CAMERA_MOTION.movementIntensity,
+      cameraStability: typeof cameraItem.cameraStability === "string" && CAMERA_STABILITY_OPTIONS.some((option) => option.value === cameraItem.cameraStability)
+        ? cameraItem.cameraStability as CameraStabilityValue
+        : DEFAULT_CAMERA_MOTION.cameraStability,
+      subjectMotion: typeof cameraItem.subjectMotion === "string" && SUBJECT_MOTION_OPTIONS.some((option) => option.value === cameraItem.subjectMotion)
+        ? cameraItem.subjectMotion as SubjectMotionValue
+        : DEFAULT_CAMERA_MOTION.subjectMotion,
+      subjectMotionCustom: typeof cameraItem.subjectMotionCustom === "string" ? cameraItem.subjectMotionCustom.slice(0, 200) : "",
+      motionQualityRuleIds: Array.isArray(cameraItem.motionQualityRuleIds)
+        ? cameraItem.motionQualityRuleIds.filter((id): id is MotionQualityRuleId => typeof id === "string" && motionQualityRuleIds.includes(id as MotionQualityRuleId))
+        : [...DEFAULT_CAMERA_MOTION.motionQualityRuleIds],
+    },
     pacingStyle: typeof item.pacingStyle === "string" && PACING_STYLE_OPTIONS.some((option) => option.value === item.pacingStyle) ? item.pacingStyle : defaultCreativeDirection.pacingStyle,
     pacingStyleCustom: typeof item.pacingStyleCustom === "string" ? item.pacingStyleCustom.slice(0, 200) : "",
     creativeRulesManual: typeof item.creativeRulesManual === "string"

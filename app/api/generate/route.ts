@@ -9,13 +9,22 @@ import {
   requestedOutputValues,
 } from "../../production-types";
 import { buildAuthorizedSceneInventory, buildObjectStateLedger, migrateForm, selectedModelAdapter } from "../../production-engine";
+import { MOTION_QUALITY_RULES } from "../../creative-direction";
 
 type RequestBody = {
   action?: "generate" | "fix";
   form?: Partial<ProductionForm>;
   creativeDirection?: {
     visualMood: string;
-    cameraStyle: string;
+    cameraMotion: {
+      cameraStyle: string;
+      customInstructions: string;
+      framing: string;
+      movementIntensity: string;
+      cameraStability: string;
+      subjectMotion: string;
+      qualityRules: string[];
+    };
     pacingStyle: string;
     creativeRules: string;
   };
@@ -163,19 +172,39 @@ export async function POST(request: Request) {
     return Response.json({ error: "Legacy Scene Setup inputs are not accepted." }, { status: 400 });
   }
   const creativeDirection = body.creativeDirection;
-  if (!creativeDirection || !["visualMood", "cameraStyle", "pacingStyle", "creativeRules"].every((key) =>
-    typeof creativeDirection[key as keyof typeof creativeDirection] === "string")) {
+  if (!creativeDirection || !["visualMood", "pacingStyle", "creativeRules"].every((key) =>
+    typeof creativeDirection[key as keyof typeof creativeDirection] === "string") ||
+    !creativeDirection.cameraMotion ||
+    !["cameraStyle", "customInstructions", "framing", "movementIntensity", "cameraStability", "subjectMotion"].every((key) =>
+      typeof creativeDirection.cameraMotion[key as keyof typeof creativeDirection.cameraMotion] === "string") ||
+    !Array.isArray(creativeDirection.cameraMotion.qualityRules) ||
+    !creativeDirection.cameraMotion.qualityRules.every((rule) => typeof rule === "string")) {
     return Response.json({ error: "Creative Direction is required." }, { status: 400 });
   }
-  if (!creativeDirection.visualMood.trim() || !creativeDirection.cameraStyle.trim() || !creativeDirection.pacingStyle.trim()) {
+  if (!creativeDirection.visualMood.trim() || !creativeDirection.cameraMotion.cameraStyle.trim() || !creativeDirection.cameraMotion.subjectMotion.trim() || !creativeDirection.pacingStyle.trim()) {
     return Response.json({ error: "Visual mood, camera style, and pacing style are required." }, { status: 400 });
   }
   const normalizedForm = migrateForm(body.form);
   normalizedForm.creativeDirection = {
     visualMood: "custom",
     visualMoodCustom: creativeDirection.visualMood.trim(),
-    cameraStyle: "custom",
-    cameraStyleCustom: creativeDirection.cameraStyle.trim(),
+    cameraMotion: {
+      cameraStyle: "custom",
+      cameraStyleCustom: [
+        creativeDirection.cameraMotion.cameraStyle.trim(),
+        creativeDirection.cameraMotion.customInstructions.trim(),
+        `Framing: ${creativeDirection.cameraMotion.framing.trim()}`,
+      ].filter(Boolean).join(". ").slice(0, 200),
+      cameraCustomInstructions: creativeDirection.cameraMotion.customInstructions.trim(),
+      framing: "automatic",
+      movementIntensity: creativeDirection.cameraMotion.movementIntensity === "subtle" || creativeDirection.cameraMotion.movementIntensity === "dynamic" ? creativeDirection.cameraMotion.movementIntensity : "balanced",
+      cameraStability: creativeDirection.cameraMotion.cameraStability === "natural" || creativeDirection.cameraMotion.cameraStability === "expressive" ? creativeDirection.cameraMotion.cameraStability : "stable",
+      subjectMotion: "custom",
+      subjectMotionCustom: creativeDirection.cameraMotion.subjectMotion.trim(),
+      motionQualityRuleIds: MOTION_QUALITY_RULES
+        .filter((rule) => creativeDirection.cameraMotion.qualityRules.includes(rule.prompt))
+        .map((rule) => rule.id),
+    },
     pacingStyle: "custom",
     pacingStyleCustom: creativeDirection.pacingStyle.trim(),
     creativeRulesManual: creativeDirection.creativeRules.trim(),

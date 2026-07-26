@@ -1,7 +1,7 @@
 import {
   CharacterProfile,
-  CreativeAsset,
   CreativeDirectionState,
+  CreativeAsset,
   LegacyPackItem,
   LegacySavedPack,
   ProductionForm,
@@ -13,8 +13,11 @@ import {
   SavedProductionPack,
   StoredPack,
   defaultProductionForm,
+  defaultCreativeDirection,
   fieldsForRequestedOutputs,
+  motionQualityRuleIds,
   requestedOutputValues,
+  ruleChipIds,
 } from "./production-types";
 
 const previewStyleQuality = (id?: ProductionForm["videoStyleId"]) => {
@@ -36,43 +39,72 @@ const stringValue = (value: unknown, fallback = "") =>
 const boolValue = (value: unknown, fallback: boolean) =>
   typeof value === "boolean" ? value : fallback;
 
-const creativeDirectionPresets = {
-  visualMood: {
-    "bright-colorful": "Bright & Colorful: Bright lighting, vivid colors, cheerful atmosphere, and clear visual contrast.",
-    "dark-cinematic": "Dark & Cinematic: Deep shadows, dramatic contrast, controlled highlights, and a serious cinematic tone.",
-    "warm-magical": "Warm & Magical: Warm lighting, gentle glow, rich color harmony, and an inviting magical atmosphere.",
-    "soft-dreamy": "Soft & Dreamy: Soft light, delicate colors, gentle contrast, and an ethereal dreamlike feeling.",
-    "cool-moody": "Cool & Moody: Cool color temperature, atmospheric shadows, restrained highlights, and a reflective mood.",
-    "epic-dramatic": "Epic & Dramatic: Powerful lighting, bold contrast, heightened scale, and strong dramatic atmosphere.",
-    "futuristic-neon": "Futuristic Neon: Neon accents, reflective surfaces, bold contrast, and a futuristic high-tech atmosphere.",
-    "natural-realistic": "Natural & Realistic: Natural lighting, believable colors, realistic atmosphere, and restrained visual styling.",
-    "minimal-clean": "Minimal & Clean: Simple composition, controlled colors, clean lighting, and minimal visual distraction.",
-  },
-  cameraStyle: {
-    "smooth-cinematic": "Smooth & Cinematic: Smooth tracking movement, stable framing, gentle push-ins, and polished cinematic motion.",
-    "dynamic-energetic": "Dynamic & Energetic: Active camera movement, dynamic framing, responsive tracking, and energetic visual motion.",
-    "locked-stable": "Locked & Stable: Stable camera placement, controlled framing, minimal movement, and clear subject visibility.",
-    "slow-push-in": "Slow Push-In: A gradual camera move toward the subject to build focus, emotion, or anticipation.",
-    "orbit-subject": "Orbit Around Subject: The camera moves smoothly around the main subject while keeping the subject clearly framed.",
-    "fast-action-camera": "Fast Action Camera: Quick tracking, responsive reframing, energetic movement, and action-focused composition.",
-    "overhead-top-down": "Overhead / Top-Down: Elevated or top-down framing that clearly presents movement, layout, and spatial relationships.",
-    "handheld-realistic": "Handheld & Realistic: Natural handheld movement with restrained shake and realistic documentary-style framing.",
-    "character-follow": "Character Follow: The camera follows the primary character while preserving clear movement and spatial continuity.",
-  },
-  pacingStyle: {
-    "fast-energetic": "Fast & Energetic: Quick pacing, high character energy, strong reactions, and continuous visual movement.",
-    "calm-emotional": "Calm & Emotional: Gentle pacing, expressive emotional beats, restrained movement, and clear character focus.",
-    "exaggerated-comedic": "Exaggerated & Comedic: Bold reactions, amplified timing, expressive performance, and clear comedic escalation.",
-    "slow-suspenseful": "Slow & Suspenseful: Controlled pacing, delayed reveals, rising tension, and deliberate performance beats.",
-    "natural-realistic": "Natural & Realistic: Believable timing, restrained acting, natural reactions, and realistic movement.",
-    "epic-dramatic": "Epic & Dramatic: Strong dramatic beats, powerful movement, heightened performance, and cinematic escalation.",
-    "gentle-family-friendly": "Gentle & Family-Friendly: Clear pacing, warm expressions, readable actions, and soft family-friendly performance.",
-    "steady-informational": "Steady & Informational: Clear structured pacing, controlled delivery, and an easy-to-follow visual progression.",
-    "gradual-build": "Gradual Build: A measured opening that steadily increases energy and intensity toward the final payoff.",
-  },
+// Keep these resolvers local because the engine is also loaded as a standalone
+// module by export workers and the deterministic prompt test harness.
+const engineDirectionOptions = {
+  visualMood: [
+    ["bright-colorful", "Bright & Colorful", "Bright lighting, vivid colors, cheerful atmosphere, and clear visual contrast."],
+    ["dark-cinematic", "Dark & Cinematic", "Deep shadows, dramatic contrast, controlled highlights, and a serious cinematic tone."],
+    ["warm-magical", "Warm & Magical", "Warm lighting, gentle glow, rich color harmony, and an inviting magical atmosphere."],
+    ["soft-dreamy", "Soft & Dreamy", "Soft light, delicate colors, gentle contrast, and an ethereal dreamlike feeling."],
+    ["cool-moody", "Cool & Moody", "Cool color temperature, atmospheric shadows, restrained highlights, and a reflective mood."],
+    ["epic-dramatic", "Epic & Dramatic", "Powerful lighting, bold contrast, heightened scale, and strong dramatic atmosphere."],
+    ["futuristic-neon", "Futuristic Neon", "Neon accents, reflective surfaces, bold contrast, and a futuristic high-tech atmosphere."],
+    ["natural-realistic", "Natural & Realistic", "Natural lighting, believable colors, realistic atmosphere, and restrained visual styling."],
+    ["minimal-clean", "Minimal & Clean", "Simple composition, controlled colors, clean lighting, and minimal visual distraction."],
+  ],
+  cameraStyle: [
+    ["smooth-cinematic", "Smooth Cinematic", "Smooth tracking, stable framing, gentle push-ins, and polished cinematic movement."],
+    ["dynamic-energetic", "Dynamic & Energetic", "Active tracking, responsive reframing, and energetic camera movement."],
+    ["locked-stable", "Locked & Stable", "Fixed or highly controlled framing with minimal camera movement."],
+    ["character-follow", "Character Follow", "The camera follows the main character while preserving visibility and screen direction."],
+    ["slow-push-in", "Slow Push-In", "A gradual camera move toward the subject to create emphasis or anticipation."],
+    ["orbit-subject", "Orbit Around Subject", "The camera moves smoothly around the focal subject while keeping it clearly framed."],
+    ["handheld-realistic", "Handheld Realistic", "Subtle natural camera movement with restrained realistic shake."],
+    ["fast-action-camera", "Fast Action Camera", "Responsive tracking and energetic reframing for fast movement and action."],
+    ["overhead-top-down", "Overhead / Top-Down", "Elevated framing that clearly presents spatial movement and scene layout."],
+  ],
+  framing: [
+    ["automatic", "Automatic", "Let the AI choose and adjust framing based on the scene and action."],
+    ["wide-shot", "Wide Shot", "Show the environment, characters, and full spatial relationship clearly."],
+    ["medium-shot", "Medium Shot", "Balance character performance with enough visible environmental context."],
+    ["close-up", "Close-Up", "Prioritize facial expressions, reactions, and important visual detail."],
+    ["full-body", "Full Body", "Keep the complete character body visible for physical action and movement."],
+    ["over-the-shoulder", "Over-the-Shoulder", "Frame interaction from behind or beside one subject toward another."],
+  ],
+  subjectMotion: [
+    ["natural-controlled", "Natural & Controlled", "Believable character and object motion with controlled timing and weight."],
+    ["smooth-cinematic", "Smooth & Cinematic", "Polished subject movement with fluid transitions and restrained physical performance."],
+    ["fast-energetic", "Fast & Energetic", "Quick, active subject movement with continuous energy and clear direction."],
+    ["exaggerated-comedic", "Exaggerated & Comedic", "Amplified poses, reactions, timing, and physical comedy while preserving readability."],
+    ["realistic-physical", "Realistic Physical Motion", "Weight, momentum, balance, contact, and object interaction should remain physically believable."],
+  ],
+  pacingStyle: [
+    ["fast-energetic", "Fast & Energetic", "Quick pacing, high character energy, strong reactions, and continuous visual movement."],
+    ["calm-emotional", "Calm & Emotional", "Gentle pacing, expressive emotional beats, restrained movement, and clear character focus."],
+    ["exaggerated-comedic", "Exaggerated & Comedic", "Bold reactions, amplified timing, expressive performance, and clear comedic escalation."],
+    ["slow-suspenseful", "Slow & Suspenseful", "Controlled pacing, delayed reveals, rising tension, and deliberate performance beats."],
+    ["natural-realistic", "Natural & Realistic", "Believable timing, restrained acting, natural reactions, and realistic movement."],
+    ["epic-dramatic", "Epic & Dramatic", "Strong dramatic beats, powerful movement, heightened performance, and cinematic escalation."],
+    ["gentle-family-friendly", "Gentle & Family-Friendly", "Clear pacing, warm expressions, readable actions, and soft family-friendly performance."],
+    ["steady-informational", "Steady & Informational", "Clear structured pacing, controlled delivery, and an easy-to-follow visual progression."],
+    ["gradual-build", "Gradual Build", "A measured opening that steadily increases energy and intensity toward the final payoff."],
+  ],
 } as const;
 
-const ruleChipSentences: Record<string, string> = {
+const engineMotionRulePrompts: Record<string, string> = {
+  "smooth-continuous-movement": "Keep camera, character, and object motion smooth and continuous.",
+  "no-sudden-camera-jumps": "Do not introduce sudden camera jumps or unexplained reframing.",
+  "no-unrequested-cuts": "Do not add cuts unless explicitly required by the selected production structure.",
+  "preserve-screen-direction": "Preserve consistent screen direction and spatial continuity.",
+  "keep-characters-visible": "Keep all selected characters visible whenever required by the scene action.",
+  "realistic-ground-contact": "Maintain realistic foot placement, body balance, and ground contact.",
+  "avoid-floating-sliding": "Prevent characters and objects from floating, drifting, or sliding unnaturally.",
+  "objects-physically-connected": "Keep held, attached, or interacting objects physically connected to the correct character or surface.",
+  "match-motion-to-pacing": "Match camera and subject movement speed to the selected pacing and performance style.",
+};
+
+const engineRuleChipText: Record<string, string> = {
   "no-dialogue": "No dialogue.",
   "no-sudden-cuts": "No sudden cuts.",
   "characters-visible": "Keep all selected characters visible.",
@@ -81,32 +113,62 @@ const ruleChipSentences: Record<string, string> = {
   "seamless-loop": "End with a seamless loop.",
 };
 
-function migrateCreativeDirection(value: unknown): CreativeDirectionState {
-  const item = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const defaults = defaultProductionForm.creativeDirection;
-  const selectedRuleChipIds = Array.isArray(item.selectedRuleChipIds)
-    ? item.selectedRuleChipIds.filter((id): id is CreativeDirectionState["selectedRuleChipIds"][number] => typeof id === "string" && id in ruleChipSentences)
-    : [];
-  return {
-    visualMood: typeof item.visualMood === "string" && (item.visualMood === "custom" || item.visualMood in creativeDirectionPresets.visualMood) ? item.visualMood : defaults.visualMood,
-    visualMoodCustom: stringValue(item.visualMoodCustom).slice(0, 200),
-    cameraStyle: typeof item.cameraStyle === "string" && (item.cameraStyle === "custom" || item.cameraStyle in creativeDirectionPresets.cameraStyle) ? item.cameraStyle : defaults.cameraStyle,
-    cameraStyleCustom: stringValue(item.cameraStyleCustom).slice(0, 200),
-    pacingStyle: typeof item.pacingStyle === "string" && (item.pacingStyle === "custom" || item.pacingStyle in creativeDirectionPresets.pacingStyle) ? item.pacingStyle : defaults.pacingStyle,
-    pacingStyleCustom: stringValue(item.pacingStyleCustom).slice(0, 200),
-    creativeRulesManual: stringValue(item.creativeRulesManual, stringValue(item.creativeRules)).slice(0, 300),
-    selectedRuleChipIds,
-  };
+function resolveEngineDirection(value: string, custom: string, options: readonly (readonly [string, string, string])[]) {
+  if (value === "custom") return custom.trim();
+  const option = options.find(([id]) => id === value);
+  return option ? `${option[1]}: ${option[2]}` : "";
 }
 
 function resolveCreativeDirection(state: CreativeDirectionState) {
-  const resolve = (value: string, custom: string, presets: Record<string, string>) =>
-    value === "custom" ? custom.trim() : presets[value] || "";
+  const camera = state.cameraMotion;
   return {
-    visualMood: resolve(state.visualMood, state.visualMoodCustom, creativeDirectionPresets.visualMood),
-    cameraStyle: resolve(state.cameraStyle, state.cameraStyleCustom, creativeDirectionPresets.cameraStyle),
-    pacingStyle: resolve(state.pacingStyle, state.pacingStyleCustom, creativeDirectionPresets.pacingStyle),
-    creativeRules: [state.creativeRulesManual.trim(), ...state.selectedRuleChipIds.map((id) => ruleChipSentences[id]).filter(Boolean)].filter(Boolean).join(" "),
+    visualMood: resolveEngineDirection(state.visualMood, state.visualMoodCustom, engineDirectionOptions.visualMood),
+    cameraMotion: {
+      cameraStyle: resolveEngineDirection(camera.cameraStyle, camera.cameraStyleCustom, engineDirectionOptions.cameraStyle),
+      customInstructions: camera.cameraCustomInstructions.trim(),
+      framing: resolveEngineDirection(camera.framing, "", engineDirectionOptions.framing),
+      movementIntensity: camera.movementIntensity,
+      cameraStability: camera.cameraStability,
+      subjectMotion: resolveEngineDirection(camera.subjectMotion, camera.subjectMotionCustom, engineDirectionOptions.subjectMotion),
+      qualityRules: camera.motionQualityRuleIds.flatMap((id) => engineMotionRulePrompts[id] ? [engineMotionRulePrompts[id]] : []),
+    },
+    pacingStyle: resolveEngineDirection(state.pacingStyle, state.pacingStyleCustom, engineDirectionOptions.pacingStyle),
+    creativeRules: [state.creativeRulesManual.trim(), ...state.selectedRuleChipIds.map((id) => engineRuleChipText[id]).filter(Boolean)].filter(Boolean).join(" "),
+  };
+}
+
+function migrateCreativeDirection(value: unknown): CreativeDirectionState {
+  const item = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const camera = item.cameraMotion && typeof item.cameraMotion === "object" && !Array.isArray(item.cameraMotion)
+    ? item.cameraMotion as Record<string, unknown>
+    : item;
+  const defaults = defaultCreativeDirection;
+  const valid = (candidate: unknown, options: readonly (readonly [string, string, string])[], fallback: string) =>
+    typeof candidate === "string" && (candidate === "custom" || options.some(([id]) => id === candidate)) ? candidate : fallback;
+  return {
+    visualMood: valid(item.visualMood, engineDirectionOptions.visualMood, defaults.visualMood) as CreativeDirectionState["visualMood"],
+    visualMoodCustom: stringValue(item.visualMoodCustom).slice(0, 200),
+    cameraMotion: {
+      cameraStyle: valid(camera.cameraStyle, engineDirectionOptions.cameraStyle, defaults.cameraMotion.cameraStyle) as CreativeDirectionState["cameraMotion"]["cameraStyle"],
+      cameraStyleCustom: stringValue(camera.cameraStyleCustom).slice(0, 200),
+      cameraCustomInstructions: stringValue(camera.cameraCustomInstructions).slice(0, 300),
+      framing: valid(camera.framing, engineDirectionOptions.framing, defaults.cameraMotion.framing) as CreativeDirectionState["cameraMotion"]["framing"],
+      movementIntensity: ["subtle", "balanced", "dynamic"].includes(String(camera.movementIntensity)) ? camera.movementIntensity as CreativeDirectionState["cameraMotion"]["movementIntensity"] : defaults.cameraMotion.movementIntensity,
+      cameraStability: ["stable", "natural", "expressive"].includes(String(camera.cameraStability)) ? camera.cameraStability as CreativeDirectionState["cameraMotion"]["cameraStability"] : defaults.cameraMotion.cameraStability,
+      subjectMotion: valid(camera.subjectMotion, engineDirectionOptions.subjectMotion, defaults.cameraMotion.subjectMotion) as CreativeDirectionState["cameraMotion"]["subjectMotion"],
+      subjectMotionCustom: stringValue(camera.subjectMotionCustom).slice(0, 200),
+      motionQualityRuleIds: Array.isArray(camera.motionQualityRuleIds)
+        ? camera.motionQualityRuleIds.filter((id): id is CreativeDirectionState["cameraMotion"]["motionQualityRuleIds"][number] =>
+            typeof id === "string" && motionQualityRuleIds.includes(id as CreativeDirectionState["cameraMotion"]["motionQualityRuleIds"][number]))
+        : [...defaults.cameraMotion.motionQualityRuleIds],
+    },
+    pacingStyle: valid(item.pacingStyle, engineDirectionOptions.pacingStyle, defaults.pacingStyle) as CreativeDirectionState["pacingStyle"],
+    pacingStyleCustom: stringValue(item.pacingStyleCustom).slice(0, 200),
+    creativeRulesManual: stringValue(item.creativeRulesManual, stringValue(item.creativeRules)).slice(0, 300),
+    selectedRuleChipIds: Array.isArray(item.selectedRuleChipIds)
+      ? item.selectedRuleChipIds.filter((id): id is CreativeDirectionState["selectedRuleChipIds"][number] =>
+          typeof id === "string" && ruleChipIds.includes(id as CreativeDirectionState["selectedRuleChipIds"][number]))
+      : [],
   };
 }
 
@@ -761,6 +823,18 @@ export function generateDemoPack(
   const narrationRule = form.voiceLayers.includes("No Spoken Dialogue")
     ? `No understandable spoken dialogue, no narration, and no lip-sync. Communicate through poses, expressions, music, and synchronized sound.${cartoonSoundRule}`
     : `Voice layers: ${form.voiceLayers.join(", ")}. Language: ${form.language}. Vocal tone: ${form.vocalTone}. ${form.lipSyncRequired ? "Accurate lip-sync is required." : "Lip-sync is not required unless a selected speaker visibly speaks."} Narrator guidance: ${form.voiceLayers.includes("Narrator") ? form.narratorGuidance || "none" : "not enabled"}. Narration text: ${form.voiceLayers.includes("Narrator") ? form.narrationText || "none" : "not enabled"}. Character dialogue: ${form.voiceLayers.some((layer) => layer.includes("Voice")) ? form.characterDialogue || "none" : "not enabled"}. Character voice guidance: ${form.characterVoiceGuidance || "use the saved voice profiles."}.${cartoonSoundRule}`;
+  const cameraMotion = derivedScene.creative.cameraMotion;
+  const cameraMotionDirection = `CAMERA & MOTION DIRECTION
+Camera Style: ${cameraMotion.cameraStyle}
+Additional Camera Instructions: ${cameraMotion.customInstructions || "No additional camera instructions provided."}
+Framing: ${cameraMotion.framing}
+Movement Intensity: ${cameraMotion.movementIntensity}
+Camera Stability: ${cameraMotion.cameraStability}
+Subject Motion: ${cameraMotion.subjectMotion}
+Motion Quality Rules:
+${cameraMotion.qualityRules.length ? cameraMotion.qualityRules.map((rule) => `- ${rule}`).join("\n") : "- No additional motion quality rules selected."}
+Camera Style controls how the scene is filmed. Subject Motion controls how characters and objects move. Keep both systems coordinated but distinct.
+Use the selected framing as a primary preference. When framing is Automatic, choose and adjust framing according to action clarity, character visibility, and continuity.`;
   const lock = `Model: ${model}
 Model adapter: ${adapter.displayName}
 Adapter structure: ${adapter.promptStructure}
@@ -801,7 +875,7 @@ Adapter motion policy: ${adapter.motionPolicy}.
 Adapter reference-frame policy: ${adapter.referenceFramePolicy}.
 CREATIVE DIRECTION
 Visual Mood & Atmosphere: ${derivedScene.creative.visualMood}
-Camera & Motion Style: ${derivedScene.creative.cameraStyle}
+${cameraMotionDirection}
 Pacing & Performance: ${derivedScene.creative.pacingStyle}
 Creative Rules & Restrictions: ${derivedScene.creative.creativeRules || "No additional creative restrictions provided."}
 Derivation rule: Determine the location, supporting objects, action progression, and ending/payoff from the concept, selected cast, video type, video model, prompt model, duration, global video ratio, and Creative Direction. Keep every derived element relevant to the concept; introduce no unrelated objects, characters, locations, cuts, or events.
@@ -817,12 +891,13 @@ Create a full-body front view, full-body side view, optional back view, neutral 
   const compactCast = cast.map((profile) => buildCompactCharacterLock(profile).split(".")[0]).join("\n");
   const conciseLock = `Create a ${duration}-second ${videoRatio} ${style} video for ${model} on ${platform}.
 Model adapter: ${adapter.displayName}. Camera policy: ${adapter.cameraPolicy}.
-Creative direction: mood=${derivedScene.creative.visualMood}; camera=${derivedScene.creative.cameraStyle}; pacing=${derivedScene.creative.pacingStyle}; restrictions=${derivedScene.creative.creativeRules || "none"}.
+Creative direction: mood=${form.creativeDirection.visualMood}; filming=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; movement=${cameraMotion.movementIntensity}; stability=${cameraMotion.cameraStability}; subject motion=${form.creativeDirection.cameraMotion.subjectMotion}; selected motion rules=${form.creativeDirection.cameraMotion.motionQualityRuleIds.length}; pacing=${derivedScene.creative.pacingStyle}; restrictions=${derivedScene.creative.creativeRules || "none"}.
 Cast: exactly ${cast.length} characters — ${castRoles}. Exact character count: ${cast.length}.
 Authorized object: exactly ${objectLedger.length} important object: ${object}. Location: ${location}.
 CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} important object: ${object}. SCENE INVENTORY LOCK, EXACT COUNT LOCK, NO-SPAWN / NO-DESPAWN LOCK, STRICT OBJECT PRESENCE LOCK. No selected character may suddenly appear, disappear, spawn, vanish, or be replaced; no sudden appearances or disappearances.
 OBJECT CONTINUITY LOCK: ${object} start=supported; final position=supported. One visible force and continuous path; no duplication, replacement, or sudden object.
 One continuous shot only; no sudden cuts, scene reset, accidental crop-out, no random gestures, no random spinning, or gliding feet. Natural-motion lock and natural movement lock: anticipation, acceleration, contact, follow-through, deceleration, settling.
+No sudden camera jumps or unexplained reframing. Maintain realistic ground contact. Match movement speed to the selected pacing.
   Creative Direction applies from 0:00. Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK. Action ownership lock. Natural movement lock. ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} Use supplied frames as continuity anchors.`;
   const conciseFinalRule = `This production contains exactly ${cast.length} characters — ${cast.map((profile) => profile.shortName).join(", ")} — and exactly ${objectLedger.length} important object — ${object}. No other character or object may appear. Use only authorized selected characters and objects established in the start frame. Preserve exact counts, identities, roles, colors, clothing, proportions, scale, and environment from start to finish.
 
@@ -835,8 +910,8 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
   const finalTimeline = adaptedTimeline;
-  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Apply Creative Direction from frame zero. Use only this cast and object; nothing else appears.`;
-  const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, visible support contact, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
+  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use wide or medium-wide visibility, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. Start active; do not show the payoff. This is the complete authorized scene inventory. Apply Creative Direction from frame zero.`;
+  const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object supported at its final position in a stable completed pose, with contact shadows, completed settling, and matched perspective. Preserve the exact authorized inventory; nothing else appears.`;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
     characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",
@@ -939,15 +1014,33 @@ export function inspectProductionPack(
   const workflowStyle = previewStyleQuality(form.videoStyleId);
   const inventory = buildAuthorizedSceneInventory(form, cast);
   const objectStates = buildObjectStateLedger(inventory);
+  const motionRuleChecks: Record<ProductionForm["creativeDirection"]["cameraMotion"]["motionQualityRuleIds"][number], { label: string; pattern: RegExp }> = {
+    "smooth-continuous-movement": { label: "Smooth continuous movement", pattern: /smooth and continuous|continuous paths?|smooth motion/i },
+    "no-sudden-camera-jumps": { label: "No sudden camera jumps", pattern: /no sudden camera jumps?|no unexplained reframing/i },
+    "no-unrequested-cuts": { label: "No unrequested cuts", pattern: /no unrequested cuts?|one continuous shot|no sudden cuts/i },
+    "preserve-screen-direction": { label: "Preserve screen direction", pattern: /screen direction|spatial continuity/i },
+    "keep-characters-visible": { label: "Keep selected characters visible", pattern: /keep all selected characters visible|strict presence lock|continuously present/i },
+    "realistic-ground-contact": { label: "Maintain realistic ground contact", pattern: /ground contact|foot placement|visible support contact/i },
+    "avoid-floating-sliding": { label: "Avoid floating or sliding", pattern: /no floating|avoid floating|no .*sliding|prevent .*sliding/i },
+    "objects-physically-connected": { label: "Keep objects physically connected", pattern: /physically connected|visibly supported|held, attached/i },
+    "match-motion-to-pacing": { label: "Match movement speed to pacing", pattern: /match .*movement speed.*pacing|creative pacing direction/i },
+  };
   const findings: QualityFinding[] = [
     finding("Video title exists", pack.videoTitle.trim().length >= 3, "Add a clear original video title."),
     finding("Video title is original in saved history", !savedTitles.some((title) =>
       title.trim().toLowerCase() === pack.videoTitle.trim().toLowerCase()), "Choose a title not already used by a saved production.", true),
     finding("Creative Direction is complete", Boolean(
       resolveCreativeDirection(form.creativeDirection).visualMood &&
-      resolveCreativeDirection(form.creativeDirection).cameraStyle &&
+      resolveCreativeDirection(form.creativeDirection).cameraMotion.cameraStyle &&
+      resolveCreativeDirection(form.creativeDirection).cameraMotion.subjectMotion &&
       resolveCreativeDirection(form.creativeDirection).pacingStyle
     ), "Choose presets or describe each selected Custom creative direction."),
+    ...form.creativeDirection.cameraMotion.motionQualityRuleIds.map((id) =>
+      finding(
+        `Motion quality: ${motionRuleChecks[id].label}`,
+        motionRuleChecks[id].pattern.test(all),
+        `Apply the selected motion quality rule: ${motionRuleChecks[id].label}.`,
+      )),
     finding("Exactly one valid hero", Boolean(hero && hero.role === "Hero" && cast.filter((profile) => profile.role === "Hero").length === 1), "The production must have exactly one main Hero."),
     finding("At least one active character", cast.length > 0, "Select at least one character for this production."),
     finding("Unique active character IDs", rawActiveIds.length === activeIds.length, "Remove duplicate active character IDs."),

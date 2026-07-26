@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CharacterProfile,
   CharacterRole,
+  CameraMotionState,
   CreativeDirectionState,
   CreativeAsset,
   CreativeAssetKind,
@@ -25,8 +26,13 @@ import {
 } from "./production-types";
 import {
   CAMERA_STYLE_OPTIONS,
+  CAMERA_FRAMING_OPTIONS,
+  CAMERA_STABILITY_OPTIONS,
+  MOTION_QUALITY_RULES,
+  MOVEMENT_INTENSITY_OPTIONS,
   PACING_STYLE_OPTIONS,
   RULE_CHIPS,
+  SUBJECT_MOTION_OPTIONS,
   VISUAL_MOOD_OPTIONS,
   CreativeDirectionOption,
   resolveCreativeDirection,
@@ -93,6 +99,15 @@ type CompleteIdea = {
 type IdeaSnapshot = Pick<ProductionForm, "videoTitle" | "locationAssetId" | "locationName" | "location" | "objectAssetId" | "objectName" | "importantObject" | "actionAssetId" | "actionName" | "trapAction" | "payoffAssetId" | "payoffName" | "endingPayoff">;
 const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
 const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: [], object: [], action: [], payoff: [] });
+const cameraMotionStyleDefaults: Record<VideoStyleId, Pick<CameraMotionState, "cameraStyle" | "movementIntensity" | "cameraStability" | "subjectMotion">> = {
+  slapstick: { cameraStyle: "character-follow", movementIntensity: "dynamic", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
+  cinematic: { cameraStyle: "smooth-cinematic", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
+  "family-3d": { cameraStyle: "smooth-cinematic", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "natural-controlled" },
+  anime: { cameraStyle: "dynamic-energetic", movementIntensity: "dynamic", cameraStability: "expressive", subjectMotion: "fast-energetic" },
+  "live-action": { cameraStyle: "handheld-realistic", movementIntensity: "balanced", cameraStability: "natural", subjectMotion: "realistic-physical" },
+  "cgi-fantasy": { cameraStyle: "orbit-subject", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
+  "stylized-3d": { cameraStyle: "character-follow", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
+};
 
 const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
   { id: "videoTitle", icon: "T", title: "Ultra-Unique Video Title", short: "Video Title", description: "Original editable title for this production." },
@@ -158,6 +173,74 @@ function CreativeDirectionSelectCard({
       </div> : null}
     </div>
   </article>;
+}
+
+function CameraMotionPanel({
+  value,
+  cameraStyleError,
+  subjectMotionError,
+  rulesExpanded,
+  onChange,
+  onToggleRules,
+}: {
+  value: CameraMotionState;
+  cameraStyleError?: string;
+  subjectMotionError?: string;
+  rulesExpanded: boolean;
+  onChange: (patch: Partial<CameraMotionState>) => void;
+  onToggleRules: () => void;
+}) {
+  const selectedCamera = CAMERA_STYLE_OPTIONS.find((option) => option.value === value.cameraStyle);
+  const selectedFraming = CAMERA_FRAMING_OPTIONS.find((option) => option.value === value.framing);
+  const selectedSubjectMotion = SUBJECT_MOTION_OPTIONS.find((option) => option.value === value.subjectMotion);
+  const selectedIntensity = MOVEMENT_INTENSITY_OPTIONS.find((option) => option.value === value.movementIntensity);
+  const selectedStability = CAMERA_STABILITY_OPTIONS.find((option) => option.value === value.cameraStability);
+
+  return <section className="camera-motion-panel">
+    <header className="camera-motion-heading">
+      <span className="camera-motion-heading-icon" aria-hidden="true">▣</span>
+      <div><h3>Camera & Motion Style</h3><p>Define the camera movement, framing, and overall motion language.</p></div>
+    </header>
+    <div className="camera-motion-primary-grid">
+      <div className="camera-motion-card camera-style-card">
+        <label htmlFor="camera-style">Camera Style</label>
+        <select id="camera-style" value={value.cameraStyle} onChange={(event) => onChange({ cameraStyle: event.target.value as CameraMotionState["cameraStyle"] })}>
+          {CAMERA_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+        {value.cameraStyle === "custom"
+          ? <div className="camera-custom-field"><label htmlFor="camera-style-custom">Custom camera style</label><textarea id="camera-style-custom" value={value.cameraStyleCustom} maxLength={200} aria-invalid={Boolean(cameraStyleError)} aria-describedby={cameraStyleError ? "camera-style-error camera-style-count" : "camera-style-count"} placeholder="Describe the camera movement and visual style you want." onChange={(event) => onChange({ cameraStyleCustom: event.target.value.slice(0, 200) })} />{cameraStyleError && <p className="camera-motion-error" id="camera-style-error">{cameraStyleError}</p>}<span className="camera-motion-counter" id="camera-style-count">{value.cameraStyleCustom.length}/200</span></div>
+          : <p className="camera-motion-description">{selectedCamera?.description}</p>}
+      </div>
+      <div className="camera-motion-card camera-instructions-card">
+        <div className="camera-motion-label-row"><label htmlFor="camera-custom-instructions">Custom Instructions</label><span className="camera-motion-optional-badge">Optional</span></div>
+        <textarea id="camera-custom-instructions" value={value.cameraCustomInstructions} maxLength={300} placeholder="Describe any additional camera framing, movement, transitions, or visual behavior you want." onChange={(event) => onChange({ cameraCustomInstructions: event.target.value.slice(0, 300) })} />
+        <span className="camera-motion-counter">{value.cameraCustomInstructions.length}/300</span>
+      </div>
+    </div>
+    <div className="camera-motion-settings-grid">
+      <div className="camera-motion-card">
+        <label htmlFor="camera-framing">Framing</label>
+        <select id="camera-framing" value={value.framing} onChange={(event) => onChange({ framing: event.target.value as CameraMotionState["framing"] })}>{CAMERA_FRAMING_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+        <p className="camera-motion-description">{selectedFraming?.description}</p>
+      </div>
+      <div className="camera-motion-card"><label>Movement Intensity</label><div className="camera-segmented-control" role="group" aria-label="Movement intensity">{MOVEMENT_INTENSITY_OPTIONS.map((option) => <button key={option.value} type="button" className={`camera-segmented-option ${value.movementIntensity === option.value ? "is-active" : ""}`} aria-pressed={value.movementIntensity === option.value} onClick={() => onChange({ movementIntensity: option.value })}>{option.label}</button>)}</div><p className="camera-motion-description">{selectedIntensity?.description}</p></div>
+      <div className="camera-motion-card"><label>Camera Stability</label><div className="camera-segmented-control" role="group" aria-label="Camera stability">{CAMERA_STABILITY_OPTIONS.map((option) => <button key={option.value} type="button" className={`camera-segmented-option ${value.cameraStability === option.value ? "is-active" : ""}`} aria-pressed={value.cameraStability === option.value} onClick={() => onChange({ cameraStability: option.value })}>{option.label}</button>)}</div><p className="camera-motion-description">{selectedStability?.description}</p></div>
+    </div>
+    <div className="subject-motion-row">
+      <div className="camera-motion-card">
+        <label htmlFor="subject-motion">Subject Motion</label>
+        <select id="subject-motion" value={value.subjectMotion} onChange={(event) => onChange({ subjectMotion: event.target.value as CameraMotionState["subjectMotion"] })}>{SUBJECT_MOTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+        {value.subjectMotion === "custom"
+          ? <div className="camera-custom-field"><label htmlFor="subject-motion-custom">Custom subject motion</label><textarea id="subject-motion-custom" value={value.subjectMotionCustom} maxLength={200} aria-invalid={Boolean(subjectMotionError)} aria-describedby={subjectMotionError ? "subject-motion-error subject-motion-count" : "subject-motion-count"} placeholder="Describe how characters and objects should move." onChange={(event) => onChange({ subjectMotionCustom: event.target.value.slice(0, 200) })} />{subjectMotionError && <p className="camera-motion-error" id="subject-motion-error">{subjectMotionError}</p>}<span className="camera-motion-counter" id="subject-motion-count">{value.subjectMotionCustom.length}/200</span></div>
+          : <p className="camera-motion-description">{selectedSubjectMotion?.description}</p>}
+      </div>
+      <aside className="camera-motion-callout"><h4>Different from Camera Style</h4><p>Camera Style controls how the scene is filmed. Subject Motion controls how characters and objects move.</p></aside>
+    </div>
+    <section className="motion-quality-panel">
+      <button type="button" className="motion-quality-header" aria-expanded={rulesExpanded} onClick={onToggleRules}><div><h4>Motion Quality Rules</h4><p>Smart rules the AI should follow for professional motion.</p></div><div><span className="motion-quality-badge">Recommended</span><span aria-hidden="true">{rulesExpanded ? "−" : "+"}</span></div></button>
+      {rulesExpanded && <div className="motion-quality-grid">{MOTION_QUALITY_RULES.map((rule) => { const selected = value.motionQualityRuleIds.includes(rule.id); return <button key={rule.id} type="button" className={`motion-quality-rule ${selected ? "is-active" : ""}`} aria-pressed={selected} onClick={() => onChange({ motionQualityRuleIds: selected ? value.motionQualityRuleIds.filter((id) => id !== rule.id) : [...value.motionQualityRuleIds, rule.id] })}><span aria-hidden="true">{selected ? "✓" : ""}</span>{rule.label}</button>; })}</div>}
+    </section>
+  </section>;
 }
 
 const builtInCharacters: CharacterProfile[] = [
@@ -466,7 +549,8 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("videoIdea");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
-  const [creativeDirectionErrors, setCreativeDirectionErrors] = useState<Partial<Record<"visualMood" | "cameraStyle" | "pacingStyle", string>>>({});
+  const [creativeDirectionErrors, setCreativeDirectionErrors] = useState<Partial<Record<"visualMood" | "cameraStyle" | "subjectMotion" | "pacingStyle", string>>>({});
+  const [motionRulesExpanded, setMotionRulesExpanded] = useState(true);
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
   const presetImportRef = useRef<HTMLInputElement>(null);
@@ -574,6 +658,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   useEffect(() => {
     if (!activeVideoStyle) return;
     const configurationTask = window.setTimeout(() => {
+      const isRestoringExistingProject = Boolean(localStorage.getItem(STORAGE.form));
       setForm((current) => ({
         ...current,
         videoStyleId: activeVideoStyle.id,
@@ -581,6 +666,10 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
         visualStyle: activeVideoStyle.defaults.visualStyle,
         duration: activeVideoStyle.defaults.duration,
         videoRatio: activeVideoStyle.defaults.ratio,
+        creativeDirection: isRestoringExistingProject ? current.creativeDirection : {
+          ...current.creativeDirection,
+          cameraMotion: { ...current.creativeDirection.cameraMotion, ...cameraMotionStyleDefaults[activeVideoStyle.id] },
+        },
       }));
     }, 1);
     return () => window.clearTimeout(configurationTask);
@@ -660,7 +749,8 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const effectiveRequestedOutputs = selectionMode === "fullPack" ? [...requestedOutputValues] : requestedOutputs;
   const customCreativeDirectionValid = (
     (form.creativeDirection.visualMood !== "custom" || Boolean(form.creativeDirection.visualMoodCustom.trim())) &&
-    (form.creativeDirection.cameraStyle !== "custom" || Boolean(form.creativeDirection.cameraStyleCustom.trim())) &&
+    (form.creativeDirection.cameraMotion.cameraStyle !== "custom" || Boolean(form.creativeDirection.cameraMotion.cameraStyleCustom.trim())) &&
+    (form.creativeDirection.cameraMotion.subjectMotion !== "custom" || Boolean(form.creativeDirection.cameraMotion.subjectMotionCustom.trim())) &&
     (form.creativeDirection.pacingStyle !== "custom" || Boolean(form.creativeDirection.pacingStyleCustom.trim()))
   );
   const isReady = Boolean(
@@ -711,8 +801,17 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     setCreativeDirectionErrors((current) => {
       const next = { ...current };
       if (patch.visualMood !== undefined || patch.visualMoodCustom?.trim()) delete next.visualMood;
-      if (patch.cameraStyle !== undefined || patch.cameraStyleCustom?.trim()) delete next.cameraStyle;
       if (patch.pacingStyle !== undefined || patch.pacingStyleCustom?.trim()) delete next.pacingStyle;
+      return next;
+    });
+  }
+
+  function updateCameraMotion(patch: Partial<CameraMotionState>) {
+    setForm((current) => ({ ...current, creativeDirection: { ...current.creativeDirection, cameraMotion: { ...current.creativeDirection.cameraMotion, ...patch } } }));
+    setCreativeDirectionErrors((current) => {
+      const next = { ...current };
+      if (patch.cameraStyle !== undefined || patch.cameraStyleCustom?.trim()) delete next.cameraStyle;
+      if (patch.subjectMotion !== undefined || patch.subjectMotionCustom?.trim()) delete next.subjectMotion;
       return next;
     });
   }
@@ -1278,14 +1377,15 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     }
     const directionErrors: typeof creativeDirectionErrors = {};
     if (form.creativeDirection.visualMood === "custom" && !form.creativeDirection.visualMoodCustom.trim()) directionErrors.visualMood = "Describe your custom visual mood.";
-    if (form.creativeDirection.cameraStyle === "custom" && !form.creativeDirection.cameraStyleCustom.trim()) directionErrors.cameraStyle = "Describe your custom camera style.";
+    if (form.creativeDirection.cameraMotion.cameraStyle === "custom" && !form.creativeDirection.cameraMotion.cameraStyleCustom.trim()) directionErrors.cameraStyle = "Describe your custom camera style.";
+    if (form.creativeDirection.cameraMotion.subjectMotion === "custom" && !form.creativeDirection.cameraMotion.subjectMotionCustom.trim()) directionErrors.subjectMotion = "Describe your custom subject motion.";
     if (form.creativeDirection.pacingStyle === "custom" && !form.creativeDirection.pacingStyleCustom.trim()) directionErrors.pacingStyle = "Describe your custom pacing style.";
     if (Object.keys(directionErrors).length) {
       setCreativeDirectionErrors(directionErrors);
       setError("Complete the selected Custom creative direction fields.");
       setActiveWorkflowTab("setup");
       setProductionTab("core");
-      const firstId = directionErrors.visualMood ? "visual-mood-custom" : directionErrors.cameraStyle ? "camera-style-custom" : "pacing-style-custom";
+      const firstId = directionErrors.visualMood ? "visual-mood-custom" : directionErrors.cameraStyle ? "camera-style-custom" : directionErrors.subjectMotion ? "subject-motion-custom" : "pacing-style-custom";
       window.setTimeout(() => document.getElementById(firstId)?.focus(), 0);
       return;
     }
@@ -1760,7 +1860,13 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       });
       children.push(new Paragraph({ children: [new PageBreak()] }), heading("CREATIVE DIRECTION"));
       children.push(setting("Visual Mood & Atmosphere", exportCreativeDirection.visualMood));
-      children.push(setting("Camera & Motion Style", exportCreativeDirection.cameraStyle));
+      children.push(setting("Camera Style", exportCreativeDirection.cameraMotion.cameraStyle));
+      children.push(setting("Camera Instructions", exportCreativeDirection.cameraMotion.customInstructions || "None"));
+      children.push(setting("Framing", exportCreativeDirection.cameraMotion.framing));
+      children.push(setting("Movement Intensity", exportCreativeDirection.cameraMotion.movementIntensity));
+      children.push(setting("Camera Stability", exportCreativeDirection.cameraMotion.cameraStability));
+      children.push(setting("Subject Motion", exportCreativeDirection.cameraMotion.subjectMotion));
+      children.push(setting("Motion Quality Rules", exportCreativeDirection.cameraMotion.qualityRules.join("\n") || "None"));
       children.push(setting("Pacing & Performance", exportCreativeDirection.pacingStyle));
       children.push(setting("Creative Rules & Restrictions", exportCreativeDirection.creativeRules || "No additional creative restrictions provided."));
       if (exportForm.additionalDirection?.trim()) children.push(setting("Additional Direction", exportForm.additionalDirection.trim()));
@@ -1933,7 +2039,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </section>
               <section className="production-section studio-dashboard-card studio-scene-panel">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {resolveCreativeDirection(form.creativeDirection).pacingStyle}</p></div></header>
-                <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
+                <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraMotion.cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
               </section>
             </div>
 
@@ -2032,7 +2138,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             {productionTab === "core" && <div className="scene-editor__body">
               <section className="production-section-content creative-direction-section" aria-labelledby="creative-direction-section-title"><h2 className="sr-only" id="creative-direction-section-title">Creative Direction controls</h2><div className="creative-direction-grid">
                 <CreativeDirectionSelectCard id="visual-mood" title="Visual Mood & Atmosphere" description="Set the emotional tone, lighting, atmosphere, and color feeling." icon="◉" value={form.creativeDirection.visualMood} customValue={form.creativeDirection.visualMoodCustom} options={VISUAL_MOOD_OPTIONS} selectLabel="Choose a visual mood" customLabel="Custom visual mood" customPlaceholder="Describe the mood, lighting, atmosphere, and color feeling you want." customError={creativeDirectionErrors.visualMood} onValueChange={(visualMood) => updateCreativeDirection({ visualMood })} onCustomValueChange={(visualMoodCustom) => updateCreativeDirection({ visualMoodCustom })} />
-                <CreativeDirectionSelectCard id="camera-style" title="Camera & Motion Style" description="Define the camera movement, framing, and overall motion language." icon="▣" value={form.creativeDirection.cameraStyle} customValue={form.creativeDirection.cameraStyleCustom} options={CAMERA_STYLE_OPTIONS} selectLabel="Choose a camera style" customLabel="Custom camera and motion style" customPlaceholder="Describe the camera movement, framing, and motion style you want." customError={creativeDirectionErrors.cameraStyle} onValueChange={(cameraStyle) => updateCreativeDirection({ cameraStyle })} onCustomValueChange={(cameraStyleCustom) => updateCreativeDirection({ cameraStyleCustom })} />
+                <CameraMotionPanel value={form.creativeDirection.cameraMotion} cameraStyleError={creativeDirectionErrors.cameraStyle} subjectMotionError={creativeDirectionErrors.subjectMotion} rulesExpanded={motionRulesExpanded} onChange={updateCameraMotion} onToggleRules={() => setMotionRulesExpanded((current) => !current)} />
                 <CreativeDirectionSelectCard id="pacing-style" title="Pacing & Performance" description="Control the pacing, character energy, and performance style." icon="ϟ" value={form.creativeDirection.pacingStyle} customValue={form.creativeDirection.pacingStyleCustom} options={PACING_STYLE_OPTIONS} selectLabel="Choose a pacing style" customLabel="Custom pacing and performance style" customPlaceholder="Describe the pacing, character energy, acting, and performance style you want." customError={creativeDirectionErrors.pacingStyle} onValueChange={(pacingStyle) => updateCreativeDirection({ pacingStyle })} onCustomValueChange={(pacingStyleCustom) => updateCreativeDirection({ pacingStyleCustom })} />
                 <article className="creative-rules-card production-card-surface"><header className="creative-direction-card-header production-card-header"><span className="creative-direction-card-icon production-card-icon" aria-hidden="true">◇</span><div><div className="creative-rules-title-row"><h3>Creative Rules &amp; Restrictions</h3><span className="creative-rules-optional-badge production-optional-badge">Optional</span></div><p>Add any important instructions, rules, or restrictions the AI should follow.</p></div></header><label className="sr-only" htmlFor="creative-rules">Creative rules and restrictions</label><textarea id="creative-rules" value={form.creativeDirection.creativeRulesManual} onChange={(event) => updateCreativeDirection({ creativeRulesManual: event.target.value.slice(0, 300) })} placeholder="e.g., No dialogue, no sudden cuts, keep all characters visible, maintain character identity, end with a seamless loop..." maxLength={300} /><div className="creative-direction-field-footer"><div /><span>{form.creativeDirection.creativeRulesManual.length}/300</span></div><div className="creative-rule-chips" aria-label="Quick creative rules">{RULE_CHIPS.map((chip) => { const isActive = form.creativeDirection.selectedRuleChipIds.includes(chip.id); return <button className="production-chip" key={chip.id} type="button" aria-pressed={isActive} onClick={() => toggleCreativeRuleChip(chip.id)}>{chip.label}</button>; })}</div></article>
               </div></section>

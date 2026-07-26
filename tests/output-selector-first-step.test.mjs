@@ -22,9 +22,11 @@ test("configuration studio is the single first workflow step", () => {
   }
 });
 
-test("concept keeps only the title and optional direction fields", () => {
+test("concept orders title, output package, and optional direction", () => {
   const conceptSection = page.slice(page.indexOf('id="episode-idea"'), page.indexOf('id="characters"'));
   assert.match(conceptSection, /<span>Video Name<\/span><input value=\{form\.videoTitle\} onChange=\{\(event\) => update\("videoTitle", event\.target\.value\)\} placeholder="Create a memorable original title"/);
+  assert.match(conceptSection, /concept-video-title[\s\S]*concept-output-package[\s\S]*concept-additional-direction/);
+  assert.match(conceptSection, /Output Package[\s\S]{0,220}\{requestedOutputs\.length\} output\{requestedOutputs\.length === 1 \? "" : "s"\} selected/);
   assert.match(conceptSection, /Additional direction <i>optional<\/i>[\s\S]{0,160}value=\{form\.additionalDirection\}[\s\S]{0,120}update\("additionalDirection", event\.target\.value\)/);
   for (const removed of ["Location name", "Location description", "Important Object name", "Important Object description", "Action or Trap name", "Action or Trap description", "Ending or Payoff name", "Ending or Payoff description", "Expand descriptions"]) {
     assert.doesNotMatch(conceptSection, new RegExp(removed));
@@ -37,11 +39,12 @@ test("custom and full-pack modes remain mutually exclusive presets", () => {
   assert.match(page, /type OutputSelectionMode = "custom" \| "fullPack"/);
   assert.match(page, /useState<OutputSelectionMode>\("custom"\)/);
   assert.match(page, /useState<RequestedOutput\[]>\(\["videoPrompt"\]\)/);
-  assert.match(page, /selectionMode === "custom" && <div className="studio-quick-actions">/);
+  assert.match(page, /selectionMode === "custom" && <div className="output-package-options">/);
   assert.match(page, /selectionMode === "fullPack"/);
   assert.match(page, /setRequestedOutputs\(\[\.\.\.requestedOutputValues\]\)/);
   assert.match(page, /independentSelectionsRef\.current = requestedOutputs/);
   assert.match(page, /Full Production Pack/);
+  assert.equal((page.match(/<h3 id="concept-output-package-title">Output Package<\/h3>/g) || []).length, 1);
   assert.doesNotMatch(page, /fullPackSelected|toggleFullPack/);
 });
 

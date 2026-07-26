@@ -1804,25 +1804,11 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           <section className="production-studio-dashboard" id="choose-outputs" role="tabpanel" aria-labelledby="workflow-tab-outputs" hidden={activeWorkflowTab !== "outputs"}>
             <aside className="studio-config-column">
               <section className="studio-dashboard-card studio-config-card">
-                <header><span>01</span><div><h2>Configuration</h2><p>Choose the package, outputs, and global frame format.</p></div></header>
+                <header><span>01</span><div><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
                 <div className="mode-switch production-generation-modes" aria-label="Generator mode">
                   <button className={`production-generation-mode ${mode === "demo" ? "active" : ""}`} type="button" onClick={() => setMode("demo")}><span><b className="production-generation-mode-title">Demo Mode</b><small className="production-generation-mode-note">No API</small></span></button>
                   <button className={`production-generation-mode ${mode === "ai" ? "active" : ""}`} type="button" onClick={() => setMode("ai")}><span><b className="production-generation-mode-title">AI Mode</b><small className="production-generation-mode-note">OpenAI powered</small></span></button>
                 </div>
-                <div className="selection-mode production-package-switch" role="group" aria-label="Output selection mode">
-                  <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option ${selectionMode === "custom" ? "active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
-                  <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option ${selectionMode === "fullPack" ? "active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
-                </div>
-                <div className="studio-output-checklist">
-                  {outputChoices.map((choice) => {
-                    const included = requestedOutputs.includes(choice.id);
-                    return <label className={included ? "is-selected" : ""} key={choice.id}>
-                      <input type="checkbox" checked={included} disabled={selectionMode === "fullPack"} onChange={() => toggleRequestedOutput(choice.id)} />
-                      <span>{choice.icon}</span><strong>{choice.short}</strong>
-                    </label>;
-                  })}
-                </div>
-                {selectionMode === "custom" && <div className="studio-quick-actions"><button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select all</button><button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended</button><button type="button" onClick={() => setCustomOutputs([])}>Clear</button></div>}
                 <div className="studio-credit-status"><span>Estimated credits</span><strong>{estimatedCredits}</strong><small>{creditStatus}</small></div>
                 <div className="studio-ratio-control"><h3>Video Ratio</h3>{globalRatioControl}<p>Frames are generated automatically based on the selected video ratio.</p></div>
                 <button className="studio-setup-link" type="button" onClick={scrollToEpisodeIdea}>Edit production setup</button>
@@ -1861,11 +1847,32 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
             <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></div>
+            <div className="concept-section">
+              <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
+              <section className="concept-field concept-output-package" aria-labelledby="concept-output-package-title">
+                <header className="concept-field-header"><h3 id="concept-output-package-title">Output Package</h3><span>{requestedOutputs.length} output{requestedOutputs.length === 1 ? "" : "s"} selected</span></header>
+                <div className="selection-mode production-package-switch output-package-mode" role="group" aria-label="Output selection mode">
+                  <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option ${selectionMode === "custom" ? "active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
+                  <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option ${selectionMode === "fullPack" ? "active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
+                </div>
+                {selectionMode === "custom" && <div className="output-package-options">
+                  <div className="studio-output-checklist">
+                    {outputChoices.map((choice) => {
+                      const included = requestedOutputs.includes(choice.id);
+                      return <label className={included ? "is-selected" : ""} key={choice.id}>
+                        <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                        <span>{choice.icon}</span><strong>{choice.short}</strong>
+                      </label>;
+                    })}
+                  </div>
+                  <div className="studio-quick-actions"><button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select all</button><button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended</button><button type="button" onClick={() => setCustomOutputs([])}>Clear</button></div>
+                </div>}
+              </section>
+              <label className="field concept-field concept-additional-direction"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
+            </div>
             <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
+            {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
             <div className="form-grid concept-fields">
-              {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
-              <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-              <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
               <details className="advanced-panel wide">
                 <summary>Creative Library import and export <span>+</span></summary>
                 <div className="advanced-content">

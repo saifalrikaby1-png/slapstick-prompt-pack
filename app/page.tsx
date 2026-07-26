@@ -1967,8 +1967,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <div className="selection-mode idea-mode production-segmented-control" role="group" aria-label="Idea creation method"><button type="button" className={`production-segmented-option ${ideaCreationMethod === "manual" ? "active is-active" : ""}`} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={`production-segmented-option ${ideaCreationMethod === "ai" ? "active is-active" : ""}`} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
             {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
             <div className="form-grid concept-fields">
-              <details className="advanced-panel wide">
-                <summary>Creative Library import and export <span>+</span></summary>
+              <details className="advanced-panel wide production-accordion production-accordion-secondary">
+                <summary><span className="production-accordion-title">Creative Library import and export</span><span className="production-accordion-icon">+</span></summary>
                 <div className="advanced-content">
                   <p>Saved creative assets stay editable and reusable. Imports are validated and merged.</p>
                   <div className="button-row">
@@ -1984,8 +1984,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="production-section form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
             <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></header>
-            <div className="production-section-content character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`production-card-surface character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
-            <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
+            <div className="production-section-content character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`production-card-surface production-character-card character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button className="production-edit-button" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
+            <details className="character-block character-editor-drawer production-accordion" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary><span className="production-accordion-title">Character editor</span><span className="production-accordion-icon">{characterEditorOpen ? "−" : "+"}</span></summary>
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
                 <div><strong>{viewedCharacter?.fullIdentity || "No saved characters"}</strong><small>Character {characters.length ? characterIndex + 1 : 0} of {characters.length}</small></div>
@@ -2013,8 +2013,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </div></div>
             </details>
 
-            <details className="advanced-panel">
-              <summary>Character Library import and export <span>+</span></summary>
+            <details className="advanced-panel production-accordion production-accordion-secondary">
+              <summary><span className="production-accordion-title">Character Library import and export</span><span className="production-accordion-icon">+</span></summary>
               <div className="advanced-content">
                 <p>Built-in profiles are protected. Imports are validated and merged; they never replace the whole library.</p>
                 <div className="button-row">
@@ -2074,8 +2074,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </div>
             </details>
 
-            <details className="advanced-panel">
-              <summary>Project Presets and Saved Packs <span>+</span></summary>
+            <details className="advanced-panel production-accordion production-accordion-secondary">
+              <summary><span className="production-accordion-title">Project Presets and Saved Packs</span><span className="production-accordion-icon">+</span></summary>
               <div className="advanced-content">
                 <div className="preset-row">
                   <input value={presetName} onChange={(event) => setPresetName(event.target.value)} placeholder="Preset name" />

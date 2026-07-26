@@ -520,6 +520,24 @@ body:has(> .production-studio-workflow){padding-bottom:0}
 .video-production-page .creative-direction-header{margin-bottom:16px}.video-production-page .creative-direction-title-row{display:flex;align-items:flex-start;gap:12px}.video-production-page .creative-direction-title-row h1{margin:0;color:#f8f7f2;font-family:var(--font-fraunces),Georgia,serif;font-size:clamp(1.65rem,2.4vw,2.25rem);font-weight:500;line-height:1.2}.video-production-page .creative-direction-title-row p{max-width:900px;margin:5px 0 0;color:#aeb9cc;font-size:.76rem;line-height:1.55}.video-production-page .creative-direction-icon,.video-production-page .creative-direction-card-icon{color:#f1c45c}.video-production-page .creative-direction-section{position:relative;padding:17px;border:1px solid rgba(112,135,174,.2);border-radius:12px;background:radial-gradient(circle at 10% 5%,rgba(241,196,92,.05),transparent 34%),linear-gradient(135deg,rgba(16,29,51,.96),rgba(9,20,38,.98));box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 12px 28px rgba(0,0,0,.14)}.video-production-page .creative-direction-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.video-production-page .creative-direction-card,.video-production-page .creative-rules-card{min-width:0;padding:14px;border:1px solid rgba(112,135,174,.24);border-radius:10px;background:linear-gradient(135deg,rgba(19,35,59,.94),rgba(11,25,44,.97));box-shadow:inset 0 1px 0 rgba(255,255,255,.022)}.video-production-page .creative-rules-card{grid-column:1/-1}.video-production-page .creative-direction-card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}.video-production-page .creative-direction-card-header h3{margin:0;color:#f6f7fa;font-size:.82rem;font-weight:720;line-height:1.35}.video-production-page .creative-direction-card-header p{margin:4px 0 0;color:#aeb9cc;font-size:.68rem;line-height:1.45}.video-production-page .creative-direction-control>label,.video-production-page .creative-direction-custom-field>label{display:block;margin-bottom:6px;color:#dce3ee;font-size:.68rem;font-weight:650}.video-production-page .creative-direction-control select{width:100%;min-height:38px;padding:0 34px 0 10px;border:1px solid rgba(112,135,174,.3);border-radius:8px;background:rgba(6,15,29,.66);color:#f5f7fa;font-size:.72rem}.video-production-page .creative-direction-selected-description{min-height:34px;margin:8px 0 0;color:#9facc0;font-size:.65rem;line-height:1.45}.video-production-page .creative-direction-custom-field{margin-top:9px}.video-production-page .creative-direction-custom-field textarea,.video-production-page .creative-rules-card>textarea{width:100%;min-height:78px;resize:vertical;padding:9px 10px;border:1px solid rgba(112,135,174,.3);border-radius:8px;background:rgba(6,15,29,.66);color:#f5f7fa;font:inherit;font-size:.7rem;line-height:1.45}.video-production-page .creative-rules-card>textarea{min-height:82px}.video-production-page :is(.creative-direction-control select,.creative-direction-custom-field textarea,.creative-rules-card>textarea):focus-visible{outline:2px solid rgba(241,196,92,.76);outline-offset:2px}.video-production-page .creative-direction-field-footer{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:5px;color:#8290a7;font-size:.62rem}.video-production-page .creative-direction-error{margin:0;color:#ff9d84}.video-production-page .creative-rules-title-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.video-production-page .creative-rules-optional-badge{display:inline-flex;min-height:21px;align-items:center;padding:0 7px;border:1px solid rgba(112,135,174,.25);border-radius:999px;background:rgba(8,18,34,.5);color:#aeb9cc;font-size:.58rem;font-weight:650}.video-production-page .creative-rule-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.video-production-page .creative-rule-chips button{min-height:29px;padding:0 9px;border:1px solid rgba(112,135,174,.25);border-radius:999px;background:rgba(12,25,44,.78);color:#dce3ee;font-size:.62rem;font-weight:650}.video-production-page .creative-rule-chips button:hover{border-color:rgba(241,196,92,.48)}.video-production-page .creative-rule-chips button[aria-pressed="true"]{border-color:rgba(241,196,92,.74);background:linear-gradient(135deg,rgba(36,65,56,.94),rgba(17,45,39,.98));color:#f8f7f2}@media(max-width:1080px){.video-production-page .creative-direction-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.video-production-page .creative-rules-card{grid-column:1/-1}}@media(max-width:700px){.video-production-page .creative-direction-section{padding:13px}.video-production-page .creative-direction-grid{grid-template-columns:1fr}.video-production-page .creative-rules-card{grid-column:auto}}
 /* Production Page section system, based on the approved Creative Direction surface. */
 .production-page {
+  --prod-bg: #101518;
+  --prod-surface: #12191d;
+  --prod-surface-2: #0c1d32;
+  --prod-card: #10243f;
+  --prod-card-deep: #0d2038;
+  --prod-border: rgba(76, 115, 165, .34);
+  --prod-border-strong: #34557c;
+  --prod-gold-border: #e0ab31;
+  --prod-text: #f7faf8;
+  --prod-text-soft: #c2ccdc;
+  --prod-text-muted: #7f91aa;
+  --prod-label: #dce4f0;
+  --prod-gold: #f1c45c;
+  --prod-gold-strong: #e0ab31;
+  --prod-emerald: #163c35;
+  --prod-emerald-hover: #1a493f;
+  --prod-emerald-deep: #12362f;
+  --prod-emerald-deeper: #0d2926;
   --production-page-bg: #101518;
   --production-section-bg: #12191d;
   --production-section-border: rgba(112, 135, 174, .22);
@@ -874,6 +892,163 @@ body:has(> .production-studio-workflow){padding-bottom:0}
   border-radius: 6px;
   background: rgba(35, 37, 28, .6);
   color: var(--production-gold);
+}
+
+/* Production-only color reconciliation for legacy controls and utility surfaces. */
+.production-page .production-character-card {
+  border: 1px solid var(--prod-gold-border);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 40% 28%, rgba(39, 102, 84, .16), transparent 42%),
+    linear-gradient(135deg, rgba(12, 36, 56, .98), rgba(8, 28, 46, .98));
+  color: var(--prod-text);
+}
+
+.production-page .production-character-card.included {
+  border-color: var(--prod-gold-border);
+  background:
+    radial-gradient(circle at 40% 28%, rgba(48, 128, 101, .22), transparent 42%),
+    linear-gradient(135deg, rgba(15, 54, 61, .98), rgba(9, 39, 51, .99));
+}
+
+.production-page .production-character-card :is(strong, h3) {
+  color: var(--prod-text);
+}
+
+.production-page .production-character-card :is(p, small) {
+  color: var(--prod-text-soft);
+}
+
+.production-page .production-edit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--prod-gold-border);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(58, 127, 102, .18), transparent 42%),
+    linear-gradient(135deg, var(--prod-emerald) 0%, var(--prod-emerald-deep) 48%, var(--prod-emerald-deeper) 100%);
+  color: var(--prod-text);
+  font-size: .82rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05), 0 8px 18px rgba(0, 0, 0, .14);
+}
+
+.production-page .production-edit-button:hover {
+  border-color: #f4c65c;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(73, 150, 119, .22), transparent 42%),
+    linear-gradient(135deg, var(--prod-emerald-hover) 0%, #153d35 48%, #103029 100%);
+}
+
+.production-page .production-accordion {
+  overflow: hidden;
+  border: 1px solid var(--prod-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(11, 25, 44, .96), rgba(8, 22, 39, .98));
+  color: var(--prod-text);
+}
+
+.production-page .production-accordion > summary {
+  background: transparent;
+  color: var(--prod-text);
+}
+
+.production-page .production-accordion-title {
+  color: var(--prod-text);
+}
+
+.production-page .production-accordion-icon {
+  color: var(--prod-gold);
+}
+
+.production-page .advanced-panel[open] summary .production-accordion-title {
+  transform: none;
+}
+
+.production-page .production-accordion-secondary {
+  border-color: var(--prod-border-strong);
+  background: linear-gradient(135deg, rgba(13, 32, 56, .98), rgba(10, 28, 49, .99));
+  color: var(--prod-text-soft);
+}
+
+.production-page .production-accordion-secondary > summary,
+.production-page .production-accordion-secondary .production-accordion-title {
+  color: var(--prod-text-soft);
+}
+
+.production-page .production-accordion-secondary:hover {
+  background: linear-gradient(135deg, #122a47, #0f2440);
+}
+
+.production-page label:not(.sr-only),
+.production-page .production-label {
+  color: var(--prod-label);
+}
+
+.production-page :is(.production-description, .muted-description, .production-helper-text, .helper-text) {
+  color: var(--prod-text-soft);
+}
+
+.production-page :is(.production-muted, .production-subtle, .selection-count, .empty-note) {
+  color: var(--prod-text-muted);
+}
+
+.production-page .production-secondary-button,
+.production-page :is(
+  .button-row button:not(.primary-small),
+  .output-actions button,
+  .copy-button,
+  .studio-quick-actions button,
+  .studio-setup-link,
+  .character-browser-nav button,
+  .preset-row button
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(69, 107, 155, .32);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(13, 31, 53, .88), rgba(8, 23, 41, .94));
+  color: var(--prod-text);
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.production-page .production-secondary-button:hover,
+.production-page :is(
+  .button-row button:not(.primary-small),
+  .output-actions button,
+  .copy-button,
+  .studio-quick-actions button,
+  .studio-setup-link,
+  .character-browser-nav button,
+  .preset-row button
+):hover {
+  border-color: rgba(255, 210, 41, .5);
+  background: linear-gradient(135deg, rgba(18, 42, 71, .96), rgba(11, 31, 54, .98));
+}
+
+.production-page :is(
+  .advanced-content,
+  .character-browser-nav,
+  .toggle-field,
+  .choice-field,
+  .preset-row,
+  .saved-pack-list article,
+  .idea-provider-note,
+  .silent-lock,
+  .production-feature-toggle,
+  .production-control-group
+) {
+  border-color: var(--prod-border);
+  background-color: var(--prod-card-deep);
+  color: var(--prod-text);
 }
 
 @media (max-width: 1100px) {

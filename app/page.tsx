@@ -385,7 +385,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
   const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
   const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
-  const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("outputs");
+  const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("videoIdea");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -595,14 +595,13 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     productionCharacters.length > 0 &&
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
-  const conceptComplete = Boolean(form.videoTitle.trim());
+  const conceptComplete = Boolean(form.videoTitle.trim() && requestedOutputs.length > 0);
   const workflowSteps = [
     { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
     { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
     { id: "scene", tabId: "workflow-tab-setup", title: "Scene Setup", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
     { id: "motion", tabId: undefined, title: "Motion & Camera", status: activeWorkflowTab === "setup" && productionTab === "motion" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("motion"); } },
     { id: "audio", tabId: undefined, title: "Audio", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
-    { id: "output", tabId: "workflow-tab-outputs", title: "Output Package", status: activeWorkflowTab === "outputs" ? "active" : requestedOutputs.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("outputs") },
     { id: "review", tabId: undefined, title: "Review & Generate", status: activeWorkflowTab === "setup" && productionTab === "advanced" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("advanced"); } },
   ] as const;
   const completedWorkflowSteps = workflowSteps.filter((step) => step.status === "completed").length;
@@ -1769,7 +1768,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       <header className="studio-toolbar">
         <div className="studio-project-identity"><span className="studio-project-icon" aria-hidden="true">▣</span><div className="studio-project-name"><span>Project:</span><strong>{form.videoTitle || "Untitled Production"}</strong></div><span className="studio-save-status"><span className="studio-save-dot" />Saved locally</span></div>
         <div className="studio-project-metadata"><div><span>Style</span><strong>{selectedStyle(form)}</strong></div><div><span>Duration</span><strong>{form.duration} Seconds</strong></div><div><span>Model</span><strong>{selectedModel(form)}</strong></div><div><span>Ratio</span><strong>{form.videoRatio}</strong></div><div className="studio-output-summary"><span>◆</span><span><small>Outputs</small><strong>{requestedOutputs.length} selected</strong></span></div></div>
-        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-toolbar-button" type="button" onClick={downloadWord} disabled={!pack || isDownloading}>{isDownloading ? "Preparing…" : "Export"}</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
+        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => { setActiveWorkflowTab("outputs"); window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-toolbar-button" type="button" onClick={downloadWord} disabled={!pack || isDownloading}>{isDownloading ? "Preparing…" : "Export"}</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
       </header>
 
       <section className="hero production-page-hero production-page-header" id="top">
@@ -1801,7 +1800,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <section className="setup-panel production-card production-selection-panel studio-step-workspace">
           <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
-          <section className="production-studio-dashboard" id="choose-outputs" role="tabpanel" aria-labelledby="workflow-tab-outputs" hidden={activeWorkflowTab !== "outputs"}>
+          <section className="production-studio-dashboard" id="choose-outputs" aria-label="Production preview" hidden={activeWorkflowTab !== "outputs"}>
             <aside className="studio-config-column">
               <section className="studio-dashboard-card studio-config-card">
                 <header><span>01</span><div><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
@@ -1885,6 +1884,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
               </details>
             </div>
+            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" disabled={!conceptComplete} onClick={() => setActiveWorkflowTab("characters")}><span>Continue to Cast</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
           <section className="form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
@@ -1943,7 +1943,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <section className="scene-panel scene-tone-panel"><h2>Tone &amp; Energy</h2><div className="scene-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`scene-tone-chip ${selected ? "is-selected" : ""}`} key={tone}><input className="scene-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="scene-tone-icon" aria-hidden="true">{selected ? "✓" : "•"}</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input className="scene-input" value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}</section>
               <section className="scene-panel scene-ratio-panel"><h2>Video Ratio</h2><p>Start and End Frames inherit this ratio.</p><div className="scene-ratio-grid"><div className="scene-ratio-field">{globalRatioControl}</div></div></section>
             </div>}
-            {productionTab === "core" && <footer className="scene-editor__footer"><button className="scene-editor__continue" type="button" onClick={() => setActiveWorkflowTab("outputs")}><span>Save &amp; Continue</span><span aria-hidden="true">→</span></button></footer>}
+            {productionTab === "core" && <footer className="scene-editor__footer"><button className="scene-editor__continue" type="button" onClick={() => setProductionTab("motion")}><span>Continue to Motion &amp; Camera</span><span aria-hidden="true">→</span></button></footer>}
             </main>
             {productionTab !== "core" && <><div className="form-grid">
               <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
@@ -2016,7 +2016,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <div><span>05</span><h2 id="setup-generation-title">Generation Summary</h2><p>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
               <button className="generate-button selectable-generate" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
             </section>
-            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setActiveWorkflowTab("outputs")}><span>Save &amp; Continue</span><span aria-hidden="true">→</span></button></footer></>}
+            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab(productionTab === "motion" ? "audio" : productionTab === "audio" ? "advanced" : "audio")}><span>{productionTab === "motion" ? "Continue to Audio" : productionTab === "audio" ? "Continue to Review & Generate" : "Back to Audio"}</span><span aria-hidden="true">{productionTab === "advanced" ? "←" : "→"}</span></button></footer></>}
           </section>
 
           {error && <div className="message error" role="alert">{error}</div>}

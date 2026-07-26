@@ -31,8 +31,19 @@ test("concept orders title, output package, and optional direction", () => {
   for (const removed of ["Location name", "Location description", "Important Object name", "Important Object description", "Action or Trap name", "Action or Trap description", "Ending or Payoff name", "Ending or Payoff description", "Expand descriptions"]) {
     assert.doesNotMatch(conceptSection, new RegExp(removed));
   }
-  assert.match(page, /const conceptComplete = Boolean\(form\.videoTitle\.trim\(\)\)/);
+  assert.match(page, /const conceptComplete = Boolean\(form\.videoTitle\.trim\(\) && requestedOutputs\.length > 0\)/);
   assert.doesNotMatch(page, /ideaDescriptionsExpanded|completeIdeaField/);
+});
+
+test("workflow navigation has six steps without a separate output package step", () => {
+  const workflow = page.slice(page.indexOf("const workflowSteps = ["), page.indexOf("] as const;", page.indexOf("const workflowSteps = [")));
+  for (const [id, title] of [["concept", "Concept"], ["cast", "Cast"], ["scene", "Scene Setup"], ["motion", "Motion & Camera"], ["audio", "Audio"], ["review", "Review & Generate"]]) {
+    assert.match(workflow, new RegExp(`id: "${id}"[\\s\\S]{0,100}title: "${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+  }
+  assert.doesNotMatch(workflow, /id: "output"|title: "Output Package"/);
+  assert.match(page, /setActiveWorkflowTab\("characters"\)[\s\S]{0,120}Continue to Cast/);
+  assert.match(page, /productionTab === "motion" \? "audio" : productionTab === "audio" \? "advanced" : "audio"/);
+  assert.match(page, /Continue to Review & Generate[\s\S]{0,120}Back to Audio/);
 });
 
 test("custom and full-pack modes remain mutually exclusive presets", () => {

@@ -7,9 +7,9 @@ const css = fs.readFileSync("app/globals.css", "utf8");
 
 test("configuration studio is the single first workflow step", () => {
   assert.ok(page.indexOf(">Configuration<") < page.indexOf(">Complete Video Idea<"));
-  assert.match(page, /studio-config-card[\s\S]{0,180}<span>01<\/span>[\s\S]{0,120}Configuration/);
-  assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
-  assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
+  assert.match(page, /studio-config-card[\s\S]{0,260}<span className="production-section-number" aria-hidden="true">01<\/span>[\s\S]{0,180}Configuration/);
+  assert.match(page, /production-section-number" aria-hidden="true">02<\/span>[\s\S]{0,180}Complete Video Idea/);
+  assert.match(page, /production-section-number" aria-hidden="true">03<\/span>[\s\S]{0,180}Characters/);
   assert.match(page, /scene-editor[\s\S]{0,300}Creative Direction/);
   assert.doesNotMatch(page, /Voice, Music, and Saved Settings/);
   assert.match(page, /Narration, Voices, Music &amp; Sound[\s\S]{0,160}Configure spoken audio, cartoon vocals, music, and SFX/);

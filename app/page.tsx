@@ -1818,7 +1818,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   return (
-    <main className="video-production-page production-studio-workflow">
+    <main className="video-production-page production-page production-studio-workflow">
       <header className="topbar production-topbar">
         <div className={`engine-badge ${mode === "ai" ? "ai" : ""}`}>
           <span />
@@ -1865,7 +1865,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           <section className="production-studio-dashboard" id="choose-outputs" aria-label="Production preview" hidden={activeWorkflowTab !== "outputs"}>
             <aside className="studio-config-column">
               <section className="studio-dashboard-card studio-config-card">
-                <header><span>01</span><div><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">01</span><div className="production-section-heading-copy"><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
                 <div className="mode-switch production-generation-modes" aria-label="Generator mode">
                   <button className={`production-generation-mode ${mode === "demo" ? "active" : ""}`} type="button" onClick={() => setMode("demo")}><span><b className="production-generation-mode-title">Demo Mode</b><small className="production-generation-mode-note">No API</small></span></button>
                   <button className={`production-generation-mode ${mode === "ai" ? "active" : ""}`} type="button" onClick={() => setMode("ai")}><span><b className="production-generation-mode-title">AI Mode</b><small className="production-generation-mode-note">OpenAI powered</small></span></button>
@@ -1878,28 +1878,28 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
             <div className="studio-center-column">
               <section className="studio-dashboard-card studio-prompt-panel" ref={outputRef}>
-                <header><span>02</span><div><h2>Generated Prompt</h2><p>The synchronized master prompt and production rules.</p></div><CopyButton label="Copy Prompt" value={completePrompt || "Generate the pack to create the synchronized master prompt."} /></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Generated Prompt</h2><p>The synchronized master prompt and production rules.</p></div><CopyButton label="Copy Prompt" value={completePrompt || "Generate the pack to create the synchronized master prompt."} /></header>
                 <pre>{pack ? completePrompt : "Your master production prompt will appear here after generation. Configuration, cast, camera, frames, audio, negative rules, and continuity checks remain synchronized."}</pre>
               </section>
               <section className="studio-dashboard-card studio-timeline-panel">
-                <header><span>03</span><div><h2>Action Timeline</h2><p>Second-by-second choreography for the selected duration.</p></div></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Action Timeline</h2><p>Second-by-second choreography for the selected duration.</p></div></header>
                 <pre>{pack?.videoTimeline || `0:00  Opening pose and immediate hook\n0:${String(Math.max(1, Math.floor(Number(form.duration) / 3))).padStart(2, "0")}  Escalation and camera follow\n0:${String(Math.max(2, Math.floor(Number(form.duration) * 2 / 3))).padStart(2, "0")}  Peak action\n0:${form.duration}  Payoff and settled end frame`}</pre>
               </section>
             </div>
 
             <div className="studio-right-column">
               <section className="studio-dashboard-card studio-frames-panel">
-                <header><span>04</span><div><h2>Start Frame &amp; End Frame</h2><p>Reference prompts inherit the global {form.videoRatio} ratio.</p></div></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">04</span><div className="production-section-heading-copy"><h2>Start Frame &amp; End Frame</h2><p>Reference prompts inherit the global {form.videoRatio} ratio.</p></div></header>
                 <article><strong>Start Frame</strong><pre>{pack?.startFramePrompt || "Generated automatically from the opening composition, cast, and scene."}</pre>{pack?.startFramePrompt && <CopyButton label="Copy" value={pack.startFramePrompt} />}</article>
                 <article><strong>End Frame</strong><pre>{pack?.endFramePrompt || "Generated automatically from the payoff, continuity locks, and final pose."}</pre>{pack?.endFramePrompt && <CopyButton label="Copy" value={pack.endFramePrompt} />}</article>
               </section>
               <section className="studio-dashboard-card studio-motion-panel">
-                <header><span>05</span><div><h2>Camera &amp; Motion</h2><p>{form.motionLevel} motion · {form.duration}s · {selectedModel(form)}</p></div></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">05</span><div className="production-section-heading-copy"><h2>Camera &amp; Motion</h2><p>{form.motionLevel} motion · {form.duration}s · {selectedModel(form)}</p></div></header>
                 <p>{pack?.videoLock || "Camera path, subject visibility, motion continuity, and action ownership are locked during generation."}</p>
                 <button type="button" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("motion"); }}>Edit camera and motion</button>
               </section>
               <section className="studio-dashboard-card studio-scene-panel">
-                <header><span>06</span><div><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {resolveCreativeDirection(form.creativeDirection).pacingStyle}</p></div></header>
+                <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {resolveCreativeDirection(form.creativeDirection).pacingStyle}</p></div></header>
                 <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
               </section>
             </div>
@@ -1907,7 +1907,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
-            <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></div>
+            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></header>
             <div className="concept-section">
               <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
               <section className="concept-field concept-output-package" aria-labelledby="concept-output-package-title">
@@ -1950,7 +1950,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           <section className="form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
-            <div className="section-heading"><span>03</span><div><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></div>
+            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></header>
             <div className="character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
             <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
               <div className="character-browser-nav">
@@ -1995,7 +1995,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <main className="sceneSetup scene-editor">
-            <header className="creative-direction-header"><div className="creative-direction-title-row"><span className="creative-direction-icon" aria-hidden="true">✦</span><div><h1>Creative Direction</h1><p>Guide the overall look, feel, camera language, and performance of your video. The AI will determine the location, supporting objects, action progression, and ending from your concept and selections.</p></div></div></header>
+            <header className="production-section-header creative-direction-header"><span className="production-section-number" aria-hidden="true">04</span><div className="production-section-heading-copy"><h2>Creative Direction</h2><p>Guide the overall look, feel, camera language, and performance of your video. The AI will determine the location, supporting objects, action progression, and ending from your concept and selections.</p></div></header>
             {productionTab === "core" && <div className="scene-editor__body">
               <section className="creative-direction-section" aria-labelledby="creative-direction-section-title"><h2 className="sr-only" id="creative-direction-section-title">Creative Direction controls</h2><div className="creative-direction-grid">
                 <CreativeDirectionSelectCard id="visual-mood" title="Visual Mood & Atmosphere" description="Set the emotional tone, lighting, atmosphere, and color feeling." icon="◉" value={form.creativeDirection.visualMood} customValue={form.creativeDirection.visualMoodCustom} options={VISUAL_MOOD_OPTIONS} selectLabel="Choose a visual mood" customLabel="Custom visual mood" customPlaceholder="Describe the mood, lighting, atmosphere, and color feeling you want." customError={creativeDirectionErrors.visualMood} onValueChange={(visualMood) => updateCreativeDirection({ visualMood })} onCustomValueChange={(visualMoodCustom) => updateCreativeDirection({ visualMoodCustom })} />
@@ -2087,7 +2087,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <section className="output-panel production-card production-output-panel studio-live-preview" hidden={activeWorkflowTab === "outputs"}>
           <ProductionPartialBorder />
           <div className="output-heading production-output-header">
-            <div className="production-panel-heading"><span className="production-step-number">02</span><div><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>
+            <div className="production-section-header production-panel-heading"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>
             <div className="output-actions"><button className="production-save-library" type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
           {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}

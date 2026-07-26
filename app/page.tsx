@@ -385,7 +385,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
   const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
   const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
-  const [ideaDescriptionsExpanded, setIdeaDescriptionsExpanded] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("outputs");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
@@ -596,7 +595,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     productionCharacters.length > 0 &&
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
-  const conceptComplete = Boolean(form.videoTitle.trim() && form.location.trim() && form.importantObject.trim() && form.trapAction.trim() && form.endingPayoff.trim());
+  const conceptComplete = Boolean(form.videoTitle.trim());
   const workflowSteps = [
     { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
     { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
@@ -1757,11 +1756,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     );
   }
 
-  function completeIdeaField(kind: CreativeAssetKind, label: string) {
-    const keys = creativeFields[kind];
-    return <div className="complete-idea-field" key={kind}><label className="field"><span>{label} name</span><input value={String(form[keys.name])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.name]: event.target.value }))} /></label><label className="field wide"><span>{label} description</span><textarea className={ideaDescriptionsExpanded ? "expanded-description" : "compact-description"} value={String(form[keys.description])} onChange={(event) => setForm((current) => ({ ...current, [keys.id]: "", [keys.description]: event.target.value }))} /></label></div>;
-  }
-
   return (
     <main className="video-production-page production-studio-workflow">
       <header className="topbar production-topbar">
@@ -1866,16 +1860,11 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
-            <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Create one connected premise manually or generate all five editable fields together.</p></div></div>
+            <div className="section-heading"><span>02</span><div><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></div>
             <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
-            <div className="form-grid">
+            <div className="form-grid concept-fields">
               {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
               <label className="field wide"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
-              {completeIdeaField("location", "Location")}
-              {completeIdeaField("object", "Important Object")}
-              {completeIdeaField("action", "Action or Trap")}
-              {completeIdeaField("payoff", "Ending or Payoff")}
-              <button type="button" className="description-toggle wide" aria-expanded={ideaDescriptionsExpanded} onClick={() => setIdeaDescriptionsExpanded((current) => !current)}>{ideaDescriptionsExpanded ? "Collapse descriptions" : "Expand descriptions"}</button>
               <label className="field wide"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
               <details className="advanced-panel wide">
                 <summary>Creative Library import and export <span>+</span></summary>

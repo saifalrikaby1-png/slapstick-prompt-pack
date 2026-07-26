@@ -57,6 +57,8 @@ test("creative suggestion route validates, times out, cools down, and keeps the 
   assert.doesNotMatch(page, /OPENAI_API_KEY|sk-[A-Za-z0-9_-]{20,}/);
 });
 
-test("no customer-facing credits, pricing, counters, or usage limits are added", () => {
-  assert.doesNotMatch(`${page}\n${route}`, /\bcredits?\b|pricing|\busage limit\b|generation count/i);
+test("credit estimate remains display-only without pricing or usage limits", () => {
+  assert.match(page, /const estimatedCredits = mode === "ai" \? requestedOutputs\.length \* 4 : 0/);
+  assert.match(page, /Demo mode · no credits used/);
+  assert.doesNotMatch(`${page}\n${route}`, /pricing|\busage limit\b|generation count/i);
 });

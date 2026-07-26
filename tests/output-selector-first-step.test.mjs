@@ -22,6 +22,17 @@ test("configuration studio is the single first workflow step", () => {
   }
 });
 
+test("concept keeps only the title and optional direction fields", () => {
+  const conceptSection = page.slice(page.indexOf('id="episode-idea"'), page.indexOf('id="characters"'));
+  assert.match(conceptSection, /<span>Video Name<\/span><input value=\{form\.videoTitle\} onChange=\{\(event\) => update\("videoTitle", event\.target\.value\)\} placeholder="Create a memorable original title"/);
+  assert.match(conceptSection, /Additional direction <i>optional<\/i>[\s\S]{0,160}value=\{form\.additionalDirection\}[\s\S]{0,120}update\("additionalDirection", event\.target\.value\)/);
+  for (const removed of ["Location name", "Location description", "Important Object name", "Important Object description", "Action or Trap name", "Action or Trap description", "Ending or Payoff name", "Ending or Payoff description", "Expand descriptions"]) {
+    assert.doesNotMatch(conceptSection, new RegExp(removed));
+  }
+  assert.match(page, /const conceptComplete = Boolean\(form\.videoTitle\.trim\(\)\)/);
+  assert.doesNotMatch(page, /ideaDescriptionsExpanded|completeIdeaField/);
+});
+
 test("custom and full-pack modes remain mutually exclusive presets", () => {
   assert.match(page, /type OutputSelectionMode = "custom" \| "fullPack"/);
   assert.match(page, /useState<OutputSelectionMode>\("custom"\)/);

@@ -179,6 +179,8 @@ export type SavedProductionPack = {
   characterProfiles: CharacterProfile[];
   pack: PartialProductionPack;
   qualityReport: QualityReport;
+  outputSelectionMode?: "custom" | "fullPack";
+  customRequestedOutputs?: RequestedOutput[];
   requestedOutputs?: RequestedOutput[];
   generatedOutputs?: RequestedOutput[];
   packStatus?: "Partial Pack" | "Complete Pack" | "Legacy Pack";

@@ -581,10 +581,11 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const fullPackGenerated = generatedOutputs.length === requestedOutputValues.length;
   const qualityTargetReached = Boolean(qualityReport && qualityReport.score >= 90);
   const canFixPrompts = Boolean(pack && fullPackGenerated && !qualityTargetReached && unresolvedFindings.length > 0);
-  const needsLocation = requestedOutputs.some((output) => output !== "characterBuildingPrompt");
-  const needsObject = requestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
-  const needsAction = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
-  const needsPayoff = requestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath"].includes(output));
+  const effectiveRequestedOutputs = selectionMode === "fullPack" ? [...requestedOutputValues] : requestedOutputs;
+  const needsLocation = effectiveRequestedOutputs.some((output) => output !== "characterBuildingPrompt");
+  const needsObject = effectiveRequestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
+  const needsAction = effectiveRequestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
+  const needsPayoff = effectiveRequestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath"].includes(output));
   const isReady = Boolean(
     (!needsLocation || form.location.trim()) &&
     (!needsObject || form.importantObject.trim()) &&
@@ -595,7 +596,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     productionCharacters.length > 0 &&
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
-  const conceptComplete = Boolean(form.videoTitle.trim() && requestedOutputs.length > 0);
+  const conceptComplete = Boolean(form.videoTitle.trim() && effectiveRequestedOutputs.length > 0);
   const workflowSteps = [
     { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
     { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
@@ -606,7 +607,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   ] as const;
   const completedWorkflowSteps = workflowSteps.filter((step) => step.status === "completed").length;
   const workflowProgress = Math.round((completedWorkflowSteps / workflowSteps.length) * 100);
-  const estimatedCredits = mode === "ai" ? requestedOutputs.length * 4 : 0;
+  const estimatedCredits = mode === "ai" ? effectiveRequestedOutputs.length * 4 : 0;
   const creditStatus = mode === "demo"
     ? "Demo mode · no credits used"
     : isGenerating
@@ -1200,7 +1201,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
   }
 
   async function generate() {
-    if (!requestedOutputs.length) {
+    const outputsForGeneration = selectionMode === "fullPack" ? [...requestedOutputValues] : requestedOutputs;
+    if (!outputsForGeneration.length) {
       setError("Select at least one output to generate.");
       return;
     }
@@ -1208,13 +1210,13 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
     }
-    const existingSelections = generatedOutputs.filter((output) => requestedOutputs.includes(output));
+    const existingSelections = generatedOutputs.filter((output) => outputsForGeneration.includes(output));
     if (existingSelections.length && !window.confirm(`Replace ${existingSelections.length} existing generated output${existingSelections.length === 1 ? "" : "s"}?`)) return;
     setError("");
     setNotice("");
     setIsGenerating(true);
     try {
-      const selectedFields = fieldsForRequestedOutputs(requestedOutputs);
+      const selectedFields = fieldsForRequestedOutputs(outputsForGeneration);
       const previousPack = pack;
       // Demo compatibility contract: mode === "demo" ? generateDemoPack
       const nextPartial = mode === "demo"
@@ -1232,13 +1234,13 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                   id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
                 })),
                 characters: productionCharacters,
-                requestedOutputs,
+                requestedOutputs: outputsForGeneration,
               }),
             });
             const data = await response.json() as { pack?: Partial<ProductionPack>; generatedOutputs?: RequestedOutput[]; error?: string };
             if (!response.ok) throw new Error(data.error || "AI Mode could not generate the production pack.");
             if (!data.pack) throw new Error("AI Mode returned no selected outputs.");
-            if (form.videoTitle.trim() && requestedOutputs.includes("videoTitle")) data.pack.videoTitle = form.videoTitle.trim();
+            if (form.videoTitle.trim() && outputsForGeneration.includes("videoTitle")) data.pack.videoTitle = form.videoTitle.trim();
             return data.pack;
           })();
       const emptyPack: ProductionPack = {
@@ -1249,7 +1251,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setPack(nextPack);
       setFixSummary(null);
       setRemainingFixFindings([]);
-      setGeneratedOutputs((current) => [...new Set([...current, ...requestedOutputs])]);
+      setGeneratedOutputs((current) => [...new Set([...current, ...outputsForGeneration])]);
       setLegacyPack(null);
       window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
     } catch (caught) {
@@ -1309,6 +1311,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   function toggleRequestedOutput(output: RequestedOutput) {
+    if (selectionMode === "fullPack") return;
     setRequestedOutputs((current) => {
       const next = current.includes(output) ? current.filter((item) => item !== output) : [...current, output];
       independentSelectionsRef.current = next;
@@ -1317,16 +1320,18 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   }
 
   function setOutputMode(nextMode: OutputSelectionMode) {
+    if (nextMode === selectionMode) return;
     if (nextMode === "fullPack") {
-      independentSelectionsRef.current = requestedOutputs;
+      independentSelectionsRef.current = [...requestedOutputs];
       setRequestedOutputs([...requestedOutputValues]);
     } else {
-      setRequestedOutputs(independentSelectionsRef.current.length ? independentSelectionsRef.current : ["videoPrompt"]);
+      setRequestedOutputs([...independentSelectionsRef.current]);
     }
     setSelectionMode(nextMode);
   }
 
   function setCustomOutputs(outputs: RequestedOutput[]) {
+    if (selectionMode === "fullPack") return;
     const unique = [...new Set(outputs)];
     independentSelectionsRef.current = unique;
     setRequestedOutputs(unique);
@@ -1506,7 +1511,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       characterProfiles: productionCharacters,
       pack,
       qualityReport,
-      requestedOutputs,
+      outputSelectionMode: selectionMode,
+      customRequestedOutputs: [...independentSelectionsRef.current],
+      requestedOutputs: [...effectiveRequestedOutputs],
       generatedOutputs,
       packStatus: generatedOutputs.length === requestedOutputValues.length ? "Complete Pack" : "Partial Pack",
     };
@@ -1527,8 +1534,15 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     setPack(saved.pack as ProductionPack);
     setGeneratedOutputs(saved.generatedOutputs || requestedOutputValues.filter((output) =>
       fieldsForRequestedOutputs([output]).every((field) => Boolean(saved.pack[field]))));
-    setRequestedOutputs(saved.requestedOutputs || requestedOutputValues);
-    setSelectionMode((saved.generatedOutputs || []).length === requestedOutputValues.length ? "fullPack" : "custom");
+    const restoredMode = saved.outputSelectionMode === "fullPack" ? "fullPack" : "custom";
+    const restoredCustomOutputs: RequestedOutput[] = saved.customRequestedOutputs
+      ? saved.customRequestedOutputs
+      : saved.requestedOutputs
+        ? saved.requestedOutputs
+        : ["videoPrompt"];
+    independentSelectionsRef.current = [...restoredCustomOutputs];
+    setSelectionMode(restoredMode);
+    setRequestedOutputs(restoredMode === "fullPack" ? [...requestedOutputValues] : [...restoredCustomOutputs]);
     setLegacyPack(null);
     setNotice("Saved pack loaded.");
     window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
@@ -1849,23 +1863,23 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <div className="concept-section">
               <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
               <section className="concept-field concept-output-package" aria-labelledby="concept-output-package-title">
-                <header className="concept-field-header"><h3 id="concept-output-package-title">Output Package</h3><span>{requestedOutputs.length} output{requestedOutputs.length === 1 ? "" : "s"} selected</span></header>
+                <header className="concept-field-header"><h3 id="concept-output-package-title">Output Package</h3><span>{effectiveRequestedOutputs.length} output{effectiveRequestedOutputs.length === 1 ? "" : "s"} selected{selectionMode === "fullPack" ? " · Locked" : ""}</span></header>
                 <div className="selection-mode production-package-switch output-package-mode" role="group" aria-label="Output selection mode">
                   <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option ${selectionMode === "custom" ? "active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
                   <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option ${selectionMode === "fullPack" ? "active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
                 </div>
-                {selectionMode === "custom" && <div className="output-package-options">
+                <div className="output-package-options">
                   <div className="studio-output-checklist">
                     {outputChoices.map((choice) => {
-                      const included = requestedOutputs.includes(choice.id);
-                      return <label className={included ? "is-selected" : ""} key={choice.id}>
-                        <input type="checkbox" checked={included} onChange={() => toggleRequestedOutput(choice.id)} />
+                      const included = selectionMode === "fullPack" || requestedOutputs.includes(choice.id);
+                      return <label className={`${included ? "is-selected" : ""} ${selectionMode === "fullPack" ? "is-locked" : ""}`} key={choice.id}>
+                        <input className="output-option-checkbox" type="checkbox" checked={included} disabled={selectionMode === "fullPack"} aria-disabled={selectionMode === "fullPack"} onChange={() => toggleRequestedOutput(choice.id)} />
                         <span>{choice.icon}</span><strong>{choice.short}</strong>
                       </label>;
                     })}
                   </div>
-                  <div className="studio-quick-actions"><button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select all</button><button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended</button><button type="button" onClick={() => setCustomOutputs([])}>Clear</button></div>
-                </div>}
+                  <div className="studio-quick-actions"><button type="button" disabled={selectionMode === "fullPack"} onClick={() => setCustomOutputs([...requestedOutputValues])}>Select all</button><button type="button" disabled={selectionMode === "fullPack"} onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended</button><button type="button" disabled={selectionMode === "fullPack"} onClick={() => setCustomOutputs([])}>Clear</button></div>
+                </div>
               </section>
               <label className="field concept-field concept-additional-direction"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
             </div>

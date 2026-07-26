@@ -407,6 +407,14 @@ export function migrateStoredPack(value: unknown): StoredPack | null {
     const quality = item.qualityReport && typeof item.qualityReport === "object"
       ? item.qualityReport as QualityReport
       : { score: 0, findings: [] };
+    const requestedOutputs = Array.isArray(item.requestedOutputs)
+      ? [...new Set(item.requestedOutputs.filter((output): output is RequestedOutput =>
+          typeof output === "string" && requestedOutputValues.includes(output as RequestedOutput)))]
+      : generatedOutputs;
+    const customRequestedOutputs = Array.isArray(item.customRequestedOutputs)
+      ? [...new Set(item.customRequestedOutputs.filter((output): output is RequestedOutput =>
+          typeof output === "string" && requestedOutputValues.includes(output as RequestedOutput)))]
+      : requestedOutputs;
     return {
       id,
       schemaVersion: 2,
@@ -419,7 +427,15 @@ export function migrateStoredPack(value: unknown): StoredPack | null {
       characterProfiles: characters,
       pack: migratedPack as PartialProductionPack,
       qualityReport: quality,
-      requestedOutputs: generatedOutputs,
+      outputSelectionMode: item.outputSelectionMode === "fullPack"
+        ? "fullPack"
+        : item.outputSelectionMode === "custom"
+          ? "custom"
+          : generatedOutputs.length === requestedOutputValues.length
+            ? "fullPack"
+            : "custom",
+      customRequestedOutputs,
+      requestedOutputs,
       generatedOutputs,
       packStatus: generatedOutputs.length === requestedOutputValues.length ? "Complete Pack" : "Partial Pack",
     } satisfies SavedProductionPack;

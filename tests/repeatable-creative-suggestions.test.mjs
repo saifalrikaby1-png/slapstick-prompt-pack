@@ -58,7 +58,7 @@ test("creative suggestion route validates, times out, cools down, and keeps the 
 });
 
 test("credit estimate remains display-only without pricing or usage limits", () => {
-  assert.match(page, /const estimatedCredits = mode === "ai" \? requestedOutputs\.length \* 4 : 0/);
+  assert.match(page, /const estimatedCredits = mode === "ai" \? effectiveRequestedOutputs\.length \* 4 : 0/);
   assert.match(page, /Demo mode · no credits used/);
   assert.doesNotMatch(`${page}\n${route}`, /pricing|\busage limit\b|generation count/i);
 });

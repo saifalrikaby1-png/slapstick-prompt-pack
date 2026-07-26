@@ -31,7 +31,7 @@ test("studio interface preserves selection, generation, regeneration, and displa
   for (const text of ["Configuration", "Full Production Pack", "Generate Pack", "Select at least one output to generate.", "Download Selected Outputs as Word", "Estimated credits"]) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(page, /const estimatedCredits = mode === "ai" \? requestedOutputs\.length \* 4 : 0/);
+  assert.match(page, /const estimatedCredits = mode === "ai" \? effectiveRequestedOutputs\.length \* 4 : 0/);
   assert.match(page, /Demo mode · no credits used/);
   for (const source of [route, engine, typesSource]) {
     assert.doesNotMatch(source, /\b(?:CreditBalance|CreditTransaction|GenerationCreditCost|OUTPUT_CREDIT_COSTS|calculateCreditCost|estimatedCredits|actualCredits|reservedCredits|availableCredits)\b/);

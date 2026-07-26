@@ -35,7 +35,7 @@ test("strict presence keeps active cast and object traceable from start to end",
   assert.match(pack.videoLock, /STRICT OBJECT PRESENCE LOCK/);
   assert.match(pack.videoLock, /NO-SPAWN|No selected character may suddenly appear/);
   assert.match(pack.videoTimeline, /At exactly 0:00/);
-  assert.match(pack.videoTimeline, /rolling blue cookie/);
+  assert.match(pack.videoTimeline, /supporting story object derived from/);
 });
 
 test("fast tone starts at exactly zero with named ownership and a cast-safe camera", () => {

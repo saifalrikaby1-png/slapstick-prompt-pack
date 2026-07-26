@@ -26,7 +26,7 @@ test("authorized inventory and object state ledger are exact and closed-world", 
   const inventory = engine.buildAuthorizedSceneInventory(form(), cast.slice(0, 2));
   const ledger = engine.buildObjectStateLedger(inventory);
   assert.deepEqual(inventory.characters.map((item) => item.name), ["Biscuit", "Grumpy"]);
-  assert.equal(inventory.importantObjects[0].name, "one blue rolling cookie");
+  assert.match(inventory.importantObjects[0].name, /supporting story object derived from/);
   assert.equal(ledger[0].presentAtStart, true);
   assert.equal(ledger[0].presentAtEnd, true);
   assert.equal(inventory.allowCuts, false);

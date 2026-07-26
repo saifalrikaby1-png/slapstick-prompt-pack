@@ -1,6 +1,7 @@
 import {
   CharacterProfile,
   CreativeAsset,
+  CreativeDirectionState,
   LegacyPackItem,
   LegacySavedPack,
   ProductionForm,
@@ -34,6 +35,80 @@ const stringValue = (value: unknown, fallback = "") =>
 
 const boolValue = (value: unknown, fallback: boolean) =>
   typeof value === "boolean" ? value : fallback;
+
+const creativeDirectionPresets = {
+  visualMood: {
+    "bright-colorful": "Bright & Colorful: Bright lighting, vivid colors, cheerful atmosphere, and clear visual contrast.",
+    "dark-cinematic": "Dark & Cinematic: Deep shadows, dramatic contrast, controlled highlights, and a serious cinematic tone.",
+    "warm-magical": "Warm & Magical: Warm lighting, gentle glow, rich color harmony, and an inviting magical atmosphere.",
+    "soft-dreamy": "Soft & Dreamy: Soft light, delicate colors, gentle contrast, and an ethereal dreamlike feeling.",
+    "cool-moody": "Cool & Moody: Cool color temperature, atmospheric shadows, restrained highlights, and a reflective mood.",
+    "epic-dramatic": "Epic & Dramatic: Powerful lighting, bold contrast, heightened scale, and strong dramatic atmosphere.",
+    "futuristic-neon": "Futuristic Neon: Neon accents, reflective surfaces, bold contrast, and a futuristic high-tech atmosphere.",
+    "natural-realistic": "Natural & Realistic: Natural lighting, believable colors, realistic atmosphere, and restrained visual styling.",
+    "minimal-clean": "Minimal & Clean: Simple composition, controlled colors, clean lighting, and minimal visual distraction.",
+  },
+  cameraStyle: {
+    "smooth-cinematic": "Smooth & Cinematic: Smooth tracking movement, stable framing, gentle push-ins, and polished cinematic motion.",
+    "dynamic-energetic": "Dynamic & Energetic: Active camera movement, dynamic framing, responsive tracking, and energetic visual motion.",
+    "locked-stable": "Locked & Stable: Stable camera placement, controlled framing, minimal movement, and clear subject visibility.",
+    "slow-push-in": "Slow Push-In: A gradual camera move toward the subject to build focus, emotion, or anticipation.",
+    "orbit-subject": "Orbit Around Subject: The camera moves smoothly around the main subject while keeping the subject clearly framed.",
+    "fast-action-camera": "Fast Action Camera: Quick tracking, responsive reframing, energetic movement, and action-focused composition.",
+    "overhead-top-down": "Overhead / Top-Down: Elevated or top-down framing that clearly presents movement, layout, and spatial relationships.",
+    "handheld-realistic": "Handheld & Realistic: Natural handheld movement with restrained shake and realistic documentary-style framing.",
+    "character-follow": "Character Follow: The camera follows the primary character while preserving clear movement and spatial continuity.",
+  },
+  pacingStyle: {
+    "fast-energetic": "Fast & Energetic: Quick pacing, high character energy, strong reactions, and continuous visual movement.",
+    "calm-emotional": "Calm & Emotional: Gentle pacing, expressive emotional beats, restrained movement, and clear character focus.",
+    "exaggerated-comedic": "Exaggerated & Comedic: Bold reactions, amplified timing, expressive performance, and clear comedic escalation.",
+    "slow-suspenseful": "Slow & Suspenseful: Controlled pacing, delayed reveals, rising tension, and deliberate performance beats.",
+    "natural-realistic": "Natural & Realistic: Believable timing, restrained acting, natural reactions, and realistic movement.",
+    "epic-dramatic": "Epic & Dramatic: Strong dramatic beats, powerful movement, heightened performance, and cinematic escalation.",
+    "gentle-family-friendly": "Gentle & Family-Friendly: Clear pacing, warm expressions, readable actions, and soft family-friendly performance.",
+    "steady-informational": "Steady & Informational: Clear structured pacing, controlled delivery, and an easy-to-follow visual progression.",
+    "gradual-build": "Gradual Build: A measured opening that steadily increases energy and intensity toward the final payoff.",
+  },
+} as const;
+
+const ruleChipSentences: Record<string, string> = {
+  "no-dialogue": "No dialogue.",
+  "no-sudden-cuts": "No sudden cuts.",
+  "characters-visible": "Keep all selected characters visible.",
+  "maintain-identity": "Maintain character identity and appearance consistency.",
+  "family-friendly": "Keep all content family-friendly.",
+  "seamless-loop": "End with a seamless loop.",
+};
+
+function migrateCreativeDirection(value: unknown): CreativeDirectionState {
+  const item = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const defaults = defaultProductionForm.creativeDirection;
+  const selectedRuleChipIds = Array.isArray(item.selectedRuleChipIds)
+    ? item.selectedRuleChipIds.filter((id): id is CreativeDirectionState["selectedRuleChipIds"][number] => typeof id === "string" && id in ruleChipSentences)
+    : [];
+  return {
+    visualMood: typeof item.visualMood === "string" && (item.visualMood === "custom" || item.visualMood in creativeDirectionPresets.visualMood) ? item.visualMood : defaults.visualMood,
+    visualMoodCustom: stringValue(item.visualMoodCustom).slice(0, 200),
+    cameraStyle: typeof item.cameraStyle === "string" && (item.cameraStyle === "custom" || item.cameraStyle in creativeDirectionPresets.cameraStyle) ? item.cameraStyle : defaults.cameraStyle,
+    cameraStyleCustom: stringValue(item.cameraStyleCustom).slice(0, 200),
+    pacingStyle: typeof item.pacingStyle === "string" && (item.pacingStyle === "custom" || item.pacingStyle in creativeDirectionPresets.pacingStyle) ? item.pacingStyle : defaults.pacingStyle,
+    pacingStyleCustom: stringValue(item.pacingStyleCustom).slice(0, 200),
+    creativeRulesManual: stringValue(item.creativeRulesManual, stringValue(item.creativeRules)).slice(0, 300),
+    selectedRuleChipIds,
+  };
+}
+
+function resolveCreativeDirection(state: CreativeDirectionState) {
+  const resolve = (value: string, custom: string, presets: Record<string, string>) =>
+    value === "custom" ? custom.trim() : presets[value] || "";
+  return {
+    visualMood: resolve(state.visualMood, state.visualMoodCustom, creativeDirectionPresets.visualMood),
+    cameraStyle: resolve(state.cameraStyle, state.cameraStyleCustom, creativeDirectionPresets.cameraStyle),
+    pacingStyle: resolve(state.pacingStyle, state.pacingStyleCustom, creativeDirectionPresets.pacingStyle),
+    creativeRules: [state.creativeRulesManual.trim(), ...state.selectedRuleChipIds.map((id) => ruleChipSentences[id]).filter(Boolean)].filter(Boolean).join(" "),
+  };
+}
 
 export function ratioLabel(
   ratio: string,
@@ -299,19 +374,7 @@ export function migrateForm(value: unknown): ProductionForm {
   const migrated: ProductionForm = {
     ...defaultProductionForm,
     videoTitle: stringValue(item.videoTitle),
-    locationAssetId: stringValue(item.locationAssetId),
-    locationName: stringValue(item.locationName),
-    location: stringValue(item.location, stringValue(item.notes)),
-    objectAssetId: stringValue(item.objectAssetId),
-    objectName: stringValue(item.objectName),
-    importantObject: stringValue(item.importantObject, stringValue(item.object)),
-    allowPreviouslySavedObjects: boolValue(item.allowPreviouslySavedObjects, false),
-    actionAssetId: stringValue(item.actionAssetId),
-    actionName: stringValue(item.actionName),
-    trapAction: stringValue(item.trapAction, stringValue(item.trap)),
-    payoffAssetId: stringValue(item.payoffAssetId),
-    payoffName: stringValue(item.payoffName),
-    endingPayoff: stringValue(item.endingPayoff),
+    creativeDirection: migrateCreativeDirection(item.creativeDirection),
     additionalDirection: stringValue(item.additionalDirection, stringValue(item.notes)),
     heroId: stringValue(item.heroId, defaultProductionForm.heroId),
     selectedCharacterIds,
@@ -336,14 +399,8 @@ export function migrateForm(value: unknown): ProductionForm {
       ? item.motionLevel
       : "Balanced",
     videoRatio: stringValue(item.videoRatio, stringValue(item.ratio, defaultProductionForm.videoRatio)).split(" ")[0],
-    startFrameRatio: stringValue(item.startFrameRatio, stringValue(item.ratio, defaultProductionForm.startFrameRatio)).split(" ")[0],
-    endFrameRatio: stringValue(item.endFrameRatio, stringValue(item.ratio, defaultProductionForm.endFrameRatio)).split(" ")[0],
     videoCustomWidth: stringValue(item.videoCustomWidth),
     videoCustomHeight: stringValue(item.videoCustomHeight),
-    startCustomWidth: stringValue(item.startCustomWidth),
-    startCustomHeight: stringValue(item.startCustomHeight),
-    endCustomWidth: stringValue(item.endCustomWidth),
-    endCustomHeight: stringValue(item.endCustomHeight),
     voiceLayers: Array.isArray(item.voiceLayers)
       ? item.voiceLayers.filter((layer): layer is ProductionForm["voiceLayers"][number] =>
         ["Narrator", "Hero Voice", "Companion Voices", "Enemy Voices", "No Spoken Dialogue"].includes(String(layer)))
@@ -575,15 +632,27 @@ export interface ObjectContinuityState {
   presentAtEnd: boolean;
 }
 
+export function deriveScenePlan(form: ProductionForm, heroName = "The Hero") {
+  const creative = resolveCreativeDirection(form.creativeDirection);
+  const concept = form.videoTitle.trim() || "the selected video concept";
+  return {
+    location: `a coherent, production-ready setting derived from “${concept},” with ${creative.visualMood}`,
+    importantObject: `one clearly identifiable supporting story object derived from “${concept}”`,
+    mainAction: `${heroName} leads a clear cause-and-effect action progression derived from the concept, cast, and ${creative.pacingStyle}`,
+    endingPayoff: `${heroName} completes a relevant, safe ending/payoff that resolves “${concept}” and supports a replayable finish`,
+    creative,
+  };
+}
+
 export function buildAuthorizedSceneInventory(form: ProductionForm, cast: CharacterProfile[]): AuthorizedSceneInventory {
-  const direction = form.additionalDirection.toLowerCase();
-  const action = form.trapAction.trim();
-  const locationElements = form.location.split(/[.;]/).map((value) => value.trim()).filter(Boolean).slice(0, 6);
+  const resolved = deriveScenePlan(form, cast.find((profile) => profile.role === "Hero")?.shortName);
+  const direction = `${form.additionalDirection} ${resolved.creative.creativeRules}`.toLowerCase();
+  const locationElements = resolved.location.split(/[.;]/).map((value) => value.trim()).filter(Boolean).slice(0, 6);
   return {
     characters: cast.map((profile) => ({ id: profile.id, name: profile.shortName, role: profile.role })),
-    importantObjects: [{ name: form.importantObject.trim() || "important story object", description: form.importantObject.trim() || "Established selected object" }],
-    actionObjects: action ? [{ name: action, source: "trap" }] : [],
-    fixedEnvironmentElements: locationElements.length ? locationElements : [form.location.trim() || "established environment"],
+    importantObjects: [{ name: resolved.importantObject, description: resolved.importantObject }],
+    actionObjects: [{ name: resolved.mainAction, source: "main-action" }],
+    fixedEnvironmentElements: locationElements.length ? locationElements : [resolved.location],
     authorizedEntrances: /\b(enter|entrance|arrive|reveal)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
     authorizedExits: /\b(exit|leave|off-screen|trapdoor)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
     authorizedTransformations: /\b(transform|break|destroy|collapse)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
@@ -675,8 +744,8 @@ export function generateDemoPack(
   const identities = removeUncheckedCharacters(cast.map(buildCompactCharacterLock).join("\n"));
   const duration = Math.max(5, Number(form.duration) || 15);
   const videoRatio = ratioLabel(form.videoRatio, form.videoCustomWidth, form.videoCustomHeight);
-  const startRatio = ratioLabel(form.startFrameRatio, form.startCustomWidth, form.startCustomHeight);
-  const endRatio = ratioLabel(form.endFrameRatio, form.endCustomWidth, form.endCustomHeight);
+  const startRatio = videoRatio;
+  const endRatio = videoRatio;
   const style = selectedStyle(form);
   const tone = selectedTone(form);
   const platform = selectedPlatform(form);
@@ -685,10 +754,11 @@ export function generateDemoPack(
   const ranges = timelineRanges(duration);
   const heroName = hero?.shortName || "Hero";
   const others = supporting.map((profile) => profile.shortName).join(" and ") || "the supporting cast";
-  const location = removeUncheckedCharacters(stringValue(form.location, "a clean, readable cartoon environment"));
-  const object = removeUncheckedCharacters(stringValue(form.importantObject, "the important story object"));
-  const action = removeUncheckedCharacters(stringValue(form.trapAction, "a clear physical action"));
-  const ending = removeUncheckedCharacters(stringValue(form.endingPayoff, `${heroName} completes the action and the scene resolves clearly`));
+  const derivedScene = deriveScenePlan(form, heroName);
+  const location = removeUncheckedCharacters(derivedScene.location);
+  const object = removeUncheckedCharacters(derivedScene.importantObject);
+  const action = removeUncheckedCharacters(derivedScene.mainAction);
+  const ending = removeUncheckedCharacters(derivedScene.endingPayoff);
   const ledger = visibilityLedger(cast, form.additionalDirection);
   const visibilityLock = presenceLock(ledger, object, form.additionalDirection);
   const sceneInventory = buildAuthorizedSceneInventory(form, cast);
@@ -801,6 +871,13 @@ Magical floating rule: ${sceneInventory.allowMagicalFloating ? "Only the explici
 Adapter camera policy: ${adapter.cameraPolicy}.
 Adapter motion policy: ${adapter.motionPolicy}.
 Adapter reference-frame policy: ${adapter.referenceFramePolicy}.
+CREATIVE DIRECTION
+Visual Mood & Atmosphere: ${derivedScene.creative.visualMood}
+Camera & Motion Style: ${derivedScene.creative.cameraStyle}
+Pacing & Performance: ${derivedScene.creative.pacingStyle}
+Creative Rules & Restrictions: ${derivedScene.creative.creativeRules || "No additional creative restrictions provided."}
+Derivation rule: Determine the location, supporting objects, action progression, and ending/payoff from the concept, selected cast, video type, video model, prompt model, duration, global video ratio, and Creative Direction. Keep every derived element relevant to the concept; introduce no unrelated objects, characters, locations, cuts, or events.
+Global-ratio rule: The selected global Video Ratio applies to the complete video and automatically governs the Start Frame and End Frame. Never request or generate separate frame-ratio settings.
 Identity lock: preserve colors, clothing, accessories, scale, proportions, faces, species, and roles. No duplicate characters, extra characters, substitutions, role swapping, morphing, teleportation, sudden appearances, sudden disappearances, random objects, or broken physical cause and effect.
 Audio/voice rule: ${narrationRule}
 Adapter audio policy: ${adapter.audioPolicy}.${form.additionalDirection.trim() ? `\nCustomer direction: ${form.additionalDirection.trim()}` : ""}`;
@@ -812,6 +889,7 @@ Create a full-body front view, full-body side view, optional back view, neutral 
   const compactCast = cast.map((profile) => buildCompactCharacterLock(profile).split(".")[0]).join("\n");
   const conciseLock = `Create a ${duration}-second ${videoRatio} ${style} video for ${model} on ${platform}.
 Model adapter: ${adapter.displayName}. Camera policy: ${adapter.cameraPolicy}.
+Creative direction: mood=${derivedScene.creative.visualMood}; camera=${derivedScene.creative.cameraStyle}; pacing=${derivedScene.creative.pacingStyle}; restrictions=${derivedScene.creative.creativeRules || "none"}.
 Cast: exactly ${cast.length} characters — ${castRoles}. Exact character count: ${cast.length}.
 Authorized object: exactly ${objectLedger.length} important object: ${object}. Location: ${location}.
 CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} important object: ${object}. SCENE INVENTORY LOCK, EXACT COUNT LOCK, NO-SPAWN / NO-DESPAWN LOCK, STRICT OBJECT PRESENCE LOCK. No selected character may suddenly appear, disappear, spawn, vanish, or be replaced; no sudden appearances or disappearances.
@@ -824,8 +902,7 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
 
 PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character and object has visible support and gravity; no unexplained hovering. Every character and object remains continuously traceable from exact start to exact final position through smooth preparation, anticipation, acceleration, contact, follow-through, deceleration, landing where required, and complete settling. ${form.tones.includes("Fast") ? "Fast action begins in the first visible frame at exactly 0:00; no static introduction, delayed trigger, neutral opening, or slow establishing shot." : ""} Customer-requested entrance, exit, transformation, destruction, cut, freeze, or magical floating must show the complete visible, physically traceable transition. Complete the planned payoff with every remaining authorized entity stable, visible, and supported.`;
   const sanitizedCharacterPrompts = removeUncheckedCharacters(characterPrompts);
-  const generatedTitle = form.videoTitle.trim() ||
-    `${heroName} and the ${form.objectName.trim() || "Impossible Backfire"}`;
+  const generatedTitle = form.videoTitle.trim() || `${heroName} and the Impossible Backfire`;
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
@@ -856,8 +933,8 @@ PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character 
   const finalTimeline = extremeFastChaotic(form)
     ? pacedExtremeTimeline.replace(/^0:00/, `At exactly 0:00, ${heroName} begins the first second with immediate visible action; the camera holds a wide action view; no static opening or delayed trigger.\n0:00`).replace("Major midpoint backfire", "Major middle escalation and midpoint backfire")
     : pacedExtremeTimeline;
-  const conciseStartFrame = `Create the opening reference image in ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
-  const conciseEndFrame = `Create the final reference image in ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, visible support contact, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
+  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
+  const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, visible support contact, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
     characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",
@@ -920,8 +997,9 @@ export function inspectProductionPack(
   form: ProductionForm,
   characters: CharacterProfile[],
   savedTitles: string[] = [],
-  creativeAssets: CreativeAsset[] = [],
+  _creativeAssets: CreativeAsset[] = [],
 ): QualityReport {
+  void _creativeAssets;
   const rawActiveIds = form.activeCharacterIds || [form.heroId, ...form.selectedCharacterIds];
   const activeIds = [...new Set(rawActiveIds)];
   const cast = activeIds.map((id) => characters.find((profile) => profile.id === id))
@@ -969,14 +1047,11 @@ export function inspectProductionPack(
     finding("Video title exists", pack.videoTitle.trim().length >= 3, "Add a clear original video title."),
     finding("Video title is original in saved history", !savedTitles.some((title) =>
       title.trim().toLowerCase() === pack.videoTitle.trim().toLowerCase()), "Choose a title not already used by a saved production.", true),
-    finding("Creative inputs are complete", Boolean(form.location.trim() && form.importantObject.trim() && form.trapAction.trim() && form.endingPayoff.trim()), "Location, object, action, and payoff are required."),
-    finding("Latest Creative Library records are used", (["location", "object", "action", "payoff"] as const).every((kind) => {
-      const id = form[`${kind === "object" ? "object" : kind === "action" ? "action" : kind === "payoff" ? "payoff" : "location"}AssetId`];
-      if (!id) return true;
-      const asset = creativeAssets.find((item) => item.id === id);
-      const description = kind === "location" ? form.location : kind === "object" ? form.importantObject : kind === "action" ? form.trapAction : form.endingPayoff;
-      return !asset || asset.description === description;
-    }), "Selected saved assets must resolve to their latest descriptions."),
+    finding("Creative Direction is complete", Boolean(
+      resolveCreativeDirection(form.creativeDirection).visualMood &&
+      resolveCreativeDirection(form.creativeDirection).cameraStyle &&
+      resolveCreativeDirection(form.creativeDirection).pacingStyle
+    ), "Choose presets or describe each selected Custom creative direction."),
     finding("Exactly one valid hero", Boolean(hero && hero.role === "Hero" && cast.filter((profile) => profile.role === "Hero").length === 1), "The production must have exactly one main Hero."),
     finding("At least one active character", cast.length > 0, "Select at least one character for this production."),
     finding("Unique active character IDs", rawActiveIds.length === activeIds.length, "Remove duplicate active character IDs."),
@@ -990,7 +1065,10 @@ export function inspectProductionPack(
     finding("Strict cast presence lock", /strict presence lock/.test(pack.videoLock.toLowerCase()) && cast.every((profile) =>
       pack.startFramePrompt.toLowerCase().includes(profile.shortName.toLowerCase()) && pack.endFramePrompt.toLowerCase().includes(profile.shortName.toLowerCase())), "All active characters must be present at both reference frames and locked through the video."),
     finding("No spawn or despawn wording", !/\b(?:spawn|despawn|suddenly appears?|suddenly disappears?|vanishes?|reappears?)\b/.test(`${pack.videoTimeline}\n${pack.startFramePrompt}\n${pack.endFramePrompt}`.toLowerCase()) && /no selected character may suddenly appear, disappear, spawn, vanish/.test(pack.videoLock.toLowerCase()), "Remove spawn, vanish, sudden appearance, and unexplained reappearance wording."),
-    finding("Important object continuity", pack.startFramePrompt.toLowerCase().includes(form.importantObject.toLowerCase()) && pack.endFramePrompt.toLowerCase().includes(form.importantObject.toLowerCase()) && /object continuity lock/.test(pack.videoLock.toLowerCase()), "The important object needs visible start and final positions with a continuous path."),
+    finding("Important object continuity", objectStates.every((state) =>
+      pack.startFramePrompt.toLowerCase().includes(state.name.toLowerCase()) &&
+      pack.endFramePrompt.toLowerCase().includes(state.name.toLowerCase())) &&
+      /object continuity lock/.test(pack.videoLock.toLowerCase()), "The derived important object needs visible start and final positions with a continuous path."),
     finding("Action ownership and traceability", /action ownership lock/.test(pack.videoLock.toLowerCase()) && ranges.every((range) => range.start >= 0 && range.end > range.start) && /at exactly 0:00|0:00/.test(pack.videoTimeline.toLowerCase()), "Every beat must name an owner, cause, result, and transition from 0:00."),
     finding("Natural-motion filter", /natural movement lock/.test(all) && /no random gestures/.test(all) && /no random.*spin/.test(all) && !/\brandomly\s+(?:spins?|jumps?|waves?|dances?|gestures?)\b/.test(pack.videoTimeline.toLowerCase()), "Explicitly prohibit random gestures, spinning, jumping, and unrelated movement."),
     finding("Tone from frame zero", /tone-from-zero lock/.test(pack.videoLock.toLowerCase()) && form.tones.every((tone) => pack.startFramePrompt.toLowerCase().includes(tone.toLowerCase()) || pack.videoLock.toLowerCase().includes(tone.toLowerCase())), "Selected tones must control the start frame and first action at 0:00."),
@@ -1013,8 +1091,8 @@ export function inspectProductionPack(
     finding("Sudden-appearance prohibition", /no sudden appearances|sudden appearances/.test(all), "The pack must forbid sudden appearances."),
     finding("Sudden-disappearance prohibition", /no sudden disappearances|sudden disappearances/.test(all), "The pack must forbid sudden disappearances."),
     finding("Teleportation prohibition", /no teleportation|teleport/.test(all), "The pack must forbid teleportation."),
-    finding("Start-frame ratio", pack.startFramePrompt.includes(ratioLabel(form.startFrameRatio, form.startCustomWidth, form.startCustomHeight)), "Start-frame ratio must match the selected value."),
-    finding("End-frame ratio", pack.endFramePrompt.includes(ratioLabel(form.endFrameRatio, form.endCustomWidth, form.endCustomHeight)), "End-frame ratio must match the selected value."),
+    finding("Start-frame ratio", pack.startFramePrompt.includes(ratioLabel(form.videoRatio, form.videoCustomWidth, form.videoCustomHeight)), "Start Frame must inherit the global Video Ratio."),
+    finding("End-frame ratio", pack.endFramePrompt.includes(ratioLabel(form.videoRatio, form.videoCustomWidth, form.videoCustomHeight)), "End Frame must inherit the global Video Ratio."),
     finding("Video ratio", pack.videoLock.includes(ratioLabel(form.videoRatio, form.videoCustomWidth, form.videoCustomHeight)), "Video ratio must match the selected value."),
     finding("Full duration covered", ranges.length > 0 && ranges[ranges.length - 1].end === duration, `Timeline must end at ${duration} seconds.`),
     finding("No timing gaps", noGaps, "Video ranges must be chronological, continuous, and non-overlapping."),

@@ -4,6 +4,39 @@ export type CharacterRole = "Hero" | "Enemy" | "Companion";
 
 export type CreativeAssetKind = "location" | "object" | "action" | "payoff";
 
+export const ruleChipIds = [
+  "no-dialogue",
+  "no-sudden-cuts",
+  "characters-visible",
+  "maintain-identity",
+  "family-friendly",
+  "seamless-loop",
+] as const;
+
+export type RuleChipId = (typeof ruleChipIds)[number];
+
+export type CreativeDirectionState = {
+  visualMood: string;
+  visualMoodCustom: string;
+  cameraStyle: string;
+  cameraStyleCustom: string;
+  pacingStyle: string;
+  pacingStyleCustom: string;
+  creativeRulesManual: string;
+  selectedRuleChipIds: RuleChipId[];
+};
+
+export const defaultCreativeDirection: CreativeDirectionState = {
+  visualMood: "bright-colorful",
+  visualMoodCustom: "",
+  cameraStyle: "smooth-cinematic",
+  cameraStyleCustom: "",
+  pacingStyle: "fast-energetic",
+  pacingStyleCustom: "",
+  creativeRulesManual: "",
+  selectedRuleChipIds: [],
+};
+
 export type CreativeAsset = {
   id: string;
   kind: CreativeAssetKind;
@@ -45,18 +78,32 @@ export type ProductionForm = {
   videoStyleId?: "slapstick" | "cinematic" | "family-3d" | "anime" | "live-action" | "cgi-fantasy" | "stylized-3d";
   styleWorkflowEnabled?: boolean;
   videoTitle: string;
+  creativeDirection: CreativeDirectionState;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   locationAssetId: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   locationName: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   location: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   objectAssetId: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   objectName: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   importantObject: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   allowPreviouslySavedObjects: boolean;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   actionAssetId: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   actionName: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   trapAction: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   payoffAssetId: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   payoffName: string;
+  /** @deprecated Local migration-only values; never rendered or sent for generation. */
   endingPayoff: string;
   additionalDirection: string;
   heroId: string;
@@ -74,14 +121,8 @@ export type ProductionForm = {
   ultraRetentionMode: boolean;
   motionLevel: "Safe" | "Balanced" | "Ambitious";
   videoRatio: string;
-  startFrameRatio: string;
-  endFrameRatio: string;
   videoCustomWidth: string;
   videoCustomHeight: string;
-  startCustomWidth: string;
-  startCustomHeight: string;
-  endCustomWidth: string;
-  endCustomHeight: string;
   voiceLayers: VoiceLayer[];
   narratorGuidance: string;
   narrationText: string;
@@ -220,6 +261,7 @@ export const productionPackKeys: (keyof ProductionPack)[] = [
 export const defaultProductionForm: ProductionForm = {
   videoStyleId: "slapstick",
   videoTitle: "",
+  creativeDirection: { ...defaultCreativeDirection, selectedRuleChipIds: [] },
   locationAssetId: "",
   locationName: "",
   location: "",
@@ -249,14 +291,8 @@ export const defaultProductionForm: ProductionForm = {
   ultraRetentionMode: true,
   motionLevel: "Balanced",
   videoRatio: "9:16",
-  startFrameRatio: "9:16",
-  endFrameRatio: "9:16",
   videoCustomWidth: "",
   videoCustomHeight: "",
-  startCustomWidth: "",
-  startCustomHeight: "",
-  endCustomWidth: "",
-  endCustomHeight: "",
   voiceLayers: ["No Spoken Dialogue"],
   narratorGuidance: "",
   narrationText: "",

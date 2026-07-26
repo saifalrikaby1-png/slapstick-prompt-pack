@@ -10,7 +10,7 @@ test("configuration studio is the single first workflow step", () => {
   assert.match(page, /studio-config-card[\s\S]{0,180}<span>01<\/span>[\s\S]{0,120}Configuration/);
   assert.match(page, /<span>02<\/span>[\s\S]{0,120}Complete Video Idea/);
   assert.match(page, /<span>03<\/span>[\s\S]{0,100}Characters/);
-  assert.match(page, /scene-editor[\s\S]{0,300}Scene Setup/);
+  assert.match(page, /scene-editor[\s\S]{0,300}Creative Direction/);
   assert.doesNotMatch(page, /Voice, Music, and Saved Settings/);
   assert.match(page, /Narration, Voices, Music &amp; Sound[\s\S]{0,160}Configure spoken audio, cartoon vocals, music, and SFX/);
   assert.match(page, /Project Presets and Saved Packs/);
@@ -37,7 +37,7 @@ test("concept orders title, output package, and optional direction", () => {
 
 test("workflow navigation has six steps without a separate output package step", () => {
   const workflow = page.slice(page.indexOf("const workflowSteps = ["), page.indexOf("] as const;", page.indexOf("const workflowSteps = [")));
-  for (const [id, title] of [["concept", "Concept"], ["cast", "Cast"], ["scene", "Scene Setup"], ["motion", "Motion & Camera"], ["audio", "Audio"], ["review", "Review & Generate"]]) {
+  for (const [id, title] of [["concept", "Concept"], ["cast", "Cast"], ["scene", "Creative Direction"], ["motion", "Motion & Camera"], ["audio", "Audio"], ["review", "Review & Generate"]]) {
     assert.match(workflow, new RegExp(`id: "${id}"[\\s\\S]{0,100}title: "${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
   }
   assert.doesNotMatch(workflow, /id: "output"|title: "Output Package"/);

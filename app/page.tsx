@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   CharacterProfile,
   CharacterRole,
+  CreativeDirectionState,
   CreativeAsset,
   CreativeAssetKind,
   GeneratorMode,
@@ -22,6 +23,14 @@ import {
   fieldsForRequestedOutputs,
   requestedOutputValues,
 } from "./production-types";
+import {
+  CAMERA_STYLE_OPTIONS,
+  PACING_STYLE_OPTIONS,
+  RULE_CHIPS,
+  VISUAL_MOOD_OPTIONS,
+  CreativeDirectionOption,
+  resolveCreativeDirection,
+} from "./creative-direction";
 import {
   audioVideoPrompt,
   buildAuthorizedSceneInventory,
@@ -112,6 +121,45 @@ const emptyCharacter: CharacterProfile = {
   continuityRules: "",
   negativeRules: "No duplication, species changes, color drift, extra limbs, morphing, substitutions, or role changes.",
 };
+
+type CreativeDirectionSelectCardProps = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  value: string;
+  customValue: string;
+  options: readonly CreativeDirectionOption[];
+  selectLabel: string;
+  customLabel: string;
+  customPlaceholder: string;
+  customError?: string;
+  onValueChange: (value: string) => void;
+  onCustomValueChange: (value: string) => void;
+};
+
+function CreativeDirectionSelectCard({
+  id, title, description, icon, value, customValue, options, selectLabel,
+  customLabel, customPlaceholder, customError, onValueChange, onCustomValueChange,
+}: CreativeDirectionSelectCardProps) {
+  const selectedOption = options.find((option) => option.value === value);
+  const isCustom = value === "custom";
+  return <article className="creative-direction-card">
+    <header className="creative-direction-card-header"><span className="creative-direction-card-icon" aria-hidden="true">{icon}</span><div><h3>{title}</h3><p>{description}</p></div></header>
+    <div className="creative-direction-control">
+      <label htmlFor={`${id}-select`}>{selectLabel}</label>
+      <select id={`${id}-select`} value={value} onChange={(event) => onValueChange(event.target.value)} aria-describedby={!isCustom && selectedOption?.description ? `${id}-description` : undefined}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      {!isCustom && selectedOption?.description ? <p id={`${id}-description`} className="creative-direction-selected-description">{selectedOption.description}</p> : null}
+      {isCustom ? <div className="creative-direction-custom-field">
+        <label htmlFor={`${id}-custom`}>{customLabel}</label>
+        <textarea id={`${id}-custom`} value={customValue} onChange={(event) => onCustomValueChange(event.target.value.slice(0, 200))} placeholder={customPlaceholder} maxLength={200} aria-invalid={Boolean(customError)} aria-describedby={customError ? `${id}-custom-error ${id}-custom-count` : `${id}-custom-count`} />
+        <div className="creative-direction-field-footer"><div>{customError ? <p id={`${id}-custom-error`} className="creative-direction-error">{customError}</p> : null}</div><span id={`${id}-custom-count`}>{customValue.length}/200</span></div>
+      </div> : null}
+    </div>
+  </article>;
+}
 
 const builtInCharacters: CharacterProfile[] = [
   {
@@ -388,6 +436,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("videoIdea");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
+  const [creativeDirectionErrors, setCreativeDirectionErrors] = useState<Partial<Record<"visualMood" | "cameraStyle" | "pacingStyle", string>>>({});
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
   const presetImportRef = useRef<HTMLInputElement>(null);
@@ -503,8 +552,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
         tones: activeVideoStyle.defaults.tones,
         duration: activeVideoStyle.defaults.duration,
         videoRatio: activeVideoStyle.defaults.ratio,
-        startFrameRatio: activeVideoStyle.defaults.ratio,
-        endFrameRatio: activeVideoStyle.defaults.ratio,
       }));
     }, 1);
     return () => window.clearTimeout(configurationTask);
@@ -582,15 +629,13 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const qualityTargetReached = Boolean(qualityReport && qualityReport.score >= 90);
   const canFixPrompts = Boolean(pack && fullPackGenerated && !qualityTargetReached && unresolvedFindings.length > 0);
   const effectiveRequestedOutputs = selectionMode === "fullPack" ? [...requestedOutputValues] : requestedOutputs;
-  const needsLocation = effectiveRequestedOutputs.some((output) => output !== "characterBuildingPrompt");
-  const needsObject = effectiveRequestedOutputs.some((output) => !["characterBuildingPrompt", "musicPath"].includes(output));
-  const needsAction = effectiveRequestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath", "soundEffects"].includes(output));
-  const needsPayoff = effectiveRequestedOutputs.some((output) => ["videoTitle", "endFramePrompt", "videoPrompt", "musicPath"].includes(output));
+  const customCreativeDirectionValid = (
+    (form.creativeDirection.visualMood !== "custom" || Boolean(form.creativeDirection.visualMoodCustom.trim())) &&
+    (form.creativeDirection.cameraStyle !== "custom" || Boolean(form.creativeDirection.cameraStyleCustom.trim())) &&
+    (form.creativeDirection.pacingStyle !== "custom" || Boolean(form.creativeDirection.pacingStyleCustom.trim()))
+  );
   const isReady = Boolean(
-    (!needsLocation || form.location.trim()) &&
-    (!needsObject || form.importantObject.trim()) &&
-    (!needsAction || form.trapAction.trim()) &&
-    (!needsPayoff || form.endingPayoff.trim()) &&
+    customCreativeDirectionValid &&
     form.tones.length > 0 &&
     (form.platform !== "Custom" || form.customPlatform.trim()) &&
     productionCharacters.length > 0 &&
@@ -600,7 +645,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const workflowSteps = [
     { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
     { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
-    { id: "scene", tabId: "workflow-tab-setup", title: "Scene Setup", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
+    { id: "scene", tabId: "workflow-tab-setup", title: "Creative Direction", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
     { id: "motion", tabId: undefined, title: "Motion & Camera", status: activeWorkflowTab === "setup" && productionTab === "motion" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("motion"); } },
     { id: "audio", tabId: undefined, title: "Audio", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
     { id: "review", tabId: undefined, title: "Review & Generate", status: activeWorkflowTab === "setup" && productionTab === "advanced" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("advanced"); } },
@@ -624,19 +669,29 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     setForm((current) => key === "ratio" ? {
       ...current,
       videoRatio: value,
-      startFrameRatio: value,
-      endFrameRatio: value,
     } : key === "width" ? {
       ...current,
       videoCustomWidth: value,
-      startCustomWidth: value,
-      endCustomWidth: value,
     } : {
       ...current,
       videoCustomHeight: value,
-      startCustomHeight: value,
-      endCustomHeight: value,
     });
+  }
+
+  function updateCreativeDirection(patch: Partial<CreativeDirectionState>) {
+    setForm((current) => ({ ...current, creativeDirection: { ...current.creativeDirection, ...patch } }));
+    setCreativeDirectionErrors((current) => {
+      const next = { ...current };
+      if (patch.visualMood !== undefined || patch.visualMoodCustom?.trim()) delete next.visualMood;
+      if (patch.cameraStyle !== undefined || patch.cameraStyleCustom?.trim()) delete next.cameraStyle;
+      if (patch.pacingStyle !== undefined || patch.pacingStyleCustom?.trim()) delete next.pacingStyle;
+      return next;
+    });
+  }
+
+  function toggleCreativeRuleChip(id: CreativeDirectionState["selectedRuleChipIds"][number]) {
+    const selected = form.creativeDirection.selectedRuleChipIds;
+    updateCreativeDirection({ selectedRuleChipIds: selected.includes(id) ? selected.filter((entry) => entry !== id) : [...selected, id] });
   }
 
   function sanitizeActiveText(value: string) {
@@ -655,26 +710,23 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   function formForGeneration() {
     const sanitized = {
       ...form,
-      startFrameRatio: form.videoRatio,
-      endFrameRatio: form.videoRatio,
-      startCustomWidth: form.videoCustomWidth,
-      startCustomHeight: form.videoCustomHeight,
-      endCustomWidth: form.videoCustomWidth,
-      endCustomHeight: form.videoCustomHeight,
       activeCharacterIds: activeIds,
       heroId: hero?.id || form.heroId,
       selectedCharacterIds: productionCharacters.filter((profile) => profile.role !== "Hero").map((profile) => profile.id),
-      location: sanitizeActiveText(form.location),
-      importantObject: sanitizeActiveText(form.importantObject),
-      trapAction: sanitizeActiveText(form.trapAction),
-      endingPayoff: sanitizeActiveText(form.endingPayoff),
       additionalDirection: sanitizeActiveText([form.additionalDirection, activeVideoStyle ? `STYLE WORKFLOW: ${activeVideoStyle.name}. Visual language: ${activeVideoStyle.rules.visualLanguage}. Camera: ${activeVideoStyle.rules.camera}. Lighting: ${activeVideoStyle.rules.lighting}. Pacing: ${activeVideoStyle.rules.pacing}. Motion: ${activeVideoStyle.rules.motion}. Performance: ${activeVideoStyle.rules.performance}. Audio: ${activeVideoStyle.rules.audio}. Negative constraints: ${activeVideoStyle.rules.negative}. Quality checks: ${activeVideoStyle.qualityChecks.join(", ")}.` : ""].filter(Boolean).join("\n")),
       characterCartoonSoundGuidance: sanitizeActiveText(form.characterCartoonSoundGuidance),
     };
-    if (sanitized.additionalDirection.trim()) return sanitized;
-    const { additionalDirection: _blankDirection, ...withoutBlankDirection } = sanitized;
-    void _blankDirection;
-    return withoutBlankDirection;
+    const {
+      locationAssetId: _locationAssetId, locationName: _locationName, location: _location,
+      objectAssetId: _objectAssetId, objectName: _objectName, importantObject: _importantObject,
+      allowPreviouslySavedObjects: _allowPreviouslySavedObjects,
+      actionAssetId: _actionAssetId, actionName: _actionName, trapAction: _trapAction,
+      payoffAssetId: _payoffAssetId, payoffName: _payoffName, endingPayoff: _endingPayoff,
+      creativeDirection: _creativeDirection,
+      ...generationForm
+    } = sanitized;
+    void [_locationAssetId, _locationName, _location, _objectAssetId, _objectName, _importantObject, _allowPreviouslySavedObjects, _actionAssetId, _actionName, _trapAction, _payoffAssetId, _payoffName, _endingPayoff, _creativeDirection];
+    return generationForm;
   }
 
   const creativeFields: Record<CreativeAssetKind, {
@@ -1206,6 +1258,19 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setError("Select at least one output to generate.");
       return;
     }
+    const directionErrors: typeof creativeDirectionErrors = {};
+    if (form.creativeDirection.visualMood === "custom" && !form.creativeDirection.visualMoodCustom.trim()) directionErrors.visualMood = "Describe your custom visual mood.";
+    if (form.creativeDirection.cameraStyle === "custom" && !form.creativeDirection.cameraStyleCustom.trim()) directionErrors.cameraStyle = "Describe your custom camera style.";
+    if (form.creativeDirection.pacingStyle === "custom" && !form.creativeDirection.pacingStyleCustom.trim()) directionErrors.pacingStyle = "Describe your custom pacing style.";
+    if (Object.keys(directionErrors).length) {
+      setCreativeDirectionErrors(directionErrors);
+      setError("Complete the selected Custom creative direction fields.");
+      setActiveWorkflowTab("setup");
+      setProductionTab("core");
+      const firstId = directionErrors.visualMood ? "visual-mood-custom" : directionErrors.cameraStyle ? "camera-style-custom" : "pacing-style-custom";
+      window.setTimeout(() => document.getElementById(firstId)?.focus(), 0);
+      return;
+    }
     if (!isReady) {
       setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
@@ -1218,9 +1283,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     try {
       const selectedFields = fieldsForRequestedOutputs(outputsForGeneration);
       const previousPack = pack;
+      const generationForm = formForGeneration();
       // Demo compatibility contract: mode === "demo" ? generateDemoPack
       const nextPartial = mode === "demo"
-        ? Object.fromEntries(Object.entries(generateDemoPack(formForGeneration() as ProductionForm, characters))
+        ? Object.fromEntries(Object.entries(generateDemoPack({ ...form, ...generationForm } as ProductionForm, characters))
             .filter(([key]) => selectedFields.includes(key as keyof ProductionPack)))
         : await (async () => {
             const response = await fetch("/api/generate", {
@@ -1228,7 +1294,8 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 action: "generate",
-                form: formForGeneration(),
+                form: generationForm,
+                creativeDirection: resolveCreativeDirection(form.creativeDirection),
                 activeCharacterIds: activeIds,
                 activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
                   id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
@@ -1394,6 +1461,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             body: JSON.stringify({
               action: "fix",
               form: formForGeneration(),
+              creativeDirection: resolveCreativeDirection(form.creativeDirection),
               activeCharacterIds: activeIds,
               activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({ id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile })),
               characters: productionCharacters,
@@ -1624,7 +1692,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
     if (!pack || !qualityReport) return;
     setIsDownloading(true);
     try {
-      const exportForm = formForGeneration() as ProductionForm;
+      const exportForm = { ...form, ...formForGeneration() } as ProductionForm;
+      const exportCreativeDirection = resolveCreativeDirection(form.creativeDirection);
       const authorizedSceneInventory = buildAuthorizedSceneInventory(exportForm, productionCharacters);
       const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
       const { Document, Footer, HeadingLevel, Packer, PageBreak, PageNumber, Paragraph, TextRun } = await import("docx");
@@ -1644,8 +1713,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         setting("Selected model", selectedModel(form)),
         setting("Duration", `${form.duration} seconds`),
         setting("Video ratio", exportForm.videoRatio),
-        setting("Start-frame ratio", exportForm.startFrameRatio),
-        setting("End-frame ratio", exportForm.endFrameRatio),
+        setting("Frame ratio inheritance", "Start Frame and End Frame use the global Video Ratio"),
         setting("Visual style", selectedStyle(form)),
         setting("Selected tones", selectedTone(form)),
         setting("Motion pacing profile", form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick") ? "Extreme Fast-Chaotic Motion — frame-zero action, compressed anticipation, rapid beats" : form.tones.includes("Fast") ? "Fast" : "Standard"),
@@ -1675,11 +1743,11 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         children.push(...paragraphLines(sanitizeActiveText(characterDescription(profile))));
         children.push(setting("Nonverbal Sound Profile", profile.nonverbalSoundProfile || "Neutral character-appropriate nonverbal effort and reaction sounds; no understandable words."));
       });
-      children.push(new Paragraph({ children: [new PageBreak()] }), heading("Creative Setup"));
-      children.push(setting("Location", `${exportForm.locationName || "Location"} — ${exportForm.location}`));
-      children.push(setting("Important object", `${exportForm.objectName || "Object"} — ${exportForm.importantObject}`));
-      children.push(setting("Trap or main action", `${exportForm.actionName || "Action"} — ${exportForm.trapAction}`));
-      children.push(setting("Ending or payoff", `${exportForm.payoffName || "Payoff"} — ${exportForm.endingPayoff}`));
+      children.push(new Paragraph({ children: [new PageBreak()] }), heading("CREATIVE DIRECTION"));
+      children.push(setting("Visual Mood & Atmosphere", exportCreativeDirection.visualMood));
+      children.push(setting("Camera & Motion Style", exportCreativeDirection.cameraStyle));
+      children.push(setting("Pacing & Performance", exportCreativeDirection.pacingStyle));
+      children.push(setting("Creative Rules & Restrictions", exportCreativeDirection.creativeRules || "No additional creative restrictions provided."));
       if (exportForm.additionalDirection?.trim()) children.push(setting("Additional Direction", exportForm.additionalDirection.trim()));
       children.push(heading("Audio Setup"));
       children.push(setting("Narration and spoken layers", form.voiceLayers.join(", ")));
@@ -1852,7 +1920,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </section>
               <section className="studio-dashboard-card studio-scene-panel">
                 <header><span>06</span><div><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {form.tones.join(", ")}</p></div></header>
-                <dl><div><dt>Location</dt><dd>{form.location || "Not configured"}</dd></div><div><dt>Object</dt><dd>{form.importantObject || "Not configured"}</dd></div><div><dt>Negative rules</dt><dd>{activeVideoStyle?.rules.negative || "No duplication, identity drift, morphing, extra limbs, substitutions, or role changes."}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
+                <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
               </section>
             </div>
 
@@ -1947,13 +2015,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <main className="sceneSetup scene-editor">
-            <header className="scene-editor__header"><div className="scene-editor__identity"><span className="scene-editor__icon" aria-hidden="true">▣</span><div><h1>Scene Setup</h1><p>Define the environment, key actions, and the overall tone for your video.</p></div></div><button className="scene-editor__help" type="button" title="Use Scene Setup to align your environment, action, tone, and frame ratios."><span aria-hidden="true">?</span><span>How it works</span></button></header>
+            <header className="creative-direction-header"><div className="creative-direction-title-row"><span className="creative-direction-icon" aria-hidden="true">✦</span><div><h1>Creative Direction</h1><p>Guide the overall look, feel, camera language, and performance of your video. The AI will determine the location, supporting objects, action progression, and ending from your concept and selections.</p></div></div></header>
             {productionTab === "core" && <div className="scene-editor__body">
-              <section className="scene-editor__section scene-editor__elements"><h2>Scene Elements</h2><div className="scene-editor__element-grid">
-                <article className="scene-element-card"><div className="scene-element-label"><span aria-hidden="true">⌖</span><span>Location</span></div><input className="scene-input" value={form.location} onChange={(event) => update("location", event.target.value)} placeholder="Choose or describe a location" /><div className="scene-element-image" aria-hidden="true" /></article>
-                <article className="scene-element-card"><div className="scene-element-label"><span aria-hidden="true">◇</span><span>Important Object</span></div><input className="scene-input" value={form.importantObject} onChange={(event) => update("importantObject", event.target.value)} placeholder="Choose or describe an object" /><div className="scene-element-image" aria-hidden="true" /></article>
-                <article className="scene-element-card"><div className="scene-element-label"><span aria-hidden="true">↗</span><span>Main Action</span></div><input className="scene-input" value={form.trapAction} onChange={(event) => update("trapAction", event.target.value)} placeholder="Describe the action or trap" /><div className="scene-element-image" aria-hidden="true" /></article>
-              </div><div className="scene-ending-field"><div className="scene-ending-label"><span aria-hidden="true">⚑</span><span>Ending / Payoff</span></div><div className="scene-ending-control"><textarea className="scene-textarea" value={form.endingPayoff} onChange={(event) => update("endingPayoff", event.target.value)} placeholder="Describe the clear final payoff" maxLength={300} /><span className="scene-character-count">{form.endingPayoff.length}/300</span></div></div></section>
+              <section className="creative-direction-section" aria-labelledby="creative-direction-section-title"><h2 className="sr-only" id="creative-direction-section-title">Creative Direction controls</h2><div className="creative-direction-grid">
+                <CreativeDirectionSelectCard id="visual-mood" title="Visual Mood & Atmosphere" description="Set the emotional tone, lighting, atmosphere, and color feeling." icon="◉" value={form.creativeDirection.visualMood} customValue={form.creativeDirection.visualMoodCustom} options={VISUAL_MOOD_OPTIONS} selectLabel="Choose a visual mood" customLabel="Custom visual mood" customPlaceholder="Describe the mood, lighting, atmosphere, and color feeling you want." customError={creativeDirectionErrors.visualMood} onValueChange={(visualMood) => updateCreativeDirection({ visualMood })} onCustomValueChange={(visualMoodCustom) => updateCreativeDirection({ visualMoodCustom })} />
+                <CreativeDirectionSelectCard id="camera-style" title="Camera & Motion Style" description="Define the camera movement, framing, and overall motion language." icon="▣" value={form.creativeDirection.cameraStyle} customValue={form.creativeDirection.cameraStyleCustom} options={CAMERA_STYLE_OPTIONS} selectLabel="Choose a camera style" customLabel="Custom camera and motion style" customPlaceholder="Describe the camera movement, framing, and motion style you want." customError={creativeDirectionErrors.cameraStyle} onValueChange={(cameraStyle) => updateCreativeDirection({ cameraStyle })} onCustomValueChange={(cameraStyleCustom) => updateCreativeDirection({ cameraStyleCustom })} />
+                <CreativeDirectionSelectCard id="pacing-style" title="Pacing & Performance" description="Control the pacing, character energy, and performance style." icon="ϟ" value={form.creativeDirection.pacingStyle} customValue={form.creativeDirection.pacingStyleCustom} options={PACING_STYLE_OPTIONS} selectLabel="Choose a pacing style" customLabel="Custom pacing and performance style" customPlaceholder="Describe the pacing, character energy, acting, and performance style you want." customError={creativeDirectionErrors.pacingStyle} onValueChange={(pacingStyle) => updateCreativeDirection({ pacingStyle })} onCustomValueChange={(pacingStyleCustom) => updateCreativeDirection({ pacingStyleCustom })} />
+                <article className="creative-rules-card"><header className="creative-direction-card-header"><span className="creative-direction-card-icon" aria-hidden="true">◇</span><div><div className="creative-rules-title-row"><h3>Creative Rules &amp; Restrictions</h3><span className="creative-rules-optional-badge">Optional</span></div><p>Add any important instructions, rules, or restrictions the AI should follow.</p></div></header><label className="sr-only" htmlFor="creative-rules">Creative rules and restrictions</label><textarea id="creative-rules" value={form.creativeDirection.creativeRulesManual} onChange={(event) => updateCreativeDirection({ creativeRulesManual: event.target.value.slice(0, 300) })} placeholder="e.g., No dialogue, no sudden cuts, keep all characters visible, maintain character identity, end with a seamless loop..." maxLength={300} /><div className="creative-direction-field-footer"><div /><span>{form.creativeDirection.creativeRulesManual.length}/300</span></div><div className="creative-rule-chips" aria-label="Quick creative rules">{RULE_CHIPS.map((chip) => { const isActive = form.creativeDirection.selectedRuleChipIds.includes(chip.id); return <button key={chip.id} type="button" aria-pressed={isActive} onClick={() => toggleCreativeRuleChip(chip.id)}>{chip.label}</button>; })}</div></article>
+              </div></section>
               <section className="scene-panel scene-tone-panel"><h2>Tone &amp; Energy</h2><div className="scene-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`scene-tone-chip ${selected ? "is-selected" : ""}`} key={tone}><input className="scene-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="scene-tone-icon" aria-hidden="true">{selected ? "✓" : "•"}</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input className="scene-input" value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}</section>
               <section className="scene-panel scene-ratio-panel"><h2>Video Ratio</h2><p>Start and End Frames inherit this ratio.</p><div className="scene-ratio-grid"><div className="scene-ratio-field">{globalRatioControl}</div></div></section>
             </div>}

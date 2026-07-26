@@ -608,7 +608,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   ] as const;
   const completedWorkflowSteps = workflowSteps.filter((step) => step.status === "completed").length;
   const workflowProgress = Math.round((completedWorkflowSteps / workflowSteps.length) * 100);
-  const studioHeaderSteps = workflowSteps.filter((step) => step.id !== "output");
   const estimatedCredits = mode === "ai" ? requestedOutputs.length * 4 : 0;
   const creditStatus = mode === "demo"
     ? "Demo mode · no credits used"
@@ -1787,12 +1786,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         </div>
         <button className="demo-button production-load-demo" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
-
-      <nav className="studio-stage-header" aria-label="Six-step production workflow">
-        {studioHeaderSteps.map((step, index) => <button key={step.id} type="button" className={`studio-stage is-${step.status}`} onClick={step.activate}>
-          <span>{String(index + 1).padStart(2, "0")}</span><strong>{step.title}</strong><small>{step.status === "completed" ? "Complete" : step.status === "active" ? "Active" : "Pending"}</small>
-        </button>)}
-      </nav>
 
       <div className={`workspace production-workspace studio-layout ${activeWorkflowTab === "outputs" ? "is-output-studio" : ""}`}>
         <aside className="studio-workflow-rail" aria-label="Production workflow">

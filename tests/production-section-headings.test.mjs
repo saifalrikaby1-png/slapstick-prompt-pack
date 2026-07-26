@@ -31,11 +31,11 @@ test("heading badges are two-digit, decorative, and consistently styled", () => 
   const headers = [...page.matchAll(/<span className="production-section-number" aria-hidden="true">(\d+)<\/span>/g)];
   assert.ok(headers.length >= 10);
   assert.ok(headers.every((match) => /^\d{2}$/.test(match[1])));
-  assert.match(css, /\.production-page \.production-section-number\s*\{[^}]*min-width:\s*34px;[^}]*height:\s*34px;/s);
+  assert.match(css, /\.production-page \.production-section-number\s*\{[^}]*flex:\s*0 0 42px;[^}]*width:\s*42px;[^}]*height:\s*42px;/s);
 });
 
-test("desktop and mobile typography follow the compact production hierarchy", () => {
-  assert.match(css, /\.production-page \.production-section-heading-copy h2\s*\{[^}]*font-family:\s*var\(--font-fraunces\)[^}]*font-size:\s*clamp\(1\.75rem,\s*2\.4vw,\s*2\.35rem\);[^}]*font-weight:\s*500;/s);
-  assert.match(css, /\.production-page \.production-section-heading-copy p\s*\{[^}]*color:\s*#9fb4d8;[^}]*font-size:\s*\.82rem;/s);
-  assert.match(css, /@media \(max-width: 640px\)[^]*?\.production-page \.production-section-heading-copy h2\s*\{[^}]*font-size:\s*clamp\(1\.55rem,\s*8vw,\s*2rem\);/);
+test("desktop and mobile typography follow the Creative Direction hierarchy", () => {
+  assert.match(css, /\.production-page \.production-section-heading-copy h2\s*\{[^}]*font-family:\s*var\(--font-fraunces\)[^}]*font-size:\s*clamp\(1\.75rem,\s*2\.5vw,\s*2\.4rem\);[^}]*font-weight:\s*500;/s);
+  assert.match(css, /\.production-page \.production-section-heading-copy p\s*\{[^}]*color:\s*var\(--production-text-soft\);[^}]*font-size:\s*\.91rem;/s);
+  assert.match(css, /@media \(max-width: 760px\)[^]*?\.production-page \.production-section-heading-copy h2\s*\{[^}]*font-size:\s*clamp\(1\.55rem,\s*7vw,\s*2rem\);/);
 });

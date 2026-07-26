@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ComponentPropsWithoutRef, ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CharacterProfile,
@@ -143,8 +143,8 @@ function CreativeDirectionSelectCard({
 }: CreativeDirectionSelectCardProps) {
   const selectedOption = options.find((option) => option.value === value);
   const isCustom = value === "custom";
-  return <article className="creative-direction-card">
-    <header className="creative-direction-card-header"><span className="creative-direction-card-icon" aria-hidden="true">{icon}</span><div><h3>{title}</h3><p>{description}</p></div></header>
+  return <article className="creative-direction-card production-card-surface">
+    <header className="creative-direction-card-header production-card-header"><span className="creative-direction-card-icon production-card-icon" aria-hidden="true">{icon}</span><div><h3>{title}</h3><p>{description}</p></div></header>
     <div className="creative-direction-control">
       <label htmlFor={`${id}-select`}>{selectLabel}</label>
       <select id={`${id}-select`} value={value} onChange={(event) => onValueChange(event.target.value)} aria-describedby={!isCustom && selectedOption?.description ? `${id}-description` : undefined}>
@@ -390,6 +390,39 @@ function ProductionPartialBorder() {
       </defs>
       <path d="M 1 250 L 1 18 Q 1 1 18 1 L 500 1" fill="none" stroke={`url(#${gradientId})`} strokeWidth="1.3" strokeLinecap="butt" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+}
+
+type ProductionSectionProps = ComponentPropsWithoutRef<"section"> & {
+  number: string;
+  title: string;
+  description?: ReactNode;
+  contentClassName?: string;
+  headerActions?: ReactNode;
+};
+
+function ProductionSection({
+  number,
+  title,
+  description,
+  children,
+  className = "",
+  contentClassName = "",
+  headerActions,
+  ...sectionProps
+}: ProductionSectionProps) {
+  return (
+    <section className={`production-section ${className}`.trim()} {...sectionProps}>
+      <header className="production-section-header">
+        <span className="production-section-number" aria-hidden="true">{number}</span>
+        <div className="production-section-heading-copy">
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
+        {headerActions}
+      </header>
+      <div className={`production-section-content ${contentClassName}`.trim()}>{children}</div>
+    </section>
   );
 }
 
@@ -1864,7 +1897,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
           <section className="production-studio-dashboard" id="choose-outputs" aria-label="Production preview" hidden={activeWorkflowTab !== "outputs"}>
             <aside className="studio-config-column">
-              <section className="studio-dashboard-card studio-config-card">
+              <section className="production-section studio-dashboard-card studio-config-card">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">01</span><div className="production-section-heading-copy"><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
                 <div className="mode-switch production-generation-modes" aria-label="Generator mode">
                   <button className={`production-generation-mode ${mode === "demo" ? "active" : ""}`} type="button" onClick={() => setMode("demo")}><span><b className="production-generation-mode-title">Demo Mode</b><small className="production-generation-mode-note">No API</small></span></button>
@@ -1877,28 +1910,28 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </aside>
 
             <div className="studio-center-column">
-              <section className="studio-dashboard-card studio-prompt-panel" ref={outputRef}>
+              <section className="production-section studio-dashboard-card studio-prompt-panel" ref={outputRef}>
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Generated Prompt</h2><p>The synchronized master prompt and production rules.</p></div><CopyButton label="Copy Prompt" value={completePrompt || "Generate the pack to create the synchronized master prompt."} /></header>
                 <pre>{pack ? completePrompt : "Your master production prompt will appear here after generation. Configuration, cast, camera, frames, audio, negative rules, and continuity checks remain synchronized."}</pre>
               </section>
-              <section className="studio-dashboard-card studio-timeline-panel">
+              <section className="production-section studio-dashboard-card studio-timeline-panel">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Action Timeline</h2><p>Second-by-second choreography for the selected duration.</p></div></header>
                 <pre>{pack?.videoTimeline || `0:00  Opening pose and immediate hook\n0:${String(Math.max(1, Math.floor(Number(form.duration) / 3))).padStart(2, "0")}  Escalation and camera follow\n0:${String(Math.max(2, Math.floor(Number(form.duration) * 2 / 3))).padStart(2, "0")}  Peak action\n0:${form.duration}  Payoff and settled end frame`}</pre>
               </section>
             </div>
 
             <div className="studio-right-column">
-              <section className="studio-dashboard-card studio-frames-panel">
+              <section className="production-section studio-dashboard-card studio-frames-panel">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">04</span><div className="production-section-heading-copy"><h2>Start Frame &amp; End Frame</h2><p>Reference prompts inherit the global {form.videoRatio} ratio.</p></div></header>
                 <article><strong>Start Frame</strong><pre>{pack?.startFramePrompt || "Generated automatically from the opening composition, cast, and scene."}</pre>{pack?.startFramePrompt && <CopyButton label="Copy" value={pack.startFramePrompt} />}</article>
                 <article><strong>End Frame</strong><pre>{pack?.endFramePrompt || "Generated automatically from the payoff, continuity locks, and final pose."}</pre>{pack?.endFramePrompt && <CopyButton label="Copy" value={pack.endFramePrompt} />}</article>
               </section>
-              <section className="studio-dashboard-card studio-motion-panel">
+              <section className="production-section studio-dashboard-card studio-motion-panel">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">05</span><div className="production-section-heading-copy"><h2>Camera &amp; Motion</h2><p>{form.motionLevel} motion · {form.duration}s · {selectedModel(form)}</p></div></header>
                 <p>{pack?.videoLock || "Camera path, subject visibility, motion continuity, and action ownership are locked during generation."}</p>
                 <button type="button" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("motion"); }}>Edit camera and motion</button>
               </section>
-              <section className="studio-dashboard-card studio-scene-panel">
+              <section className="production-section studio-dashboard-card studio-scene-panel">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {resolveCreativeDirection(form.creativeDirection).pacingStyle}</p></div></header>
                 <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
               </section>
@@ -1906,15 +1939,15 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           </section>
 
-          <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
+          <section className="production-section form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
             <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></header>
-            <div className="concept-section">
+            <div className="production-section-content concept-section">
               <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
               <section className="concept-field concept-output-package" aria-labelledby="concept-output-package-title">
                 <header className="concept-field-header"><h3 id="concept-output-package-title">Output Package</h3><span>{effectiveRequestedOutputs.length} output{effectiveRequestedOutputs.length === 1 ? "" : "s"} selected{selectionMode === "fullPack" ? " · Locked" : ""}</span></header>
-                <div className="selection-mode production-package-switch output-package-mode" role="group" aria-label="Output selection mode">
-                  <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option ${selectionMode === "custom" ? "active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
-                  <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option ${selectionMode === "fullPack" ? "active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
+                <div className="selection-mode production-package-switch output-package-mode production-segmented-control" role="group" aria-label="Output selection mode">
+                  <button type="button" aria-pressed={selectionMode === "custom"} className={`production-package-option production-segmented-option ${selectionMode === "custom" ? "active is-active" : ""}`} onClick={() => setOutputMode("custom")}>Custom Selection</button>
+                  <button type="button" aria-pressed={selectionMode === "fullPack"} className={`production-package-option production-segmented-option ${selectionMode === "fullPack" ? "active is-active" : ""}`} onClick={() => setOutputMode("fullPack")}>Full Production Pack</button>
                 </div>
                 <div className="output-package-options">
                   <div className="studio-output-checklist">
@@ -1931,7 +1964,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </section>
               <label className="field concept-field concept-additional-direction"><span>Additional direction <i>optional</i></span><textarea value={form.additionalDirection} onChange={(event) => update("additionalDirection", event.target.value)} placeholder="Example: Keep the camera in a wide side view and make the final pose loop smoothly into the opening frame." /></label>
             </div>
-            <div className="selection-mode idea-mode" role="group" aria-label="Idea creation method"><button type="button" className={ideaCreationMethod === "manual" ? "active" : ""} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={ideaCreationMethod === "ai" ? "active" : ""} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
+            <div className="selection-mode idea-mode production-segmented-control" role="group" aria-label="Idea creation method"><button type="button" className={`production-segmented-option ${ideaCreationMethod === "manual" ? "active is-active" : ""}`} aria-pressed={ideaCreationMethod === "manual"} onClick={() => setIdeaCreationMethod("manual")}>Manual</button><button type="button" className={`production-segmented-option ${ideaCreationMethod === "ai" ? "active is-active" : ""}`} aria-pressed={ideaCreationMethod === "ai"} onClick={() => setIdeaCreationMethod("ai")}>Generate with AI</button></div>
             {ideaCreationMethod === "ai" && <><div className="wide idea-provider-note">{mode === "ai" ? "AI generation uses a secure server request." : "Demo generation is created locally in your browser."}</div><div className="button-row wide"><button className="primary-small" type="button" disabled={isGeneratingCompleteIdea} aria-busy={isGeneratingCompleteIdea} onClick={generateCompleteIdea}>{isGeneratingCompleteIdea ? "Creating complete idea…" : hasCompleteIdea() ? "Generate Another Complete Idea" : "Generate Complete Video Idea"}</button>{ideaUndoSnapshot && <button type="button" onClick={undoIdeaReplacement}>Undo Idea Replacement</button>}</div></>}
             <div className="form-grid concept-fields">
               <details className="advanced-panel wide">
@@ -1949,9 +1982,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" disabled={!conceptComplete} onClick={() => setActiveWorkflowTab("characters")}><span>Continue to Cast</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
-          <section className="form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
+          <section className="production-section form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
             <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></header>
-            <div className="character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
+            <div className="production-section-content character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`production-card-surface character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
             <details className="character-block character-editor-drawer" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary>Character editor <span>{characterEditorOpen ? "−" : "+"}</span></summary>
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
@@ -1993,15 +2026,15 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </details>
           </section>
 
-          <section className="form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
+          <section className="production-section form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <main className="sceneSetup scene-editor">
             <header className="production-section-header creative-direction-header"><span className="production-section-number" aria-hidden="true">04</span><div className="production-section-heading-copy"><h2>Creative Direction</h2><p>Guide the overall look, feel, camera language, and performance of your video. The AI will determine the location, supporting objects, action progression, and ending from your concept and selections.</p></div></header>
             {productionTab === "core" && <div className="scene-editor__body">
-              <section className="creative-direction-section" aria-labelledby="creative-direction-section-title"><h2 className="sr-only" id="creative-direction-section-title">Creative Direction controls</h2><div className="creative-direction-grid">
+              <section className="production-section-content creative-direction-section" aria-labelledby="creative-direction-section-title"><h2 className="sr-only" id="creative-direction-section-title">Creative Direction controls</h2><div className="creative-direction-grid">
                 <CreativeDirectionSelectCard id="visual-mood" title="Visual Mood & Atmosphere" description="Set the emotional tone, lighting, atmosphere, and color feeling." icon="◉" value={form.creativeDirection.visualMood} customValue={form.creativeDirection.visualMoodCustom} options={VISUAL_MOOD_OPTIONS} selectLabel="Choose a visual mood" customLabel="Custom visual mood" customPlaceholder="Describe the mood, lighting, atmosphere, and color feeling you want." customError={creativeDirectionErrors.visualMood} onValueChange={(visualMood) => updateCreativeDirection({ visualMood })} onCustomValueChange={(visualMoodCustom) => updateCreativeDirection({ visualMoodCustom })} />
                 <CreativeDirectionSelectCard id="camera-style" title="Camera & Motion Style" description="Define the camera movement, framing, and overall motion language." icon="▣" value={form.creativeDirection.cameraStyle} customValue={form.creativeDirection.cameraStyleCustom} options={CAMERA_STYLE_OPTIONS} selectLabel="Choose a camera style" customLabel="Custom camera and motion style" customPlaceholder="Describe the camera movement, framing, and motion style you want." customError={creativeDirectionErrors.cameraStyle} onValueChange={(cameraStyle) => updateCreativeDirection({ cameraStyle })} onCustomValueChange={(cameraStyleCustom) => updateCreativeDirection({ cameraStyleCustom })} />
                 <CreativeDirectionSelectCard id="pacing-style" title="Pacing & Performance" description="Control the pacing, character energy, and performance style." icon="ϟ" value={form.creativeDirection.pacingStyle} customValue={form.creativeDirection.pacingStyleCustom} options={PACING_STYLE_OPTIONS} selectLabel="Choose a pacing style" customLabel="Custom pacing and performance style" customPlaceholder="Describe the pacing, character energy, acting, and performance style you want." customError={creativeDirectionErrors.pacingStyle} onValueChange={(pacingStyle) => updateCreativeDirection({ pacingStyle })} onCustomValueChange={(pacingStyleCustom) => updateCreativeDirection({ pacingStyleCustom })} />
-                <article className="creative-rules-card"><header className="creative-direction-card-header"><span className="creative-direction-card-icon" aria-hidden="true">◇</span><div><div className="creative-rules-title-row"><h3>Creative Rules &amp; Restrictions</h3><span className="creative-rules-optional-badge">Optional</span></div><p>Add any important instructions, rules, or restrictions the AI should follow.</p></div></header><label className="sr-only" htmlFor="creative-rules">Creative rules and restrictions</label><textarea id="creative-rules" value={form.creativeDirection.creativeRulesManual} onChange={(event) => updateCreativeDirection({ creativeRulesManual: event.target.value.slice(0, 300) })} placeholder="e.g., No dialogue, no sudden cuts, keep all characters visible, maintain character identity, end with a seamless loop..." maxLength={300} /><div className="creative-direction-field-footer"><div /><span>{form.creativeDirection.creativeRulesManual.length}/300</span></div><div className="creative-rule-chips" aria-label="Quick creative rules">{RULE_CHIPS.map((chip) => { const isActive = form.creativeDirection.selectedRuleChipIds.includes(chip.id); return <button key={chip.id} type="button" aria-pressed={isActive} onClick={() => toggleCreativeRuleChip(chip.id)}>{chip.label}</button>; })}</div></article>
+                <article className="creative-rules-card production-card-surface"><header className="creative-direction-card-header production-card-header"><span className="creative-direction-card-icon production-card-icon" aria-hidden="true">◇</span><div><div className="creative-rules-title-row"><h3>Creative Rules &amp; Restrictions</h3><span className="creative-rules-optional-badge production-optional-badge">Optional</span></div><p>Add any important instructions, rules, or restrictions the AI should follow.</p></div></header><label className="sr-only" htmlFor="creative-rules">Creative rules and restrictions</label><textarea id="creative-rules" value={form.creativeDirection.creativeRulesManual} onChange={(event) => updateCreativeDirection({ creativeRulesManual: event.target.value.slice(0, 300) })} placeholder="e.g., No dialogue, no sudden cuts, keep all characters visible, maintain character identity, end with a seamless loop..." maxLength={300} /><div className="creative-direction-field-footer"><div /><span>{form.creativeDirection.creativeRulesManual.length}/300</span></div><div className="creative-rule-chips" aria-label="Quick creative rules">{RULE_CHIPS.map((chip) => { const isActive = form.creativeDirection.selectedRuleChipIds.includes(chip.id); return <button className="production-chip" key={chip.id} type="button" aria-pressed={isActive} onClick={() => toggleCreativeRuleChip(chip.id)}>{chip.label}</button>; })}</div></article>
               </div></section>
               <section className="scene-panel scene-ratio-panel"><h2>Video Ratio</h2><p>Start and End Frames inherit this ratio.</p><div className="scene-ratio-grid"><div className="scene-ratio-field">{globalRatioControl}</div></div></section>
             </div>}
@@ -2072,10 +2105,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
               </div>
             </details>
-            <section className="generate-section setup-generation" aria-labelledby="setup-generation-title">
-              <div><span>05</span><h2 id="setup-generation-title">Generation Summary</h2><p>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</p></div>
-              <button className="generate-button selectable-generate" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
-            </section>
+            <ProductionSection
+              number="05"
+              title="Generation Summary"
+              description={<>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</>}
+              className="generate-section setup-generation"
+            >
+              <button className="generate-button selectable-generate production-primary-button" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
+            </ProductionSection>
             <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab(productionTab === "motion" ? "audio" : productionTab === "audio" ? "advanced" : "audio")}><span>{productionTab === "motion" ? "Continue to Audio" : productionTab === "audio" ? "Continue to Review & Generate" : "Back to Audio"}</span><span aria-hidden="true">{productionTab === "advanced" ? "←" : "→"}</span></button></footer></>}
           </section>
 
@@ -2084,7 +2121,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
         </section>
 
-        <section className="output-panel production-card production-output-panel studio-live-preview" hidden={activeWorkflowTab === "outputs"}>
+        <section className="production-section output-panel production-card production-output-panel studio-live-preview" hidden={activeWorkflowTab === "outputs"}>
           <ProductionPartialBorder />
           <div className="output-heading production-output-header">
             <div className="production-section-header production-panel-heading"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>

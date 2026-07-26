@@ -1775,7 +1775,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       <header className="studio-toolbar">
         <div className="studio-project-identity"><span className="studio-project-icon" aria-hidden="true">▣</span><div className="studio-project-name"><span>Project:</span><strong>{form.videoTitle || "Untitled Production"}</strong></div><span className="studio-save-status"><span className="studio-save-dot" />Saved locally</span></div>
         <div className="studio-project-metadata"><div><span>Style</span><strong>{selectedStyle(form)}</strong></div><div><span>Duration</span><strong>{form.duration} Seconds</strong></div><div><span>Model</span><strong>{selectedModel(form)}</strong></div><div><span>Ratio</span><strong>{form.videoRatio}</strong></div><div className="studio-output-summary"><span>◆</span><span><small>Outputs</small><strong>{requestedOutputs.length} selected</strong></span></div></div>
-        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
+        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-toolbar-button" type="button" onClick={downloadWord} disabled={!pack || isDownloading}>{isDownloading ? "Preparing…" : "Export"}</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
       </header>
 
       <section className="hero production-page-hero production-page-header" id="top">
@@ -1829,6 +1829,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                   })}
                 </div>
                 {selectionMode === "custom" && <div className="studio-quick-actions"><button type="button" onClick={() => setCustomOutputs([...requestedOutputValues])}>Select all</button><button type="button" onClick={() => setCustomOutputs(["startFramePrompt", "endFramePrompt", "videoPrompt"])}>Recommended</button><button type="button" onClick={() => setCustomOutputs([])}>Clear</button></div>}
+                <div className="studio-credit-status"><span>Estimated credits</span><strong>{estimatedCredits}</strong><small>{creditStatus}</small></div>
                 <div className="studio-ratio-control"><h3>Video Ratio</h3>{globalRatioControl}<p>Frames are generated automatically based on the selected video ratio.</p></div>
                 <button className="studio-setup-link" type="button" onClick={scrollToEpisodeIdea}>Edit production setup</button>
               </section>
@@ -1862,13 +1863,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </section>
             </div>
 
-            <footer className="studio-generation-dock">
-              <div><span>Estimated credits</span><strong>{estimatedCredits}</strong><small>{creditStatus}</small></div>
-              <div className="studio-dock-summary"><strong>{selectionMode === "fullPack" ? "Full Production Pack" : `${requestedOutputs.length} selected outputs`}</strong><span>{form.videoRatio} · {form.duration}s · {selectedModel(form)}</span></div>
-              <button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating || !requestedOutputs.length}>{isGenerating ? "Generating…" : "Generate Pack"}</button>
-              <button type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button>
-              <button type="button" onClick={downloadWord} disabled={!pack || isDownloading}>{isDownloading ? "Preparing…" : "Export"}</button>
-            </footer>
           </section>
 
           <section className="form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>

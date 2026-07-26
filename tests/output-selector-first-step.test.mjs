@@ -35,9 +35,11 @@ test("custom and full-pack modes remain mutually exclusive presets", () => {
 });
 
 test("compact toolbar, summary, persistence, and accessible controls exist", () => {
-  for (const value of ["Select all", "Clear", "Recommended", "Edit production setup", "aria-pressed", "slapstick-output-selection", "studio-generation-dock"]) {
+  for (const value of ["Select all", "Clear", "Recommended", "Edit production setup", "aria-pressed", "slapstick-output-selection", "studio-toolbar-actions"]) {
     assert.match(page, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(page, /studio-toolbar-actions[\s\S]{0,900}onClick=\{saveCurrentPack\}[\s\S]{0,900}onClick=\{downloadWord\}[\s\S]{0,900}onClick=\{generate\}/);
+  assert.doesNotMatch(page, /studio-generation-dock/);
   assert.match(page, /id="episode-idea"/);
   assert.match(page, /Frames are generated automatically based on the selected video ratio/);
 });
@@ -45,7 +47,7 @@ test("compact toolbar, summary, persistence, and accessible controls exist", () 
 test("responsive professional studio uses three columns and one column on mobile", () => {
   assert.match(css, /\.production-studio-workflow \.production-studio-dashboard\{display:grid;grid-template-columns:minmax\(260px,300px\) minmax\(320px,1fr\) minmax\(300px,340px\)/);
   assert.match(css, /@media\(max-width:760px\)[\s\S]*\.production-studio-workflow \.production-studio-dashboard\{grid-template-columns:1fr/);
-  assert.match(css, /\.production-studio-workflow \.studio-generation-dock\{position:fixed/);
+  assert.doesNotMatch(css, /studio-generation-dock|studio-dock-summary/);
   assert.match(page, /studio-output-checklist/);
 });
 

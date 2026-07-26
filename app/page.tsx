@@ -46,7 +46,6 @@ import {
   selectedModel,
   selectedPlatform,
   selectedStyle,
-  selectedTone,
   visualVideoPrompt,
 } from "./production-engine";
 import {
@@ -265,7 +264,6 @@ const biscuitForm: ProductionForm = {
   trapAction: "Grumpy and Sneaky trigger a rolling log trap; Biscuit makes one clean dodge and the same log rolls back toward them",
   payoffName: "Cookie Victory Tangle",
   endingPayoff: "Biscuit safely holds the glowing cookie in a clear victory pose while Grumpy and Sneaky sit harmlessly tangled behind the stopped log",
-  tones: ["Funny", "Fast", "Chaotic slapstick"],
   additionalDirection: "",
 };
 
@@ -280,7 +278,6 @@ const platforms = ["Social Media", "Custom"];
 const videoModels = ["Seedance", "Kling", "Google Flow / Veo", "Runway", "Higgsfield", "PixVerse", "Hailuo / MiniMax", "Generic model", "Custom model"];
 const durations = Array.from({ length: 12 }, (_, index) => String((index + 1) * 5));
 const visualStyles = ["Cinematic 3D family animation", "Stylized 3D cartoon", "High-quality 3D animation", "2D cartoon", "Anime", "Clay animation", "Stop-motion", "Realistic cinematic", "Storybook illustration", "Custom"];
-const tones = ["Calm", "Cute", "Playful", "Funny", "Energetic", "Fast", "Chaotic slapstick", "Suspenseful", "Emotional", "Magical", "Educational", "Custom"];
 const ratios = ["9:16", "16:9", "1:1", "4:5", "5:4", "3:4", "4:3", "2:3", "3:2", "21:9", "2.39:1", "Custom"];
 const voiceLayerOptions: VoiceLayer[] = ["Narrator", "Hero Voice", "Companion Voices", "Enemy Voices", "No Spoken Dialogue"];
 
@@ -549,7 +546,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
         videoStyleId: activeVideoStyle.id,
         styleWorkflowEnabled: true,
         visualStyle: activeVideoStyle.defaults.visualStyle,
-        tones: activeVideoStyle.defaults.tones,
         duration: activeVideoStyle.defaults.duration,
         videoRatio: activeVideoStyle.defaults.ratio,
       }));
@@ -636,7 +632,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   );
   const isReady = Boolean(
     customCreativeDirectionValid &&
-    form.tones.length > 0 &&
     (form.platform !== "Custom" || form.customPlatform.trim()) &&
     productionCharacters.length > 0 &&
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
@@ -806,16 +801,6 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     setCreativeAssets((current) => current.map((asset) =>
       asset.kind === "location" ? { ...asset, isSignature: asset.id === form.locationAssetId } : asset));
     setNotice(`${form.locationName} is now the one active Signature Location.`);
-  }
-
-  function toggleTone(tone: string) {
-    const selected = form.tones.includes(tone);
-    if (selected && form.tones.length === 1) {
-      setError("Select at least one tone.");
-      return;
-    }
-    update("tones", selected ? form.tones.filter((item) => item !== tone) : [...form.tones, tone]);
-    setError("");
   }
 
   function toggleVoiceLayer(layer: VoiceLayer) {
@@ -1186,7 +1171,7 @@ Primary and secondary colors: define two stable colors with exact marking placem
 Clothing and accessories: define any signature clothing or state clearly that none are used
 Scale and proportions: lock height, head-to-body ratio, limb length, and size relative to the other selected characters
 Personality: ${roleDirection}
-Facial-expression style: expressive but anatomically stable reactions appropriate to a ${selectedTone(form).toLowerCase()} production
+Facial-expression style: expressive but anatomically stable reactions appropriate to ${resolveCreativeDirection(form.creativeDirection).pacingStyle}
 Movement style: species-specific motion with visible anticipation, logical weight transfer, smooth arcs, and clean recovery
 Signature actions: define two recognizable poses or actions unique to ${current.shortName}
 Voice profile: ${form.voiceLayers.includes("No Spoken Dialogue") ? "no spoken dialogue; use only consistent non-verbal reactions" : `consistent ${form.vocalTone.toLowerCase()} delivery in ${form.language}`}
@@ -1202,7 +1187,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
             character: draft,
             context: {
               visualStyle: selectedStyle(form),
-              tone: selectedTone(form),
+              creativeDirection: resolveCreativeDirection(form.creativeDirection),
               platform: selectedPlatform(form),
               model: selectedModel(form),
               dialogueMode: form.voiceLayers.join(", "),
@@ -1343,7 +1328,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
           ...current,
           nonverbalSoundProfile: `NONVERBAL SOUND IDENTITY
 Pitch: derive only from the customer’s established description; do not infer species, gender, or role stereotypes.
-Energy: match ${selectedTone(form)} while preserving the character’s established personality.
+Energy: match ${resolveCreativeDirection(form.creativeDirection).pacingStyle} while preserving the character’s established personality.
 Rhythm: concise reactions synchronized to visible actions.
 Effort sounds: ${foundation}.
 Surprise sounds: brief wordless reactions consistent with the same identity.
@@ -1362,7 +1347,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             action: "suggestSingleField",
             requestedField: "nonverbalSoundProfile",
             character: draft,
-            context: { tone: selectedTone(form), dialogueMode: form.voiceLayers.join(", "), customerFoundation: draft.nonverbalSoundProfile },
+            context: { creativeDirection: resolveCreativeDirection(form.creativeDirection), dialogueMode: form.voiceLayers.join(", "), customerFoundation: draft.nonverbalSoundProfile },
           }),
         });
         const data = await response.json() as { suggestion?: string; error?: string };
@@ -1715,13 +1700,10 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         setting("Video ratio", exportForm.videoRatio),
         setting("Frame ratio inheritance", "Start Frame and End Frame use the global Video Ratio"),
         setting("Visual style", selectedStyle(form)),
-        setting("Selected tones", selectedTone(form)),
-        setting("Motion pacing profile", form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick") ? "Extreme Fast-Chaotic Motion — frame-zero action, compressed anticipation, rapid beats" : form.tones.includes("Fast") ? "Fast" : "Standard"),
         setting("Ultra Retention Mode", form.ultraRetentionMode ? "Enabled — immediate hook, micro-beats, middle escalation, settled payoff" : "Disabled — standard active pacing and completed payoff"),
         setting("Grounding and motion safeguards", "Visible support contact, gravity, contact shadows, object support, continuous cause-and-effect, anticipation, acceleration, follow-through, and settling are required."),
         setting("Strict cast presence policy", "Every checked character is visible at the opening and final frames and remains continuously traceable; no spawning, vanishing, substitution, merging, duplication, or accidental camera crop-out."),
         setting("Object continuity policy", "The important object has one supported start position, a visible physical path, and one supported final position; no appearing, disappearing, duplication, or design drift."),
-        setting("Tone from zero policy", `Selected tones control pose, motion, camera, expression, music, and sound at exactly 0:00.${form.tones.includes("Fast") ? " Fast mode requires immediate named movement at 0:00 with no static opening." : ""}`),
         setting("Natural motion and camera continuity", "Every beat has named action ownership and visible cause. Use one continuous cast-preserving camera path; no random motion, pose snapping, action-axis reversal, or camera-caused disappearance."),
         setting("Publishing target", selectedPlatform(form)),
         new Paragraph({ children: [new PageBreak()] }),
@@ -1791,8 +1773,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
   const hasNarrator = form.voiceLayers.includes("Narrator");
   const hasCharacterVoices = form.voiceLayers.some((layer) => layer.includes("Voice"));
   const silentMode = form.voiceLayers.includes("No Spoken Dialogue");
-  const toneConflict = form.tones.includes("Calm") &&
-    (form.tones.includes("Fast") || form.tones.includes("Chaotic slapstick"));
   const globalRatioControl = <RatioControl
     label="Video ratio"
     value={form.videoRatio}
@@ -1919,7 +1899,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <button type="button" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("motion"); }}>Edit camera and motion</button>
               </section>
               <section className="studio-dashboard-card studio-scene-panel">
-                <header><span>06</span><div><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {form.tones.join(", ")}</p></div></header>
+                <header><span>06</span><div><h2>Visual &amp; Scene Settings</h2><p>{selectedStyle(form)} · {resolveCreativeDirection(form.creativeDirection).pacingStyle}</p></div></header>
                 <dl><div><dt>Visual mood</dt><dd>{resolveCreativeDirection(form.creativeDirection).visualMood}</dd></div><div><dt>Camera style</dt><dd>{resolveCreativeDirection(form.creativeDirection).cameraStyle}</dd></div><div><dt>Creative rules</dt><dd>{resolveCreativeDirection(form.creativeDirection).creativeRules || "No additional restrictions"}</dd></div><div><dt>Quality Control</dt><dd>{qualityReport ? `${qualityReport.score}/100` : "Runs with generated outputs"}</dd></div></dl>
               </section>
             </div>
@@ -2023,7 +2003,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <CreativeDirectionSelectCard id="pacing-style" title="Pacing & Performance" description="Control the pacing, character energy, and performance style." icon="ϟ" value={form.creativeDirection.pacingStyle} customValue={form.creativeDirection.pacingStyleCustom} options={PACING_STYLE_OPTIONS} selectLabel="Choose a pacing style" customLabel="Custom pacing and performance style" customPlaceholder="Describe the pacing, character energy, acting, and performance style you want." customError={creativeDirectionErrors.pacingStyle} onValueChange={(pacingStyle) => updateCreativeDirection({ pacingStyle })} onCustomValueChange={(pacingStyleCustom) => updateCreativeDirection({ pacingStyleCustom })} />
                 <article className="creative-rules-card"><header className="creative-direction-card-header"><span className="creative-direction-card-icon" aria-hidden="true">◇</span><div><div className="creative-rules-title-row"><h3>Creative Rules &amp; Restrictions</h3><span className="creative-rules-optional-badge">Optional</span></div><p>Add any important instructions, rules, or restrictions the AI should follow.</p></div></header><label className="sr-only" htmlFor="creative-rules">Creative rules and restrictions</label><textarea id="creative-rules" value={form.creativeDirection.creativeRulesManual} onChange={(event) => updateCreativeDirection({ creativeRulesManual: event.target.value.slice(0, 300) })} placeholder="e.g., No dialogue, no sudden cuts, keep all characters visible, maintain character identity, end with a seamless loop..." maxLength={300} /><div className="creative-direction-field-footer"><div /><span>{form.creativeDirection.creativeRulesManual.length}/300</span></div><div className="creative-rule-chips" aria-label="Quick creative rules">{RULE_CHIPS.map((chip) => { const isActive = form.creativeDirection.selectedRuleChipIds.includes(chip.id); return <button key={chip.id} type="button" aria-pressed={isActive} onClick={() => toggleCreativeRuleChip(chip.id)}>{chip.label}</button>; })}</div></article>
               </div></section>
-              <section className="scene-panel scene-tone-panel"><h2>Tone &amp; Energy</h2><div className="scene-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`scene-tone-chip ${selected ? "is-selected" : ""}`} key={tone}><input className="scene-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="scene-tone-icon" aria-hidden="true">{selected ? "✓" : "•"}</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input className="scene-input" value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}</section>
               <section className="scene-panel scene-ratio-panel"><h2>Video Ratio</h2><p>Start and End Frames inherit this ratio.</p><div className="scene-ratio-grid"><div className="scene-ratio-field">{globalRatioControl}</div></div></section>
             </div>}
             {productionTab === "core" && <footer className="scene-editor__footer"><button className="scene-editor__continue" type="button" onClick={() => setProductionTab("motion")}><span>Continue to Motion &amp; Camera</span><span aria-hidden="true">→</span></button></footer>}
@@ -2034,8 +2013,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <label className="field"><span>Duration</span><select value={form.duration} onChange={(event) => update("duration", event.target.value)}>{durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>
               <label className="field"><span>Motion level</span><select value={form.motionLevel} onChange={(event) => update("motionLevel", event.target.value as ProductionForm["motionLevel"])}>{["Safe", "Balanced", "Ambitious"].map((value) => <option key={value}>{value}</option>)}</select></label>
               <label className="field"><span>Visual style</span><select value={form.visualStyle} onChange={(event) => update("visualStyle", event.target.value)}>{visualStyles.map((value) => <option key={value}>{value}</option>)}</select>{form.visualStyle === "Custom" && <input value={form.customVisualStyle} onChange={(event) => update("customVisualStyle", event.target.value)} />}</label>
-              <section className="production-control-group wide"><header className="production-control-header"><div><h3>Video Tones</h3><p>Select one or more creative directions.</p></div></header><fieldset className="choice-field production-tone-container"><legend className="sr-only">Video tones</legend><div className="choice-grid production-tone-grid">{tones.map((tone) => { const selected = form.tones.includes(tone); return <label className={`production-tone-chip ${selected ? "selected" : ""}`} key={tone}><input className="production-tone-checkbox" type="checkbox" checked={selected} onChange={() => toggleTone(tone)} /><span className="production-tone-check" aria-hidden="true">✓</span><span>{tone}</span></label>; })}</div>{form.tones.includes("Custom") && <input value={form.customTone} onChange={(event) => update("customTone", event.target.value)} placeholder="Custom tone" />}{toneConflict && <p className="conflict-note">Tone warning: Calm combined with Fast or Chaotic slapstick needs deliberate pacing. Your selections are preserved.</p>}</fieldset></section>
-              {form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick") && <div className="silent-lock wide"><strong>EXTREME FAST-CHAOTIC MOTION ACTIVE</strong><br />Uses immediate movement from frame zero, compressed anticipation, rapid acceleration, frequent visual beats, fast reactions, and a high-impact payoff.</div>}
               <label className="production-feature-toggle wide"><div className="production-feature-copy"><strong>Ultra Retention Mode</strong><span>Immediate opening hook, continuous visual micro-beats, a mid-video escalation, and a strong payoff.</span></div><span className="production-switch"><input type="checkbox" checked={form.ultraRetentionMode} onChange={(event) => update("ultraRetentionMode", event.target.checked)} /><span className="production-switch-track" /></span></label>
               <section className="production-control-group production-ratio-group wide"><header className="production-control-header"><div><h3>Video Ratio</h3><p>Start and End Frames inherit this ratio.</p></div></header><div className="production-ratio-grid">{globalRatioControl}</div></section>
               <label className="production-feature-toggle production-character-toggle wide"><div className="production-feature-copy"><strong>Include Character-Building Prompt</strong><span>Generate a dedicated identity and consistency prompt for the selected cast.</span></div><span className="production-switch"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></span></label>

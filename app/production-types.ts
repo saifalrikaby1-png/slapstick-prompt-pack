@@ -116,8 +116,6 @@ export type ProductionForm = {
   duration: string;
   visualStyle: string;
   customVisualStyle: string;
-  tones: string[];
-  customTone: string;
   ultraRetentionMode: boolean;
   motionLevel: "Safe" | "Balanced" | "Ambitious";
   videoRatio: string;
@@ -286,8 +284,6 @@ export const defaultProductionForm: ProductionForm = {
   duration: "15",
   visualStyle: "Cinematic 3D family animation",
   customVisualStyle: "",
-  tones: ["Funny", "Fast"],
-  customTone: "",
   ultraRetentionMode: true,
   motionLevel: "Balanced",
   videoRatio: "9:16",

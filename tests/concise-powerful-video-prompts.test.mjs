@@ -16,7 +16,7 @@ const cast = [
   { id: "hero", shortName: "Biscuit", fullIdentity: "Biscuit the Orange Squirrel", role: "Hero", description: "Appearance: orange squirrel", appearanceLock: "orange squirrel", personalityLock: "clever", colorLock: "orange cream", scaleLock: "small", vocalStyleLock: "cheerful", movementStyle: "grounded hops", continuityRules: "stable", negativeRules: "no duplicate" },
   { id: "enemy", shortName: "Grumpy", fullIdentity: "Grumpy the Purple Hedgehog", role: "Enemy", description: "Appearance: purple hedgehog", appearanceLock: "purple hedgehog", personalityLock: "grumpy", colorLock: "purple", scaleLock: "medium", vocalStyleLock: "huffs", movementStyle: "planted stomps", continuityRules: "stable", negativeRules: "no duplicate" },
 ];
-const form = { ...types.defaultProductionForm, duration: "10", location: "a stone woodland plaza", importantObject: "one blue rolling cookie", trapAction: "Grumpy pushes the cookie and Biscuit redirects it", endingPayoff: "Biscuit wins while Grumpy settles beside the cookie", heroId: "hero", selectedCharacterIds: ["enemy"], activeCharacterIds: ["hero", "enemy"], tones: ["Fast", "Funny"] };
+const form = { ...types.defaultProductionForm, duration: "10", location: "a stone woodland plaza", importantObject: "one blue rolling cookie", trapAction: "Grumpy pushes the cookie and Biscuit redirects it", endingPayoff: "Biscuit wins while Grumpy settles beside the cookie", heroId: "hero", selectedCharacterIds: ["enemy"], activeCharacterIds: ["hero", "enemy"] };
 const pack = engine.generateDemoPack(form, cast);
 const words = (value) => value.trim().split(/\s+/).filter(Boolean).length;
 

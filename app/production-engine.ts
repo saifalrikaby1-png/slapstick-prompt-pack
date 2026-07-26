@@ -203,7 +203,7 @@ export function selectedModelAdapter(form: ProductionForm) {
     ...base,
     motionPolicy: `${base.motionPolicy}; strict cast/object presence, no spawn/despawn, named action ownership, natural motion only, continuous position transitions`,
     cameraPolicy: `${base.cameraPolicy}; preserve the exact active cast in continuous framing without crop-out or action-axis reversal`,
-    pacingPolicy: `${base.pacingPolicy}; selected tones apply from frame zero and Fast begins with named active movement at 0:00`,
+    pacingPolicy: `${base.pacingPolicy}; apply the selected Creative Direction pacing and performance from frame zero`,
   };
   return form.videoModel === "Custom model"
     ? { ...presenceAware, displayName: selectedModel(form), promptStructure: `${base.promptStructure}; ${form.customModelGuidance || "customer-defined model guidance not supplied"}` }
@@ -220,31 +220,6 @@ export function selectedStyle(form: ProductionForm) {
   return form.visualStyle === "Custom"
     ? stringValue(form.customVisualStyle, "Custom visual style")
     : form.visualStyle;
-}
-
-export function selectedTone(form: ProductionForm) {
-  return form.tones.map((tone) => tone === "Custom"
-    ? stringValue(form.customTone, "Custom tone")
-    : tone).join(", ");
-}
-
-export function toneProductionDirection(form: ProductionForm) {
-  const directions: Record<string, string> = {
-    Calm: "measured pacing, stable framing, gentle expressions, soft motion and restrained audio",
-    Cute: "appealing poses, rounded readable expressions, light motion and delicate sound accents",
-    Playful: "buoyant rhythm, teasing staging, expressive reactions and musical Foley",
-    Funny: "clear anticipation, readable comic timing, reaction holds and precise impact accents",
-    Energetic: "active poses, rising momentum, crisp camera follow and driving rhythm",
-    Fast: "immediate first-frame action, compact beats, quick readable movement and tight audio timing",
-    "Chaotic slapstick": "controlled visual chaos around one causal action, exaggerated reactions and a clean harmless payoff",
-    Suspenseful: "held anticipation, controlled push-in, restrained motion before release and tension-building audio",
-    Emotional: "character-focused framing, expressive pauses, motivated movement and supportive score",
-    Magical: "luminous staging, graceful motion arcs, wonder reactions and sparkling visible-source accents",
-    Educational: "clear cause-and-effect staging, legible demonstrations, steady camera and unobtrusive audio",
-  };
-  return form.tones.map((tone) => tone === "Custom"
-    ? `custom direction: ${form.customTone || "customer-defined tone"}`
-    : directions[tone] || tone).join("; ");
 }
 
 export function characterDescription(profile: CharacterProfile) {
@@ -285,21 +260,21 @@ export function buildCharacterSoundInstructions({
   activeCharacters,
   timeRange,
   visibleAction,
-  selectedTones,
+  creativeDirection,
   noSpokenDialogue,
   temporaryOverrides = {},
 }: {
   activeCharacters: CharacterProfile[];
   timeRange: string;
   visibleAction: string;
-  selectedTones: string[];
+  creativeDirection: string;
   noSpokenDialogue: boolean;
   temporaryOverrides?: Record<string, string>;
 }) {
   if (!activeCharacters.length) return "";
   return activeCharacters.map((character) => {
     const identity = resolveCharacterAudioIdentity(character, temporaryOverrides[character.id] || "");
-    return `${timeRange} — ${character.shortName}: when the visible action “${visibleAction}” produces a useful reaction, use one concise nonverbal reaction adapted from this identity: ${identity} ${noSpokenDialogue ? "No spoken words." : "Do not add speech unless an enabled voice layer assigns it."} Tone context: ${selectedTones.join(", ") || "customer-defined"}.`;
+    return `${timeRange} — ${character.shortName}: when the visible action “${visibleAction}” produces a useful reaction, use one concise nonverbal reaction adapted from this identity: ${identity} ${noSpokenDialogue ? "No spoken words." : "Do not add speech unless an enabled voice layer assigns it."} Creative Direction context: ${creativeDirection}.`;
   }).join("\n");
 }
 
@@ -390,10 +365,6 @@ export function migrateForm(value: unknown): ProductionForm {
     duration: stringValue(item.duration, defaultProductionForm.duration).replace(/\s*seconds?$/i, ""),
     visualStyle: stringValue(item.visualStyle, stringValue(item.style, defaultProductionForm.visualStyle)),
     customVisualStyle: stringValue(item.customVisualStyle),
-    tones: Array.isArray(item.tones)
-      ? [...new Set(item.tones.filter((tone): tone is string => typeof tone === "string"))]
-      : [stringValue(item.tone, "Funny")],
-    customTone: stringValue(item.customTone),
     ultraRetentionMode: boolValue(item.ultraRetentionMode, true),
     motionLevel: item.motionLevel === "Safe" || item.motionLevel === "Ambitious"
       ? item.motionLevel
@@ -431,7 +402,6 @@ export function migrateForm(value: unknown): ProductionForm {
     includeCharacterBuildingPrompt: boolValue(item.includeCharacterBuildingPrompt, true),
     customModelGuidance: stringValue(item.customModelGuidance),
   };
-  if (!migrated.tones.length) migrated.tones = ["Funny"];
   if (!migrated.voiceLayers.length) migrated.voiceLayers = ["No Spoken Dialogue"];
   return migrated;
 }
@@ -547,54 +517,16 @@ function smoothMotionLock() {
   return "SMOOTH MOTION LOCK: Every action has readable anticipation, acceleration, main movement, impact or change, follow-through, deceleration, and a complete settling pose. Use continuous paths, planted feet or paws, natural weight transfer, clear collision response, and supported limbs. No snapping, teleportation, gliding feet, frozen midair motion, instant reversals, geometry intersections, or objects passing through bodies or surfaces.";
 }
 
-function toneRetentionDirection(form: ProductionForm) {
-  const ultra = form.ultraRetentionMode;
-  const fast = form.tones.some((tone) => ["Fast", "Energetic", "Chaotic slapstick"].includes(tone));
-  const calmOnly = (form.tones.includes("Calm") || form.tones.includes("Emotional")) && !fast;
-  const pace = ultra && fast
-    ? "ULTRA-FAST OPENING HOOK: the first frame is already active; within the first second the visual problem is obvious, with one rapid but readable surprise and no slow introduction"
-    : calmOnly
-      ? "strong opening visual question with smooth controlled movement, gentle micro-changes, and no frantic camera behavior"
-      : "immediate readable opening activity, one clear visual question, and continuous cause-and-effect micro-beats";
-  return `${pace}. ${toneProductionDirection(form)}. ${ultra ? "Retention scheduler enabled: one dominant visual event per beat, a major physically caused escalation around 50–65% of the duration, and a completed final payoff with settling." : "Retention scheduler is relaxed: keep the opening active and the ending complete without forcing frantic pacing."}`;
+function creativePacingDirection(form: ProductionForm) {
+  const creative = resolveCreativeDirection(form.creativeDirection);
+  const opening = form.ultraRetentionMode
+    ? "Retention scheduler enabled: begin with a readable first-frame visual hook, use one dominant visual event per beat, create a physically caused escalation around 50–65% of the duration, and complete the final payoff with settling"
+    : "Retention scheduler is relaxed: keep the opening active and the ending complete";
+  return `${creative.pacingStyle}. ${opening}. Apply this pacing and performance direction to movement, expressions, camera timing, music, and sound from the first frame.`;
 }
 
 function airborneMotionRule(action: string) {
   return `If ${action} requires a jump, launch, bounce, fall, or thrown object, show the visible trigger, launch direction and force, one continuous gravity-driven arc, brief peak, descent, landing surface, impact absorption, follow-through, and complete settling; otherwise keep every character and object supported.`;
-}
-
-export interface MotionPacingProfile {
-  id: "standard" | "fast" | "extreme-fast-chaotic";
-  displayName: string;
-  openingActionStart: number;
-  maximumIdleTime: number;
-  maximumAnticipationLength: number;
-  maximumReactionHold: number;
-  preferredBeatLength: number;
-  accelerationStyle: string;
-  movementStyle: string;
-  reactionStyle: string;
-  cameraStyle: string;
-  endingStyle: string;
-  forbiddenPacingLanguage: string[];
-}
-
-export function extremeFastChaotic(form: ProductionForm) {
-  return form.tones.includes("Fast") && form.tones.includes("Chaotic slapstick");
-}
-
-export function motionPacingProfile(form: ProductionForm): MotionPacingProfile {
-  if (extremeFastChaotic(form)) return {
-    id: "extreme-fast-chaotic", displayName: "Extreme Fast-Chaotic Motion", openingActionStart: 0,
-    maximumIdleTime: 0, maximumAnticipationLength: 0.7, maximumReactionHold: 0.5, preferredBeatLength: 0.8,
-    accelerationStyle: "immediate powerful acceleration with readable body mechanics",
-    movementStyle: "rapid exaggerated tightly connected slapstick movement",
-    reactionStyle: "instant event-driven expressive reactions", cameraStyle: "already framed wide for action with fast smooth tracking only when needed",
-    endingStyle: "fast consequence with a short readable settled payoff",
-    forbiddenPacingLanguage: ["slowly", "gradually", "gently", "calmly", "long pause", "slow reveal", "lingering", "waits", "remains still"],
-  };
-  if (form.tones.includes("Fast")) return { id: "fast", displayName: "Fast", openingActionStart: 0, maximumIdleTime: 0.25, maximumAnticipationLength: 1, maximumReactionHold: 0.75, preferredBeatLength: 1.2, accelerationStyle: "quick readable acceleration", movementStyle: "compact connected movement", reactionStyle: "quick reactions", cameraStyle: "controlled action framing", endingStyle: "brief settled payoff", forbiddenPacingLanguage: ["slowly", "long pause"] };
-  return { id: "standard", displayName: "Standard", openingActionStart: 0, maximumIdleTime: 0.5, maximumAnticipationLength: 2, maximumReactionHold: 1.5, preferredBeatLength: 2, accelerationStyle: "smooth motivated acceleration", movementStyle: "readable connected movement", reactionStyle: "clear reactions", cameraStyle: "controlled framing", endingStyle: "complete settled payoff", forbiddenPacingLanguage: [] };
 }
 
 export interface CharacterVisibilityState {
@@ -747,7 +679,6 @@ export function generateDemoPack(
   const startRatio = videoRatio;
   const endRatio = videoRatio;
   const style = selectedStyle(form);
-  const tone = selectedTone(form);
   const platform = selectedPlatform(form);
   const model = selectedModel(form);
   const adapter = selectedModelAdapter(form);
@@ -817,7 +748,7 @@ export function generateDemoPack(
           activeCharacters: index === 0 ? cast : [soundOwner],
           timeRange: rangeLabel(start, end),
           visibleAction: description,
-          selectedTones: form.tones,
+          creativeDirection: derivedScene.creative.pacingStyle,
           noSpokenDialogue: form.voiceLayers.includes("No Spoken Dialogue"),
           temporaryOverrides: temporarySoundOverrides,
         })}`
@@ -837,9 +768,7 @@ Publishing platform: ${platform}
 Duration: exactly ${duration} seconds
 Video ratio: ${videoRatio}
 Style: ${style}
-Tone: ${tone}
-Tone translation: ${toneProductionDirection(form)}
-Tone and pace lock: ${toneRetentionDirection(form)}
+  Creative pacing direction: ${creativePacingDirection(form)}
 Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}
 Motion level: ${form.motionLevel}
 Exact character count: ${cast.length}
@@ -857,8 +786,7 @@ Object continuity lock: ${object} has one clear supported start position, moves 
 Object state ledger: ${objectLedger.map((state) => `${state.name}: start=${state.startPosition}; support=${state.supportOrHolder}; motion=${state.permittedMotion}; final=${state.finalPosition}`).join(" | ")}
 Natural-motion lock: ${naturalMotionLock()}
 Action ownership lock: every timeline beat names the exact character or exact object that moves, its direction, visible cause, physical result, and transition to the next beat. No vague “someone”, “they”, or ownerless motion.
-Tone-from-zero lock: selected tones control the first visible frame at 0:00: opening pose, movement speed, expressions, camera, music, and sound have no neutral introductory period.
-${form.tones.includes("Fast") ? `FAST-AT-0:00 LOCK: at exactly 0:00 ${heroName} has already begun the first planned motion, ${object} is visibly responding or about to respond, ${others} are visibly tracking it, and the camera is already framed wide for the action. No static hold, fade-in, title card, delayed movement, or slow establishing shot.` : ""}
+  Creative Direction from-zero lock: the selected mood, camera, pacing, and performance guide the first visible frame at 0:00 with no neutral introductory period.
 Ground contact lock: ${physicalGroundingLock()}
 Object support lock: Every ordinary object is visibly supported, held, attached, or moved by an established on-screen force; no floating object or unexplained direction change.
 Gravity lock: ${airborneMotionRule(action)}
@@ -895,45 +823,19 @@ Authorized object: exactly ${objectLedger.length} important object: ${object}. L
 CLOSED-WORLD CONTINUITY RULE. AUTHORIZED CAST: ${cast.map((profile) => `${profile.shortName} (${profile.role})`).join(", ")}. AUTHORIZED OBJECTS: exactly ${objectLedger.length} important object: ${object}. SCENE INVENTORY LOCK, EXACT COUNT LOCK, NO-SPAWN / NO-DESPAWN LOCK, STRICT OBJECT PRESENCE LOCK. No selected character may suddenly appear, disappear, spawn, vanish, or be replaced; no sudden appearances or disappearances.
 OBJECT CONTINUITY LOCK: ${object} start=supported; final position=supported. One visible force and continuous path; no duplication, replacement, or sudden object.
 One continuous shot only; no sudden cuts, scene reset, accidental crop-out, no random gestures, no random spinning, or gliding feet. Natural-motion lock and natural movement lock: anticipation, acceleration, contact, follow-through, deceleration, settling.
-Tone: ${tone} from 0:00. Tone-from-zero lock. Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK. Action ownership lock. Natural movement lock. ${form.tones.includes("Fast") ? "FAST-AT-0:00 LOCK: named action is already active. ULTRA-FAST OPENING HOOK." : ""} ${form.tones.includes("Calm") && !extremeFastChaotic(form) ? "Use smooth controlled movement." : ""} ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} Use supplied frames as continuity anchors.`;
+  Creative Direction applies from 0:00. Ultra Retention Mode: ${form.ultraRetentionMode ? "Enabled" : "Disabled"}. STRICT PRESENCE LOCK. Action ownership lock. Natural movement lock. ${form.voiceLayers.includes("No Spoken Dialogue") ? "No understandable spoken dialogue." : ""} Use supplied frames as continuity anchors.`;
   const conciseFinalRule = `This production contains exactly ${cast.length} characters — ${cast.map((profile) => profile.shortName).join(", ")} — and exactly ${objectLedger.length} important object — ${object}. No other character or object may appear. Use only authorized selected characters and objects established in the start frame. Preserve exact counts, identities, roles, colors, clothing, proportions, scale, and environment from start to finish.
 
 NO duplicate characters. NO duplicate objects. NO additional characters or objects. NO unchecked characters, random props, substitutions, spawning, despawning, vanishing, materializing, fading, teleportation, position reset, scene reset, morphing, role swap. NO sudden cut. NO jump cut. NO sudden camera-angle replacement. NO unrequested freeze. NO frozen midair character or object. NO floating, hovering, gliding feet, pose snapping, unusual movement, ownerless movement, or unfinished motion.
 
-PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character and object has visible support and gravity; no unexplained hovering. Every character and object remains continuously traceable from exact start to exact final position through smooth preparation, anticipation, acceleration, contact, follow-through, deceleration, landing where required, and complete settling. ${form.tones.includes("Fast") ? "Fast action begins in the first visible frame at exactly 0:00; no static introduction, delayed trigger, neutral opening, or slow establishing shot." : ""} Customer-requested entrance, exit, transformation, destruction, cut, freeze, or magical floating must show the complete visible, physically traceable transition. Complete the planned payoff with every remaining authorized entity stable, visible, and supported.`;
+  PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character and object has visible support and gravity; no unexplained hovering. Every character and object remains continuously traceable from exact start to exact final position through smooth preparation, anticipation, acceleration, contact, follow-through, deceleration, landing where required, and complete settling. Customer-requested entrance, exit, transformation, destruction, cut, freeze, or magical floating must show the complete visible, physically traceable transition. Complete the planned payoff with every remaining authorized entity stable, visible, and supported.`;
   const sanitizedCharacterPrompts = removeUncheckedCharacters(characterPrompts);
   const generatedTitle = form.videoTitle.trim() || `${heroName} and the Impossible Backfire`;
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
-  const extremeTimeline = extremeFastChaotic(form) && duration === 10 ? `0:00–0:00.7 — ${heroName} is already yanking ${object}; it responds at once while ${others} react with wide eyes.
-0:00.7–0:01.7 — ${object} races along the established path; ${heroName} completes one rapid grounded pull-and-release.
-0:01.7–0:03 — ${others} trigger ${action} through direct contact and shift defensively at the visible cause.
-0:03–0:04.5 — ${heroName} redirects the same action in one fast continuous motion.
-0:04.5–0:06 — Major midpoint backfire: ${object} drives the established consequence and ${others} react instantly.
-0:06–0:07.5 — ${others} recover with rapid grounded steps while ${heroName} follows through.
-0:07.5–0:09 — ${heroName} develops the payoff as ${object} visibly decelerates.
-0:09–0:10 — ${ending}; short readable stable final pose.` : adaptedTimeline;
-  const pacedExtremeTimeline = extremeFastChaotic(form) && duration === 5 ? `0:00–0:00.5 — ${heroName} is already yanking ${object}; it responds instantly as ${others} react.
-0:00.5–0:01.2 — ${object} races along its established path through one rapid grounded action.
-0:01.2–0:02.2 — ${others} trigger ${action} by direct visible contact.
-0:02.2–0:03.2 — Major midpoint backfire: ${object} drives the consequence and ${others} react at once.
-0:03.2–0:04.3 — ${heroName} redirects the same action in one fast continuous follow-through.
-0:04.3–0:05 — ${ending}; stable readable final payoff.` : extremeFastChaotic(form) && duration === 15 ? `0:00–0:00.7 — ${heroName} is already yanking ${object}; it responds at once while ${others} react.
-0:00.7–0:02 — ${object} races along the established path; ${heroName} completes a rapid grounded release.
-0:02–0:03.5 — ${others} trigger ${action} through direct contact and react instantly.
-0:03.5–0:05 — ${heroName} redirects the same action with rapid readable force.
-0:05–0:06.5 — ${object} carries the connected action forward; ${others} recover in quick grounded steps.
-0:06.5–0:08.5 — Major midpoint backfire: ${object} drives the visible consequence for ${others}.
-0:08.5–0:10 — ${heroName} follows through while ${others} react immediately.
-0:10–0:11.5 — ${object} visibly decelerates along its established path.
-0:11.5–0:13 — ${heroName} develops the winning payoff in one continuous action.
-0:13–0:14 — ${others} settle into the harmless consequence with clear reactions.
-0:14–0:15 — ${ending}; short stable final payoff.` : extremeTimeline;
-  const finalTimeline = extremeFastChaotic(form)
-    ? pacedExtremeTimeline.replace(/^0:00/, `At exactly 0:00, ${heroName} begins the first second with immediate visible action; the camera holds a wide action view; no static opening or delayed trigger.\n0:00`).replace("Major midpoint backfire", "Major middle escalation and midpoint backfire")
-    : pacedExtremeTimeline;
-  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Tone ${tone} is visible from frame zero. Use only this cast and object; nothing else appears.`;
+  const finalTimeline = adaptedTimeline;
+  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use a wide or medium-wide view, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. The first second is already active and motion-ready; do not show a completed payoff. This is the complete authorized scene inventory. Apply Creative Direction from frame zero. Use only this cast and object; nothing else appears.`;
   const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: ${derivedScene.creative.visualMood}; ${derivedScene.creative.cameraStyle}; ${derivedScene.creative.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object in its supported final position, with contact shadows, visible support contact, a stable completed pose, completed settling, and matched camera perspective. Preserve the exact authorized inventory. Use only the authorized cast and object; nothing else appears.`;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
@@ -1035,15 +937,9 @@ export function inspectProductionPack(
   const completeWords = words(completeVideoPrompt(pack));
   const adapter = selectedModelAdapter(form);
   const workflowStyle = previewStyleQuality(form.videoStyleId);
-  const pacingProfile = motionPacingProfile(form);
   const inventory = buildAuthorizedSceneInventory(form, cast);
   const objectStates = buildObjectStateLedger(inventory);
   const findings: QualityFinding[] = [
-    finding("Extreme Fast-Chaotic motion pacing", !extremeFastChaotic(form) || (
-      /extreme speed lock/i.test(pack.videoLock) &&
-      /^0:00.{1,3}0:00\.7/m.test(pack.videoTimeline) &&
-      !pacingProfile.forbiddenPacingLanguage.some((term) => pack.videoTimeline.toLowerCase().includes(term))
-    ), "Fast + Chaotic slapstick needs frame-zero movement, compressed beats, and no slow pacing language."),
     finding("Video title exists", pack.videoTitle.trim().length >= 3, "Add a clear original video title."),
     finding("Video title is original in saved history", !savedTitles.some((title) =>
       title.trim().toLowerCase() === pack.videoTitle.trim().toLowerCase()), "Choose a title not already used by a saved production.", true),
@@ -1071,8 +967,7 @@ export function inspectProductionPack(
       /object continuity lock/.test(pack.videoLock.toLowerCase()), "The derived important object needs visible start and final positions with a continuous path."),
     finding("Action ownership and traceability", /action ownership lock/.test(pack.videoLock.toLowerCase()) && ranges.every((range) => range.start >= 0 && range.end > range.start) && /at exactly 0:00|0:00/.test(pack.videoTimeline.toLowerCase()), "Every beat must name an owner, cause, result, and transition from 0:00."),
     finding("Natural-motion filter", /natural movement lock/.test(all) && /no random gestures/.test(all) && /no random.*spin/.test(all) && !/\brandomly\s+(?:spins?|jumps?|waves?|dances?|gestures?)\b/.test(pack.videoTimeline.toLowerCase()), "Explicitly prohibit random gestures, spinning, jumping, and unrelated movement."),
-    finding("Tone from frame zero", /tone-from-zero lock/.test(pack.videoLock.toLowerCase()) && form.tones.every((tone) => pack.startFramePrompt.toLowerCase().includes(tone.toLowerCase()) || pack.videoLock.toLowerCase().includes(tone.toLowerCase())), "Selected tones must control the start frame and first action at 0:00."),
-    finding("Fast begins at exactly 0:00", !form.tones.includes("Fast") || (/fast-at-0:00 lock/.test(pack.videoLock.toLowerCase()) && /at exactly 0:00/.test(pack.videoTimeline.toLowerCase())), "Fast tone needs named active movement at exactly 0:00 with no static opening."),
+    finding("Creative Direction applies from frame zero", /creative direction applies from 0:00/.test(pack.videoLock.toLowerCase()) && /creative direction/.test(pack.startFramePrompt.toLowerCase()), "Creative Direction must guide the start frame and first action."),
     finding("Camera keeps active cast visible", /wide or medium-wide/.test(`${pack.startFramePrompt}\n${pack.endFramePrompt}\n${pack.videoLock}`.toLowerCase()) && /no accidental crop-out|camera-caused disappearance/.test(all), "Use a continuous wide or medium-wide view that does not lose active characters."),
     finding("Compact locks match both frames", cast.every((profile) => {
       const identity = profile.fullIdentity.toLowerCase();
@@ -1107,10 +1002,6 @@ export function inspectProductionPack(
     finding("Prompt length is reasonable", promptLength >= 1200 && promptLength <= 14000, `Combined prompt length is ${promptLength} characters.`, true),
     finding("Character identities match", cast.every((profile) =>
       all.includes(profile.fullIdentity.toLowerCase())), "Use the latest full identities consistently across all outputs."),
-    finding("Selected tones are reflected", form.tones.every((tone) =>
-      tone === "Custom"
-        ? all.includes(form.customTone.toLowerCase())
-        : all.includes(tone.toLowerCase())), "Every selected tone must influence pace, staging, expressions, camera, motion, or audio."),
     finding("Model adapter is applied", all.includes(`model adapter: ${selectedModelAdapter(form).displayName.toLowerCase()}`) &&
       all.includes(selectedModelAdapter(form).cameraPolicy.toLowerCase()), "The selected model must materially control prompt structure and camera policy."),
     finding("Voice layers are compatible", form.voiceLayers.includes("No Spoken Dialogue")

@@ -42,7 +42,6 @@ const form = {
   heroId: "hero",
   selectedCharacterIds: ["companion", "enemy", "object"],
   activeCharacterIds: cast.map((item) => item.id),
-  tones: ["Fast", "Funny"],
   characterCartoonSounds: true,
   voiceLayers: ["No Spoken Dialogue"],
 };

@@ -41,8 +41,11 @@ check("16. Supporting migrates to Companion", engine, /rawRole[\s\S]*"Companion"
 check("17. AI expansion preserves customer text", page, /Customer foundation to preserve/);
 check("18. publishing supports Social Media and Custom", page, /const platforms = \["Social Media", "Custom"\]/);
 check("19. Custom platform validation is required", page, /form\.platform !== "Custom" \|\| form\.customPlatform\.trim/);
-check("20. single tone migrates to an array", engine, /\[stringValue\(item\.tone, "Funny"\)\]/);
-check("21. multiple tones are included", engine, /form\.tones\.map/);
+test("20. legacy tone fields are no longer migrated", () => {
+  assert.doesNotMatch(engine, /item\.tone|item\.tones|customTone/);
+  assert.doesNotMatch(types, /^\s*tones:|^\s*customTone:/m);
+});
+check("21. Creative Direction pacing is included", engine, /Creative pacing direction:/);
 check("22. character-building covers all active characters", engine, /const characterPrompts = cast\.map/);
 check("23. disabled character-building output is hidden", page, /pack\.characterBuildingPrompt && <article/);
 check("24. compatible voice layers are multi-select", types, /voiceLayers: VoiceLayer\[\]/);

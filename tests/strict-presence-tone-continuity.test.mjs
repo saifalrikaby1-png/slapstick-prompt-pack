@@ -21,7 +21,7 @@ const cast = [
   { id: "enemy", shortName: "Grumpy", fullIdentity: "Grumpy the Purple Hedgehog", role: "Enemy", description: "Appearance: purple hedgehog\nPrimary and secondary colors: plum\nScale and proportions: medium\nMovement style: planted stomps", appearanceLock: "purple hedgehog", personalityLock: "grumpy", colorLock: "plum", scaleLock: "medium", vocalStyleLock: "huffs", movementStyle: "planted stomps", continuityRules: "stable", negativeRules: "no duplicate" },
   { id: "unchecked", shortName: "Sneaky", fullIdentity: "Sneaky the Green Chameleon", role: "Enemy", description: "green chameleon", appearanceLock: "green", personalityLock: "sly", colorLock: "green", scaleLock: "medium", vocalStyleLock: "chirps", movementStyle: "crawls", continuityRules: "stable", negativeRules: "no duplicate" },
 ];
-const form = (overrides = {}) => ({ ...types.defaultProductionForm, location: "a stone woodland plaza", importantObject: "a rolling blue cookie", trapAction: "Grumpy pushes the cookie and Biscuit redirects it", endingPayoff: "Biscuit wins while Grumpy settles beside the stopped cookie", heroId: "hero", selectedCharacterIds: ["enemy"], activeCharacterIds: ["hero", "enemy"], tones: ["Fast", "Funny", "Chaotic slapstick"], ...overrides });
+const form = (overrides = {}) => ({ ...types.defaultProductionForm, location: "a stone woodland plaza", importantObject: "a rolling blue cookie", trapAction: "Grumpy pushes the cookie and Biscuit redirects it", endingPayoff: "Biscuit wins while Grumpy settles beside the stopped cookie", heroId: "hero", selectedCharacterIds: ["enemy"], activeCharacterIds: ["hero", "enemy"], ...overrides });
 
 test("strict presence keeps active cast and object traceable from start to end", () => {
   const pack = engine.generateDemoPack(form(), cast);
@@ -38,32 +38,30 @@ test("strict presence keeps active cast and object traceable from start to end",
   assert.match(pack.videoTimeline, /supporting story object derived from/);
 });
 
-test("fast tone starts at exactly zero with named ownership and a cast-safe camera", () => {
+test("Creative Direction starts at exactly zero with named ownership and a cast-safe camera", () => {
   const pack = engine.generateDemoPack(form(), cast);
-  assert.match(pack.videoLock, /FAST-AT-0:00 LOCK/);
   assert.match(pack.videoTimeline, /At exactly 0:00, Biscuit/);
   assert.match(pack.videoTimeline, /camera holds a wide action view/);
-  assert.match(pack.videoLock, /Tone-from-zero lock/);
+  assert.match(pack.videoLock, /Creative Direction applies from 0:00/);
   assert.match(pack.videoLock, /Action ownership lock/);
   assert.match(pack.videoLock, /Natural-motion lock/);
 });
 
-test("quality control detects deliberate spawn, disappearance, slow fast opening, and random movement", () => {
+test("quality control detects deliberate spawn, disappearance, and random movement", () => {
   const original = engine.generateDemoPack(form(), cast);
   const broken = { ...original, videoTimeline: "0:00–0:10 Biscuit waits in a static pose, Sneaky suddenly appears, Grumpy vanishes, and Biscuit randomly spins." };
   const report = engine.inspectProductionPack(broken, form({ duration: "10" }), cast);
   const failed = report.findings.filter((finding) => finding.status !== "Passed").map((finding) => finding.label);
   assert.ok(failed.includes("No spawn or despawn wording"));
   assert.ok(failed.includes("Natural-motion filter"));
-  assert.ok(failed.includes("Fast begins at exactly 0:00"));
 });
 
-test("AI instructions and Word export include synchronized presence and tone policies", () => {
+test("AI instructions and Word export include synchronized presence and Creative Direction policies", () => {
   assert.match(route, /strict presence and visibility lock/);
-  assert.match(route, /tone from frame zero/);
+  assert.match(route, /Apply Creative Direction from frame zero/);
   assert.match(route, /natural-motion and action-ownership lock/);
   assert.match(page, /Strict cast presence policy/);
-  assert.match(page, /Tone from zero policy/);
+  assert.match(page, /Pacing & Performance/);
   assert.match(engineSource, /visibilityLedger/);
   assert.match(engine.selectedModelAdapter(form()).motionPolicy, /no spawn\/despawn/);
 });

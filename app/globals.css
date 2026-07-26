@@ -167,7 +167,6 @@ main {
   width: 100%; margin-top: 9px; border: 1px solid var(--line); border-radius: 9px;
   padding: 10px; outline: none; font-size: 11px;
 }
-.conflict-note { margin: 9px 0 0; color: #926000; font-size: 9px; line-height: 1.45; }
 .video-title-output {
   position: relative; margin: 8px 0 15px; padding: 19px 100px 19px 19px;
   border: 1px solid #d8d0ff; border-radius: 16px; background: linear-gradient(145deg, #fff, #f8f6ff);

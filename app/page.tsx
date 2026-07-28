@@ -40,6 +40,16 @@ import {
   resolveMotionEnergy,
 } from "./creative-direction";
 import {
+  MUSIC_INTENSITY_OPTIONS,
+  MUSIC_STYLE_OPTIONS,
+  resolveAudioTiming,
+  SFX_INTENSITY_OPTIONS,
+  SOUND_EFFECTS_STYLE_OPTIONS,
+  validateAudioTiming,
+  VOICE_MODE_OPTIONS,
+  voiceLayersForMode,
+} from "./audio-timing";
+import {
   audioVideoPrompt,
   buildAuthorizedSceneInventory,
   buildObjectStateLedger,
@@ -276,6 +286,61 @@ function CameraMotionPanel({ value, cameraStyleError, subjectMotionError, advanc
     <section className="motion-safeguards-status"><div className="motion-safeguards-icon" aria-hidden="true">✓</div><div className="motion-safeguards-copy"><h3>Professional Motion Safeguards</h3><p>Continuity, smooth movement, ground contact, object attachment, and camera consistency are automatically protected.</p></div><div className="motion-safeguards-actions"><span className="motion-safeguards-state">Enabled</span><button type="button" className="motion-safeguards-review" onClick={reviewSafeguards}>Review safeguards</button></div></section>
     <section className="motion-camera-advanced"><button type="button" className="motion-camera-advanced-header" aria-expanded={advancedOpen} onClick={onToggleAdvanced}><div><h3>Advanced Camera Controls</h3><p>Add specialized instructions or review detailed motion safeguards.</p></div><span aria-hidden="true">{advancedOpen ? "−" : "+"}</span></button>{advancedOpen && <div className="motion-camera-advanced-content"><div className="motion-camera-advanced-field"><div className="camera-motion-label-row"><label htmlFor="camera-custom-instructions">Custom Camera Instructions</label><span className="camera-motion-optional-badge">Optional</span></div><textarea id="camera-custom-instructions" value={value.cameraCustomInstructions} maxLength={300} placeholder="Describe any additional camera framing, movement, transitions, or visual behavior you want." onChange={(event) => onChange({ cameraCustomInstructions: event.target.value.slice(0, 300) })} /><span className="camera-motion-counter">{value.cameraCustomInstructions.length}/300</span></div><div className="motion-camera-advanced-field"><label htmlFor="camera-stability-override">Camera Stability Override</label><select id="camera-stability-override" value={value.cameraStabilityOverride} onChange={(event) => onChange({ cameraStabilityOverride: event.target.value as CameraMotionState["cameraStabilityOverride"] })}><option value="auto">Use Motion Energy Default</option>{CAMERA_STABILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div><div className="motion-camera-safeguards-detail" ref={safeguardsRef}><h4>Detailed Motion Safeguards</h4><div className="motion-camera-rule-grid">{MOTION_QUALITY_RULES.map((rule) => { const selected = value.motionQualityRuleIds.includes(rule.id); return <button key={rule.id} type="button" className={`motion-quality-rule ${selected ? "is-active" : ""}`} aria-pressed={selected} onClick={() => onChange({ motionQualityRuleIds: selected ? value.motionQualityRuleIds.filter((id) => id !== rule.id) : [...value.motionQualityRuleIds, rule.id] })}><span aria-hidden="true">{selected ? "✓" : ""}</span>{rule.label}</button>; })}</div></div></div>}</section>
     <footer className="motion-camera-step-navigation"><button type="button" onClick={onBack}><span aria-hidden="true">←</span><span>Back to Creative Direction</span></button><button type="button" className="production-emerald-gold-cta" onClick={onContinue}><span>Continue to Audio &amp; Timing</span><span aria-hidden="true">→</span></button></footer>
+  </section>;
+}
+
+function AudioTimingPanel({ form, errors, advancedOpen, onPatch, onToggleAdvanced, onBack, onContinue }: {
+  form: ProductionForm;
+  errors: Partial<Record<"voiceMode" | "musicStyle" | "soundEffectsStyle", string>>;
+  advancedOpen: boolean;
+  onPatch: (patch: Partial<ProductionForm>) => void;
+  onToggleAdvanced: () => void;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
+  const selectedVoice = VOICE_MODE_OPTIONS.find((option) => option.value === form.voiceMode);
+  const selectedMusic = MUSIC_STYLE_OPTIONS.find((option) => option.value === form.musicStyle);
+  const selectedSfx = SOUND_EFFECTS_STYLE_OPTIONS.find((option) => option.value === form.soundEffectsStylePreset);
+  const selectedMusicIntensity = MUSIC_INTENSITY_OPTIONS.find((option) => option.value === form.simplifiedMusicIntensity);
+  const selectedSfxIntensity = SFX_INTENSITY_OPTIONS.find((option) => option.value === form.sfxIntensity);
+  const setVoiceMode = (voiceMode: ProductionForm["voiceMode"]) => onPatch({
+    voiceMode,
+    voiceLayers: voiceLayersForMode(voiceMode, form.voiceLayers),
+    lipSyncRequired: voiceMode === "no-spoken-dialogue" ? false : form.lipSyncRequired,
+  });
+  const setMusicStyle = (musicStyle: ProductionForm["musicStyle"]) => {
+    const option = MUSIC_STYLE_OPTIONS.find((item) => item.value === musicStyle);
+    onPatch({ musicStyle, noMusic: musicStyle === "no-music", musicType: option?.label || form.musicType, musicMood: option?.label || form.musicMood });
+  };
+  const setMusicIntensity = (simplifiedMusicIntensity: ProductionForm["simplifiedMusicIntensity"]) => onPatch({
+    simplifiedMusicIntensity,
+    musicIntensity: simplifiedMusicIntensity === "soft" ? "Low" : simplifiedMusicIntensity === "strong" ? "High" : "Medium",
+  });
+  const setSfxStyle = (soundEffectsStylePreset: ProductionForm["soundEffectsStylePreset"]) => {
+    const option = SOUND_EFFECTS_STYLE_OPTIONS.find((item) => item.value === soundEffectsStylePreset);
+    onPatch({ soundEffectsStylePreset, soundEffectsStyle: option?.label || form.soundEffectsStyle });
+  };
+  const toggleAssignment = (layer: VoiceLayer) => {
+    const next = form.voiceLayers.includes(layer) ? form.voiceLayers.filter((item) => item !== layer) : [...form.voiceLayers.filter((item) => item !== "No Spoken Dialogue"), layer];
+    onPatch({ voiceLayers: next });
+  };
+  const showNarratorAssignments = ["narrator-only", "narrator-and-characters", "custom"].includes(form.voiceMode);
+  const showCharacterAssignments = ["character-voices", "narrator-and-characters", "custom"].includes(form.voiceMode);
+
+  return <section className="audio-timing-step" aria-label="Audio & Timing">
+    <header className="audio-timing-step-header"><div className="audio-timing-heading-group production-section-heading-copy"><span className="production-section-number" aria-hidden="true">06</span><div><h2>Audio &amp; Timing</h2><p>Configure dialogue, character sounds, music, and synchronized sound effects.</p></div></div></header>
+    <div className="audio-primary-grid">
+      <article className="audio-control-card"><header className="audio-card-header"><span className="audio-card-icon" aria-hidden="true">♫</span><div><h3>Voice &amp; Dialogue</h3><p>Choose how narration and character voices should be used.</p></div></header><label htmlFor="voice-mode">Voice Mode</label><select id="voice-mode" value={form.voiceMode} onChange={(event) => setVoiceMode(event.target.value as ProductionForm["voiceMode"])}>{VOICE_MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{form.voiceMode === "custom" ? <div className="audio-custom-field"><label htmlFor="voice-mode-custom">Custom voice mode</label><textarea id="voice-mode-custom" value={form.voiceModeCustom} maxLength={200} aria-invalid={Boolean(errors.voiceMode)} placeholder="Describe the narration and voice structure you want." onChange={(event) => onPatch({ voiceModeCustom: event.target.value.slice(0, 200) })} />{errors.voiceMode && <p className="audio-error">{errors.voiceMode}</p>}<span className="audio-counter">{form.voiceModeCustom.length}/200</span></div> : <p className="audio-selected-description">{selectedVoice?.description}</p>}<div className="audio-switch-row"><div><strong>Character Cartoon Sounds</strong><span>Generate concise nonverbal reactions and effort sounds from the selected characters&apos; saved profiles.</span></div><label className="production-switch"><input aria-label="Character Cartoon Sounds" type="checkbox" checked={form.characterCartoonSounds} onChange={(event) => onPatch({ characterCartoonSounds: event.target.checked })} /><span className="production-switch-track" /></label></div></article>
+      <article className="audio-control-card"><header className="audio-card-header"><span className="audio-card-icon" aria-hidden="true">♪</span><div><h3>Music Direction</h3><p>Choose the musical style and its presence in the mix.</p></div></header><label htmlFor="music-style">Music Style</label><select id="music-style" value={form.musicStyle} onChange={(event) => setMusicStyle(event.target.value as ProductionForm["musicStyle"])}>{MUSIC_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{form.musicStyle === "custom" ? <div className="audio-custom-field"><label htmlFor="music-style-custom">Custom music style</label><textarea id="music-style-custom" value={form.musicStyleCustom} maxLength={200} aria-invalid={Boolean(errors.musicStyle)} placeholder="Describe the music style, mood, instruments, and emotional direction." onChange={(event) => onPatch({ musicStyleCustom: event.target.value.slice(0, 200) })} />{errors.musicStyle && <p className="audio-error">{errors.musicStyle}</p>}<span className="audio-counter">{form.musicStyleCustom.length}/200</span></div> : <p className="audio-selected-description">{selectedMusic?.description}</p>}<label>Music Intensity</label><div className={`audio-segmented-control ${form.musicStyle === "no-music" ? "is-disabled" : ""}`} aria-label="Music Intensity" role="group">{MUSIC_INTENSITY_OPTIONS.map((option) => <button key={option.value} type="button" disabled={form.musicStyle === "no-music"} className={`audio-segmented-option ${form.simplifiedMusicIntensity === option.value ? "is-active" : ""}`} aria-pressed={form.simplifiedMusicIntensity === option.value} onClick={() => setMusicIntensity(option.value)}>{option.label}</button>)}</div>{form.musicStyle !== "no-music" && <p className="audio-selected-description">{selectedMusicIntensity?.description}</p>}</article>
+    </div>
+    <div className="audio-secondary-grid">
+      <article className="audio-control-card"><header className="audio-card-header"><span className="audio-card-icon" aria-hidden="true">FX</span><div><h3>Sound Effects Style</h3><p>Choose the overall Foley and synchronized effects language.</p></div></header><label htmlFor="sound-effects-style">Sound Effects Style</label><select id="sound-effects-style" value={form.soundEffectsStylePreset} onChange={(event) => setSfxStyle(event.target.value as ProductionForm["soundEffectsStylePreset"])}>{SOUND_EFFECTS_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{form.soundEffectsStylePreset === "custom" ? <div className="audio-custom-field"><label htmlFor="sound-effects-style-custom">Custom sound-effects style</label><textarea id="sound-effects-style-custom" value={form.soundEffectsStyleCustom} maxLength={200} aria-invalid={Boolean(errors.soundEffectsStyle)} placeholder="Describe the sound-effects style and timing you want." onChange={(event) => onPatch({ soundEffectsStyleCustom: event.target.value.slice(0, 200) })} />{errors.soundEffectsStyle && <p className="audio-error">{errors.soundEffectsStyle}</p>}<span className="audio-counter">{form.soundEffectsStyleCustom.length}/200</span></div> : <p className="audio-selected-description">{selectedSfx?.description}</p>}</article>
+      <article className="audio-control-card"><header className="audio-card-header"><span className="audio-card-icon" aria-hidden="true">ϟ</span><div><h3>SFX Intensity</h3><p>Set how strongly synchronized effects should support the action.</p></div></header><div className="audio-segmented-control" aria-label="SFX Intensity" role="group">{SFX_INTENSITY_OPTIONS.map((option) => <button key={option.value} type="button" className={`audio-segmented-option ${form.sfxIntensity === option.value ? "is-active" : ""}`} aria-pressed={form.sfxIntensity === option.value} onClick={() => onPatch({ sfxIntensity: option.value })}>{option.label}</button>)}</div><p className="audio-selected-description">{selectedSfxIntensity?.description}</p></article>
+    </div>
+    {form.voiceMode === "no-spoken-dialogue" && <section className="audio-status-strip"><span aria-hidden="true">ⓘ</span><div><h3>No Spoken Dialogue Selected</h3><p>Narration, understandable words, and lip-sync are disabled. Nonverbal character sounds, music, ambience, and synchronized SFX remain available.</p></div></section>}
+    <section className="audio-safeguards-strip"><span aria-hidden="true">✓</span><div><h3>Audio Quality Safeguards</h3><p>Dialogue rules, timing, synchronization, music balance, and character sound consistency are automatically protected.</p></div><strong>Enabled</strong></section>
+    <section className="advanced-audio-settings"><button type="button" className="advanced-audio-header" aria-expanded={advancedOpen} onClick={onToggleAdvanced}><div><h3>Advanced Audio Settings</h3><p>Review workflow, individual voices, lip-sync, and detailed instructions.</p></div><span aria-hidden="true">{advancedOpen ? "−" : "+"}</span></button>{advancedOpen && <div className="advanced-audio-content"><label className="field"><span>Audio Workflow</span><select value={form.audioMode} onChange={(event) => onPatch({ audioMode: event.target.value })}>{["Native-audio mode", "External audio workflow", "Silent generation / post-production audio", "Editing-guide mode"].map((value) => <option key={value}>{value}</option>)}</select></label>{form.voiceMode !== "no-spoken-dialogue" && <fieldset className="audio-voice-assignments"><legend>Individual Voice Assignments</legend>{showNarratorAssignments && <label><input type="checkbox" checked={form.voiceLayers.includes("Narrator")} onChange={() => toggleAssignment("Narrator")} />Narrator</label>}{showCharacterAssignments && ["Hero Voice", "Companion Voices", "Enemy Voices"].map((layer) => <label key={layer}><input type="checkbox" checked={form.voiceLayers.includes(layer as VoiceLayer)} onChange={() => toggleAssignment(layer as VoiceLayer)} />{layer}</label>)}</fieldset>}<label className="field"><span>Custom Voice Instructions <i>optional</i></span><textarea value={form.customVoiceInstructions} onChange={(event) => onPatch({ customVoiceInstructions: event.target.value.slice(0, 300), characterVoiceGuidance: event.target.value.slice(0, 300) })} /></label>{form.voiceMode !== "no-spoken-dialogue" && <label className="toggle-field"><input type="checkbox" checked={form.lipSyncRequired} onChange={(event) => onPatch({ lipSyncRequired: event.target.checked })} /><span>Lip-Sync preference</span></label>}<label className="field"><span>Custom Music Instructions <i>optional</i></span><textarea value={form.customMusicInstructions} onChange={(event) => onPatch({ customMusicInstructions: event.target.value.slice(0, 300) })} /></label><label className="field"><span>Custom SFX Instructions <i>optional</i></span><textarea value={form.customSfxInstructions} onChange={(event) => onPatch({ customSfxInstructions: event.target.value.slice(0, 300), characterCartoonSoundGuidance: event.target.value.slice(0, 300) })} /></label><div className="audio-detailed-safeguards"><strong>Detailed Audio Safeguards</strong><p>Prevent contradictory voice modes, preserve character voice ownership, keep lip-sync compatible, and synchronize music and effects to visible action.</p></div></div>}</section>
+    <footer className="audio-step-navigation"><button type="button" onClick={onBack}><span aria-hidden="true">←</span><span>Back to Motion &amp; Camera</span></button><button type="button" className="production-emerald-gold-cta" onClick={onContinue}><span>Continue to Review &amp; Generate</span><span aria-hidden="true">→</span></button></footer>
   </section>;
 }
 
@@ -586,7 +651,9 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [creativeDirectionErrors, setCreativeDirectionErrors] = useState<Partial<Record<"visualMood" | "cameraStyle" | "subjectMotion" | "pacingStyle", string>>>({});
+  const [audioTimingErrors, setAudioTimingErrors] = useState<Partial<Record<"voiceMode" | "musicStyle" | "soundEffectsStyle", string>>>({});
   const [motionRulesExpanded, setMotionRulesExpanded] = useState(false);
+  const [audioAdvancedOpen, setAudioAdvancedOpen] = useState(false);
   const [moreCreativeRulesOpen, setMoreCreativeRulesOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
@@ -818,6 +885,27 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
 
   function update<K extends keyof ProductionForm>(key: K, value: ProductionForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateAudioTiming(patch: Partial<ProductionForm>) {
+    setForm((current) => ({ ...current, ...patch }));
+    setAudioTimingErrors((current) => ({
+      ...current,
+      ...(patch.voiceMode !== undefined || patch.voiceModeCustom !== undefined ? { voiceMode: "" } : {}),
+      ...(patch.musicStyle !== undefined || patch.musicStyleCustom !== undefined ? { musicStyle: "" } : {}),
+      ...(patch.soundEffectsStylePreset !== undefined || patch.soundEffectsStyleCustom !== undefined ? { soundEffectsStyle: "" } : {}),
+    }));
+  }
+
+  function continueFromAudioTiming() {
+    const nextErrors = validateAudioTiming(form);
+    setAudioTimingErrors(nextErrors);
+    if (Object.values(nextErrors).some(Boolean)) {
+      setError("Complete the selected Custom audio fields.");
+      return;
+    }
+    setError("");
+    setProductionTab("advanced");
   }
 
   function updateGlobalRatio(key: "ratio" | "width" | "height", value: string) {
@@ -1434,6 +1522,16 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       window.setTimeout(() => document.getElementById(firstId)?.focus(), 0);
       return;
     }
+    const nextAudioTimingErrors = validateAudioTiming(form);
+    if (Object.values(nextAudioTimingErrors).some(Boolean)) {
+      setAudioTimingErrors(nextAudioTimingErrors);
+      setError("Complete the selected Custom audio fields.");
+      setActiveWorkflowTab("setup");
+      setProductionTab("audio");
+      const firstId = nextAudioTimingErrors.voiceMode ? "voice-mode-custom" : nextAudioTimingErrors.musicStyle ? "music-style-custom" : "sound-effects-style-custom";
+      window.setTimeout(() => document.getElementById(firstId)?.focus(), 0);
+      return;
+    }
     if (!isReady) {
       setError("Complete the creative setup and select at least one character with exactly one Hero.");
       return;
@@ -1459,6 +1557,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                 action: "generate",
                 form: generationForm,
                 creativeDirection: resolveCreativeDirection(form.creativeDirection),
+                audioTiming: resolveAudioTiming(form),
                 activeCharacterIds: activeIds,
                 activeCharacters: productionCharacters.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({
                   id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile,
@@ -2191,7 +2290,6 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="production-section form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <main className="sceneSetup scene-editor">
-            {productionTab === "audio" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Audio &amp; Timing</h2><p>Configure narration, voices, music, character sounds, and synchronized sound effects.</p></div></header>}
             {productionTab === "advanced" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">07</span><div className="production-section-heading-copy"><h2>Review &amp; Generate</h2><p>Review advanced production settings before generating the selected output package.</p></div></header>}
             {productionTab === "core" && <section className="creative-direction-step" aria-label="Creative Direction">
               <header className="creative-direction-step-header">
@@ -2210,7 +2308,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </section>}
             </main>
             {productionTab === "motion" && <CameraMotionPanel value={form.creativeDirection.cameraMotion} cameraStyleError={creativeDirectionErrors.cameraStyle} subjectMotionError={creativeDirectionErrors.subjectMotion} advancedOpen={motionRulesExpanded} onChange={updateCameraMotion} onToggleAdvanced={() => setMotionRulesExpanded((current) => !current)} onBack={() => setProductionTab("core")} onContinue={() => setProductionTab("audio")} />}
-            {productionTab !== "core" && productionTab !== "motion" && <>{productionTab === "audio" && <details className="advanced-panel production-accordion" open>
+            {productionTab === "audio" && <AudioTimingPanel form={form} errors={audioTimingErrors} advancedOpen={audioAdvancedOpen} onPatch={updateAudioTiming} onToggleAdvanced={() => setAudioAdvancedOpen((current) => !current)} onBack={() => setProductionTab("motion")} onContinue={continueFromAudioTiming} />}
+            {productionTab === "advanced" && <>{false && <details className="advanced-panel production-accordion" open>
               <summary className="production-accordion-trigger"><span className="production-accordion-icon" aria-hidden="true">♫</span><span className="production-accordion-copy"><strong>Narration, Voices, Music &amp; Sound</strong><small>Configure spoken audio, cartoon vocals, music, and SFX.</small></span><span className="production-accordion-chevron" aria-hidden="true">⌄</span></summary>
               <div className="advanced-content production-accordion-content">
                 <div className="form-grid">
@@ -2272,7 +2371,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             >
               <button className="generate-button selectable-generate production-primary-button" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
             </ProductionSection>}
-            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab(productionTab === "audio" ? "advanced" : "audio")}><span>{productionTab === "audio" ? "Continue to Review & Generate" : "Back to Audio & Timing"}</span><span aria-hidden="true">{productionTab === "advanced" ? "←" : "→"}</span></button></footer></>}
+            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab("audio")}><span>Back to Audio &amp; Timing</span><span aria-hidden="true">←</span></button></footer></>}
           </section>
 
           {error && <div className="message error" role="alert">{error}</div>}

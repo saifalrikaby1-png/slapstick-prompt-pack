@@ -118,6 +118,12 @@ export type VoiceLayer =
   | "Enemy Voices"
   | "No Spoken Dialogue";
 
+export type VoiceModeValue = "no-spoken-dialogue" | "narrator-only" | "character-voices" | "narrator-and-characters" | "custom";
+export type MusicStyleValue = "playful-orchestral-comedy" | "warm-magical-adventure" | "epic-cinematic" | "gentle-emotional" | "suspenseful" | "energetic-electronic" | "minimal-ambient" | "no-music" | "custom";
+export type MusicIntensityValue = "soft" | "balanced" | "strong";
+export type SoundEffectsStyleValue = "clean-cartoon-foley" | "exaggerated-slapstick" | "cinematic-realistic" | "soft-family-animation" | "minimal" | "custom";
+export type SfxIntensityValue = "light" | "balanced" | "strong";
+
 export type CharacterProfile = {
   id: string;
   builtIn?: boolean;
@@ -185,6 +191,8 @@ export type ProductionForm = {
   videoCustomWidth: string;
   videoCustomHeight: string;
   voiceLayers: VoiceLayer[];
+  voiceMode: VoiceModeValue;
+  voiceModeCustom: string;
   narratorGuidance: string;
   narrationText: string;
   characterDialogue: string;
@@ -195,9 +203,18 @@ export type ProductionForm = {
   musicType: string;
   musicMood: string;
   musicIntensity: string;
+  musicStyle: MusicStyleValue;
+  musicStyleCustom: string;
+  simplifiedMusicIntensity: MusicIntensityValue;
   audioMode: string;
   noMusic: boolean;
   soundEffectsStyle: string;
+  soundEffectsStylePreset: SoundEffectsStyleValue;
+  soundEffectsStyleCustom: string;
+  sfxIntensity: SfxIntensityValue;
+  customVoiceInstructions: string;
+  customMusicInstructions: string;
+  customSfxInstructions: string;
   characterCartoonSounds: boolean;
   characterCartoonSoundGuidance: string;
   includeCharacterBuildingPrompt: boolean;
@@ -353,6 +370,8 @@ export const defaultProductionForm: ProductionForm = {
   videoCustomWidth: "",
   videoCustomHeight: "",
   voiceLayers: ["No Spoken Dialogue"],
+  voiceMode: "no-spoken-dialogue",
+  voiceModeCustom: "",
   narratorGuidance: "",
   narrationText: "",
   characterDialogue: "",
@@ -363,10 +382,19 @@ export const defaultProductionForm: ProductionForm = {
   musicType: "Playful orchestral comedy",
   musicMood: "Playful",
   musicIntensity: "Medium",
+  musicStyle: "playful-orchestral-comedy",
+  musicStyleCustom: "",
+  simplifiedMusicIntensity: "balanced",
   audioMode: "Native-audio mode",
   noMusic: false,
   soundEffectsStyle: "Clean synchronized cartoon Foley",
-  characterCartoonSounds: false,
+  soundEffectsStylePreset: "clean-cartoon-foley",
+  soundEffectsStyleCustom: "",
+  sfxIntensity: "balanced",
+  customVoiceInstructions: "",
+  customMusicInstructions: "",
+  customSfxInstructions: "",
+  characterCartoonSounds: true,
   characterCartoonSoundGuidance: "",
   includeCharacterBuildingPrompt: true,
   customModelGuidance: "",

@@ -21,6 +21,16 @@ import {
   requestedOutputValues,
   ruleChipIds,
 } from "./production-types";
+import {
+  inferMusicStyle,
+  inferSoundEffectsStyle,
+  inferVoiceMode,
+  MUSIC_STYLE_OPTIONS,
+  resolveAudioOption,
+  SOUND_EFFECTS_STYLE_OPTIONS,
+  VOICE_MODE_OPTIONS,
+  voiceLayersForMode,
+} from "./audio-timing";
 
 const previewStyleQuality = (id?: ProductionForm["videoStyleId"]) => {
   const checks: Record<string, { name: string; qualityChecks: string[] }> = {
@@ -441,6 +451,28 @@ export function migrateForm(value: unknown): ProductionForm {
     (Array.isArray(item.activeCharacterIds) ? item.activeCharacterIds : legacyActive)
       .filter((entry): entry is string => typeof entry === "string" && Boolean(entry)),
   )];
+  const migratedVoiceLayers = Array.isArray(item.voiceLayers)
+    ? item.voiceLayers.filter((layer): layer is ProductionForm["voiceLayers"][number] =>
+      ["Narrator", "Hero Voice", "Companion Voices", "Enemy Voices", "No Spoken Dialogue"].includes(String(layer)))
+    : /silent|no dialogue|music and sound/i.test(stringValue(item.narrationMode, stringValue(item.dialogueMode)))
+      ? ["No Spoken Dialogue"] as ProductionForm["voiceLayers"]
+      : [
+          /narrator/i.test(stringValue(item.narrationMode)) ? "Narrator" : null,
+          /character/i.test(stringValue(item.narrationMode)) ? "Hero Voice" : null,
+        ].filter((layer): layer is ProductionForm["voiceLayers"][number] => Boolean(layer));
+  if (!migratedVoiceLayers.length) migratedVoiceLayers.push("No Spoken Dialogue");
+  const legacyMusicType = stringValue(item.musicType, stringValue(item.musicDirection, defaultProductionForm.musicType));
+  const legacyNoMusic = boolValue(item.noMusic, stringValue(item.musicDirection) === "No Music");
+  const legacySoundEffectsStyle = stringValue(item.soundEffectsStyle, defaultProductionForm.soundEffectsStyle);
+  const migratedVoiceMode = ["no-spoken-dialogue", "narrator-only", "character-voices", "narrator-and-characters", "custom"].includes(String(item.voiceMode))
+    ? item.voiceMode as ProductionForm["voiceMode"]
+    : inferVoiceMode(migratedVoiceLayers);
+  const migratedMusicStyle = MUSIC_STYLE_OPTIONS.some((option) => option.value === item.musicStyle)
+    ? item.musicStyle as ProductionForm["musicStyle"]
+    : inferMusicStyle(legacyMusicType, legacyNoMusic);
+  const migratedSfxStyle = SOUND_EFFECTS_STYLE_OPTIONS.some((option) => option.value === item.soundEffectsStylePreset)
+    ? item.soundEffectsStylePreset as ProductionForm["soundEffectsStylePreset"]
+    : inferSoundEffectsStyle(legacySoundEffectsStyle);
   const migrated: ProductionForm = {
     ...defaultProductionForm,
     videoTitle: stringValue(item.videoTitle),
@@ -467,15 +499,9 @@ export function migrateForm(value: unknown): ProductionForm {
     videoRatio: stringValue(item.videoRatio, stringValue(item.ratio, defaultProductionForm.videoRatio)).split(" ")[0],
     videoCustomWidth: stringValue(item.videoCustomWidth),
     videoCustomHeight: stringValue(item.videoCustomHeight),
-    voiceLayers: Array.isArray(item.voiceLayers)
-      ? item.voiceLayers.filter((layer): layer is ProductionForm["voiceLayers"][number] =>
-        ["Narrator", "Hero Voice", "Companion Voices", "Enemy Voices", "No Spoken Dialogue"].includes(String(layer)))
-      : /silent|no dialogue|music and sound/i.test(stringValue(item.narrationMode, stringValue(item.dialogueMode)))
-        ? ["No Spoken Dialogue"]
-        : [
-            /narrator/i.test(stringValue(item.narrationMode)) ? "Narrator" : null,
-            /character/i.test(stringValue(item.narrationMode)) ? "Hero Voice" : null,
-          ].filter((layer): layer is ProductionForm["voiceLayers"][number] => Boolean(layer)),
+    voiceLayers: migratedVoiceMode === "custom" ? migratedVoiceLayers : voiceLayersForMode(migratedVoiceMode, migratedVoiceLayers),
+    voiceMode: migratedVoiceMode,
+    voiceModeCustom: stringValue(item.voiceModeCustom).slice(0, 200),
     narratorGuidance: stringValue(item.narratorGuidance, stringValue(item.narratorVocalStyle)),
     narrationText: stringValue(item.narrationText),
     characterDialogue: stringValue(item.characterDialogue),
@@ -486,18 +512,28 @@ export function migrateForm(value: unknown): ProductionForm {
     language: stringValue(item.language, "English"),
     vocalTone: stringValue(item.vocalTone, "Expressive family-friendly cartoon"),
     lipSyncRequired: boolValue(item.lipSyncRequired, false),
-    musicType: stringValue(item.musicType, stringValue(item.musicDirection, defaultProductionForm.musicType)),
+    musicType: legacyMusicType,
     musicMood: stringValue(item.musicMood, "Playful"),
     musicIntensity: stringValue(item.musicIntensity, "Medium"),
+    musicStyle: migratedMusicStyle,
+    musicStyleCustom: stringValue(item.musicStyleCustom, migratedMusicStyle === "custom" ? legacyMusicType : "").slice(0, 200),
+    simplifiedMusicIntensity: ["soft", "balanced", "strong"].includes(String(item.simplifiedMusicIntensity))
+      ? item.simplifiedMusicIntensity as ProductionForm["simplifiedMusicIntensity"]
+      : stringValue(item.musicIntensity).toLowerCase() === "low" ? "soft" : stringValue(item.musicIntensity).toLowerCase() === "high" ? "strong" : "balanced",
     audioMode: stringValue(item.audioMode, defaultProductionForm.audioMode),
-    noMusic: boolValue(item.noMusic, stringValue(item.musicDirection) === "No Music"),
-    soundEffectsStyle: stringValue(item.soundEffectsStyle, defaultProductionForm.soundEffectsStyle),
+    noMusic: migratedMusicStyle === "no-music",
+    soundEffectsStyle: legacySoundEffectsStyle,
+    soundEffectsStylePreset: migratedSfxStyle,
+    soundEffectsStyleCustom: stringValue(item.soundEffectsStyleCustom, migratedSfxStyle === "custom" ? legacySoundEffectsStyle : "").slice(0, 200),
+    sfxIntensity: ["light", "balanced", "strong"].includes(String(item.sfxIntensity)) ? item.sfxIntensity as ProductionForm["sfxIntensity"] : "balanced",
+    customVoiceInstructions: stringValue(item.customVoiceInstructions, stringValue(item.characterVoiceGuidance)).slice(0, 300),
+    customMusicInstructions: stringValue(item.customMusicInstructions).slice(0, 300),
+    customSfxInstructions: stringValue(item.customSfxInstructions, stringValue(item.characterCartoonSoundGuidance)).slice(0, 300),
     characterCartoonSounds: boolValue(item.characterCartoonSounds, false),
     characterCartoonSoundGuidance: stringValue(item.characterCartoonSoundGuidance),
     includeCharacterBuildingPrompt: boolValue(item.includeCharacterBuildingPrompt, true),
     customModelGuidance: stringValue(item.customModelGuidance),
   };
-  if (!migrated.voiceLayers.length) migrated.voiceLayers = ["No Spoken Dialogue"];
   return migrated;
 }
 
@@ -856,6 +892,23 @@ export function generateDemoPack(
   const narrationRule = form.voiceLayers.includes("No Spoken Dialogue")
     ? `No understandable spoken dialogue, no narration, and no lip-sync. Communicate through poses, expressions, music, and synchronized sound.${cartoonSoundRule}`
     : `Voice layers: ${form.voiceLayers.join(", ")}. Language: ${form.language}. Vocal tone: ${form.vocalTone}. ${form.lipSyncRequired ? "Accurate lip-sync is required." : "Lip-sync is not required unless a selected speaker visibly speaks."} Narrator guidance: ${form.voiceLayers.includes("Narrator") ? form.narratorGuidance || "none" : "not enabled"}. Narration text: ${form.voiceLayers.includes("Narrator") ? form.narrationText || "none" : "not enabled"}. Character dialogue: ${form.voiceLayers.some((layer) => layer.includes("Voice")) ? form.characterDialogue || "none" : "not enabled"}. Character voice guidance: ${form.characterVoiceGuidance || "use the saved voice profiles."}.${cartoonSoundRule}`;
+  const resolvedVoiceMode = resolveAudioOption(form.voiceMode, form.voiceModeCustom, VOICE_MODE_OPTIONS);
+  const resolvedMusicStyle = resolveAudioOption(form.musicStyle, form.musicStyleCustom, MUSIC_STYLE_OPTIONS);
+  const resolvedSoundEffectsStyle = resolveAudioOption(form.soundEffectsStylePreset, form.soundEffectsStyleCustom, SOUND_EFFECTS_STYLE_OPTIONS);
+  const voiceAssignments = form.voiceLayers.filter((layer) => layer !== "No Spoken Dialogue").join(", ") || "None";
+  const audioTimingDirection = `AUDIO & TIMING
+Voice Mode: ${resolvedVoiceMode}
+Character Cartoon Sounds: ${form.characterCartoonSounds ? "Enabled" : "Disabled"}
+Music Style: ${resolvedMusicStyle}
+Music Intensity: ${form.musicStyle === "no-music" ? "No music" : form.simplifiedMusicIntensity}
+Sound Effects Style: ${resolvedSoundEffectsStyle}
+SFX Intensity: ${form.sfxIntensity}
+Audio Workflow: ${form.audioMode}
+Voice Assignments: ${voiceAssignments}
+Additional Voice Instructions: ${form.customVoiceInstructions.trim() || "None"}
+Additional Music Instructions: ${form.customMusicInstructions.trim() || "None"}
+Additional SFX Instructions: ${form.customSfxInstructions.trim() || "None"}
+${form.voiceMode === "no-spoken-dialogue" ? "Do not generate narration, understandable spoken words, dialogue, or lip-sync. Nonverbal breaths, gasps, giggles, grunts, yelps, effort sounds, music, ambience, and synchronized sound effects remain permitted." : ""}`;
   const cameraMotion = derivedScene.creative.cameraMotion;
   const cameraMotionDirection = `MOTION & CAMERA
 Camera Style: ${cameraMotion.cameraStyle}
@@ -916,6 +969,7 @@ Derivation rule: Determine the location, supporting objects, action progression,
 Global-ratio rule: The selected global Video Ratio applies to the complete video and automatically governs the Start Frame and End Frame. Never request or generate separate frame-ratio settings.
 Identity lock: preserve colors, clothing, accessories, scale, proportions, faces, species, and roles. No duplicate characters, extra characters, substitutions, role swapping, morphing, teleportation, sudden appearances, sudden disappearances, random objects, or broken physical cause and effect.
 Audio/voice rule: ${narrationRule}
+${audioTimingDirection}
 Adapter audio policy: ${adapter.audioPolicy}.${form.additionalDirection.trim() ? `\nCustomer direction: ${form.additionalDirection.trim()}` : ""}`;
   const characterPrompts = cast.map((profile, index) => `CHARACTER ${index + 1} — ${profile.fullIdentity.toUpperCase()}
 Role: ${profile.role}

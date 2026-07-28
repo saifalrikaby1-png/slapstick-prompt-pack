@@ -28,6 +28,7 @@ import {
   CAMERA_STYLE_OPTIONS,
   CAMERA_FRAMING_OPTIONS,
   CAMERA_STABILITY_OPTIONS,
+  MOTION_ENERGY_OPTIONS,
   MOTION_QUALITY_RULES,
   MOVEMENT_INTENSITY_OPTIONS,
   PACING_STYLE_OPTIONS,
@@ -36,6 +37,7 @@ import {
   VISUAL_MOOD_OPTIONS,
   CreativeDirectionOption,
   resolveCreativeDirection,
+  resolveMotionEnergy,
 } from "./creative-direction";
 import {
   audioVideoPrompt,
@@ -99,14 +101,14 @@ type CompleteIdea = {
 type IdeaSnapshot = Pick<ProductionForm, "videoTitle" | "locationAssetId" | "locationName" | "location" | "objectAssetId" | "objectName" | "importantObject" | "actionAssetId" | "actionName" | "trapAction" | "payoffAssetId" | "payoffName" | "endingPayoff">;
 const creativeSuggestionKinds: CreativeSuggestionKind[] = ["title", "location", "object", "action", "payoff"];
 const emptyRecentSuggestions = (): RecentSuggestions => ({ title: [], location: [], object: [], action: [], payoff: [] });
-const cameraMotionStyleDefaults: Record<VideoStyleId, Pick<CameraMotionState, "cameraStyle" | "movementIntensity" | "cameraStability" | "subjectMotion">> = {
-  slapstick: { cameraStyle: "character-follow", movementIntensity: "dynamic", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
-  cinematic: { cameraStyle: "smooth-cinematic", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
-  "family-3d": { cameraStyle: "smooth-cinematic", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "natural-controlled" },
-  anime: { cameraStyle: "dynamic-energetic", movementIntensity: "dynamic", cameraStability: "expressive", subjectMotion: "fast-energetic" },
-  "live-action": { cameraStyle: "handheld-realistic", movementIntensity: "balanced", cameraStability: "natural", subjectMotion: "realistic-physical" },
-  "cgi-fantasy": { cameraStyle: "orbit-subject", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
-  "stylized-3d": { cameraStyle: "character-follow", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
+const cameraMotionStyleDefaults: Record<VideoStyleId, Pick<CameraMotionState, "cameraStyle" | "motionEnergy" | "cameraStabilityOverride" | "movementIntensity" | "cameraStability" | "subjectMotion">> = {
+  slapstick: { cameraStyle: "character-follow", motionEnergy: "expressive", cameraStabilityOverride: "stable", movementIntensity: "dynamic", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
+  cinematic: { cameraStyle: "smooth-cinematic", motionEnergy: "balanced", cameraStabilityOverride: "auto", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
+  "family-3d": { cameraStyle: "smooth-cinematic", motionEnergy: "balanced", cameraStabilityOverride: "auto", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "natural-controlled" },
+  anime: { cameraStyle: "dynamic-action", motionEnergy: "expressive", cameraStabilityOverride: "auto", movementIntensity: "dynamic", cameraStability: "expressive", subjectMotion: "fast-energetic" },
+  "live-action": { cameraStyle: "handheld-realistic", motionEnergy: "balanced", cameraStabilityOverride: "natural", movementIntensity: "balanced", cameraStability: "natural", subjectMotion: "realistic-physical" },
+  "cgi-fantasy": { cameraStyle: "smooth-cinematic", motionEnergy: "balanced", cameraStabilityOverride: "auto", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "smooth-cinematic" },
+  "stylized-3d": { cameraStyle: "character-follow", motionEnergy: "balanced", cameraStabilityOverride: "auto", movementIntensity: "balanced", cameraStability: "stable", subjectMotion: "exaggerated-comedic" },
 };
 
 const outputChoices: Array<{ id: RequestedOutput; icon: string; title: string; short: string; description: string }> = [
@@ -175,7 +177,7 @@ function CreativeDirectionSelectCard({
   </article>;
 }
 
-function CameraMotionPanel({
+function LegacyCameraMotionPanel({
   value,
   cameraStyleError,
   subjectMotionError,
@@ -240,6 +242,40 @@ function CameraMotionPanel({
       <button type="button" className="motion-quality-header" aria-expanded={rulesExpanded} onClick={onToggleRules}><div><h4>Motion Quality Rules</h4><p>Smart rules the AI should follow for professional motion.</p></div><div><span className="motion-quality-badge">Recommended</span><span aria-hidden="true">{rulesExpanded ? "−" : "+"}</span></div></button>
       {rulesExpanded && <div className="motion-quality-grid">{MOTION_QUALITY_RULES.map((rule) => { const selected = value.motionQualityRuleIds.includes(rule.id); return <button key={rule.id} type="button" className={`motion-quality-rule ${selected ? "is-active" : ""}`} aria-pressed={selected} onClick={() => onChange({ motionQualityRuleIds: selected ? value.motionQualityRuleIds.filter((id) => id !== rule.id) : [...value.motionQualityRuleIds, rule.id] })}><span aria-hidden="true">{selected ? "✓" : ""}</span>{rule.label}</button>; })}</div>}
     </section>
+  </section>;
+}
+
+function CameraMotionPanel({ value, cameraStyleError, subjectMotionError, advancedOpen, onChange, onToggleAdvanced, onBack, onContinue }: {
+  value: CameraMotionState;
+  cameraStyleError?: string;
+  subjectMotionError?: string;
+  advancedOpen: boolean;
+  onChange: (patch: Partial<CameraMotionState>) => void;
+  onToggleAdvanced: () => void;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
+  const selectedCamera = CAMERA_STYLE_OPTIONS.find((option) => option.value === value.cameraStyle);
+  const selectedFraming = CAMERA_FRAMING_OPTIONS.find((option) => option.value === value.framing);
+  const selectedSubjectMotion = SUBJECT_MOTION_OPTIONS.find((option) => option.value === value.subjectMotion);
+  const selectedEnergy = MOTION_ENERGY_OPTIONS.find((option) => option.value === value.motionEnergy);
+  const safeguardsRef = useRef<HTMLDivElement>(null);
+  const reviewSafeguards = () => {
+    if (!advancedOpen) onToggleAdvanced();
+    window.setTimeout(() => safeguardsRef.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" }), 0);
+  };
+
+  return <section className="motion-camera-step" aria-label="Motion & Camera">
+    <header className="motion-camera-step-header"><div className="motion-camera-heading-group production-section-heading-copy"><span className="production-section-number" aria-hidden="true">05</span><div><h2>Motion &amp; Camera</h2><p>Fine-tune how your video is filmed and how characters and objects move within the scene.</p></div></div></header>
+    <div className="motion-camera-primary-grid">
+      <article className="motion-camera-control-card"><h3>Camera Style</h3><p>Choose the camera&apos;s overall filming language.</p><label htmlFor="camera-style">Camera style</label><select id="camera-style" value={value.cameraStyle} onChange={(event) => onChange({ cameraStyle: event.target.value as CameraMotionState["cameraStyle"] })}>{CAMERA_STYLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{value.cameraStyle === "custom" ? <div className="camera-custom-field"><label htmlFor="camera-style-custom">Custom camera style</label><textarea id="camera-style-custom" value={value.cameraStyleCustom} maxLength={200} aria-invalid={Boolean(cameraStyleError)} aria-describedby={cameraStyleError ? "camera-style-error camera-style-count" : "camera-style-count"} placeholder="Describe the camera movement and visual style you want." onChange={(event) => onChange({ cameraStyleCustom: event.target.value.slice(0, 200) })} />{cameraStyleError && <p className="camera-motion-error" id="camera-style-error">{cameraStyleError}</p>}<span className="camera-motion-counter" id="camera-style-count">{value.cameraStyleCustom.length}/200</span></div> : <p className="motion-camera-selected-description">{selectedCamera?.description}</p>}</article>
+      <article className="motion-camera-control-card"><h3>Framing</h3><p>Set the preferred composition for the scene.</p><label htmlFor="camera-framing">Framing preference</label><select id="camera-framing" value={value.framing} onChange={(event) => onChange({ framing: event.target.value as CameraMotionState["framing"] })}>{CAMERA_FRAMING_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><p className="motion-camera-selected-description">{selectedFraming?.description}</p></article>
+      <article className="motion-camera-control-card"><h3>Motion Energy</h3><p>Combine movement intensity and default stability into one clear choice.</p><div className="motion-energy-segmented" role="group" aria-label="Motion Energy">{MOTION_ENERGY_OPTIONS.map((option) => <button key={option.value} type="button" className={`motion-energy-option ${value.motionEnergy === option.value ? "is-active" : ""}`} aria-pressed={value.motionEnergy === option.value} onClick={() => onChange({ motionEnergy: option.value })}>{option.label}</button>)}</div><p className="motion-camera-selected-description">{selectedEnergy?.description}</p></article>
+      <article className="motion-camera-control-card"><h3>Subject Motion</h3><p>Control how characters and objects move within the shot.</p><label htmlFor="subject-motion">Subject motion style</label><select id="subject-motion" value={value.subjectMotion} onChange={(event) => onChange({ subjectMotion: event.target.value as CameraMotionState["subjectMotion"] })}>{SUBJECT_MOTION_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{value.subjectMotion === "custom" ? <div className="camera-custom-field"><label htmlFor="subject-motion-custom">Custom subject motion</label><textarea id="subject-motion-custom" value={value.subjectMotionCustom} maxLength={200} aria-invalid={Boolean(subjectMotionError)} aria-describedby={subjectMotionError ? "subject-motion-error subject-motion-count" : "subject-motion-count"} placeholder="Describe how characters and objects should move." onChange={(event) => onChange({ subjectMotionCustom: event.target.value.slice(0, 200) })} />{subjectMotionError && <p className="camera-motion-error" id="subject-motion-error">{subjectMotionError}</p>}<span className="camera-motion-counter" id="subject-motion-count">{value.subjectMotionCustom.length}/200</span></div> : <p className="motion-camera-selected-description">{selectedSubjectMotion?.description}</p>}</article>
+    </div>
+    <section className="motion-safeguards-status"><div className="motion-safeguards-icon" aria-hidden="true">✓</div><div className="motion-safeguards-copy"><h3>Professional Motion Safeguards</h3><p>Continuity, smooth movement, ground contact, object attachment, and camera consistency are automatically protected.</p></div><div className="motion-safeguards-actions"><span className="motion-safeguards-state">Enabled</span><button type="button" className="motion-safeguards-review" onClick={reviewSafeguards}>Review safeguards</button></div></section>
+    <section className="motion-camera-advanced"><button type="button" className="motion-camera-advanced-header" aria-expanded={advancedOpen} onClick={onToggleAdvanced}><div><h3>Advanced Camera Controls</h3><p>Add specialized instructions or review detailed motion safeguards.</p></div><span aria-hidden="true">{advancedOpen ? "−" : "+"}</span></button>{advancedOpen && <div className="motion-camera-advanced-content"><div className="motion-camera-advanced-field"><div className="camera-motion-label-row"><label htmlFor="camera-custom-instructions">Custom Camera Instructions</label><span className="camera-motion-optional-badge">Optional</span></div><textarea id="camera-custom-instructions" value={value.cameraCustomInstructions} maxLength={300} placeholder="Describe any additional camera framing, movement, transitions, or visual behavior you want." onChange={(event) => onChange({ cameraCustomInstructions: event.target.value.slice(0, 300) })} /><span className="camera-motion-counter">{value.cameraCustomInstructions.length}/300</span></div><div className="motion-camera-advanced-field"><label htmlFor="camera-stability-override">Camera Stability Override</label><select id="camera-stability-override" value={value.cameraStabilityOverride} onChange={(event) => onChange({ cameraStabilityOverride: event.target.value as CameraMotionState["cameraStabilityOverride"] })}><option value="auto">Use Motion Energy Default</option>{CAMERA_STABILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div><div className="motion-camera-safeguards-detail" ref={safeguardsRef}><h4>Detailed Motion Safeguards</h4><div className="motion-camera-rule-grid">{MOTION_QUALITY_RULES.map((rule) => { const selected = value.motionQualityRuleIds.includes(rule.id); return <button key={rule.id} type="button" className={`motion-quality-rule ${selected ? "is-active" : ""}`} aria-pressed={selected} onClick={() => onChange({ motionQualityRuleIds: selected ? value.motionQualityRuleIds.filter((id) => id !== rule.id) : [...value.motionQualityRuleIds, rule.id] })}><span aria-hidden="true">{selected ? "✓" : ""}</span>{rule.label}</button>; })}</div></div></div>}</section>
+    <footer className="motion-camera-step-navigation"><button type="button" onClick={onBack}><span aria-hidden="true">←</span><span>Back to Creative Direction</span></button><button type="button" className="production-emerald-gold-cta" onClick={onContinue}><span>Continue to Audio &amp; Timing</span><span aria-hidden="true">→</span></button></footer>
   </section>;
 }
 
@@ -550,7 +586,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
   const [creativeDirectionErrors, setCreativeDirectionErrors] = useState<Partial<Record<"visualMood" | "cameraStyle" | "subjectMotion" | "pacingStyle", string>>>({});
-  const [motionRulesExpanded, setMotionRulesExpanded] = useState(true);
+  const [motionRulesExpanded, setMotionRulesExpanded] = useState(false);
   const [moreCreativeRulesOpen, setMoreCreativeRulesOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
@@ -766,7 +802,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
     { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
     { id: "scene", tabId: "workflow-tab-setup", title: "Creative Direction", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
     { id: "motion", tabId: undefined, title: "Motion & Camera", status: activeWorkflowTab === "setup" && productionTab === "motion" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("motion"); } },
-    { id: "audio", tabId: undefined, title: "Audio", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
+    { id: "audio", tabId: undefined, title: "Audio & Timing", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
     { id: "review", tabId: undefined, title: "Review & Generate", status: activeWorkflowTab === "setup" && productionTab === "advanced" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("advanced"); } },
   ] as const;
   const completedWorkflowSteps = workflowSteps.filter((step) => step.status === "completed").length;
@@ -808,7 +844,15 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   }
 
   function updateCameraMotion(patch: Partial<CameraMotionState>) {
-    setForm((current) => ({ ...current, creativeDirection: { ...current.creativeDirection, cameraMotion: { ...current.creativeDirection.cameraMotion, ...patch } } }));
+    setForm((current) => {
+      const nextCameraMotion = { ...current.creativeDirection.cameraMotion, ...patch };
+      if (patch.motionEnergy !== undefined || patch.cameraStabilityOverride !== undefined) {
+        const resolved = resolveMotionEnergy(nextCameraMotion.motionEnergy, nextCameraMotion.cameraStabilityOverride);
+        nextCameraMotion.movementIntensity = resolved.movementIntensity;
+        nextCameraMotion.cameraStability = resolved.cameraStability;
+      }
+      return { ...current, creativeDirection: { ...current.creativeDirection, cameraMotion: nextCameraMotion } };
+    });
     setCreativeDirectionErrors((current) => {
       const next = { ...current };
       if (patch.cameraStyle !== undefined || patch.cameraStyleCustom?.trim()) delete next.cameraStyle;
@@ -2012,6 +2056,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
                 <div className="studio-credit-status"><span>Estimated credits</span><strong>{estimatedCredits}</strong><small>{creditStatus}</small></div>
                 <div className="studio-ratio-control"><h3>Video Ratio</h3>{globalRatioControl}<p>Frames are generated automatically based on the selected video ratio.</p></div>
+                <details className="video-setup-controls">
+                  <summary>Video Setup</summary>
+                  <div className="form-grid">
+                    <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
+                    <label className="field"><span>AI video model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select>{form.videoModel === "Custom model" && <input value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
+                    <label className="field"><span>Duration</span><select value={form.duration} onChange={(event) => update("duration", event.target.value)}>{durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>
+                    <label className="field"><span>Visual style</span><select value={form.visualStyle} onChange={(event) => update("visualStyle", event.target.value)}>{visualStyles.map((value) => <option key={value}>{value}</option>)}</select>{form.visualStyle === "Custom" && <input value={form.customVisualStyle} onChange={(event) => update("customVisualStyle", event.target.value)} />}</label>
+                    <label className="production-feature-toggle wide"><div className="production-feature-copy"><strong>Ultra Retention Mode</strong><span>Immediate opening hook, continuous visual micro-beats, a mid-video escalation, and a strong payoff.</span></div><span className="production-switch"><input type="checkbox" checked={form.ultraRetentionMode} onChange={(event) => update("ultraRetentionMode", event.target.checked)} /><span className="production-switch-track" /></span></label>
+                  </div>
+                </details>
                 <button className="studio-setup-link" type="button" onClick={scrollToEpisodeIdea}>Edit production setup</button>
               </section>
             </aside>
@@ -2120,6 +2174,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </div></div>
             </details>
 
+            <label className="production-feature-toggle production-character-toggle"><div className="production-feature-copy"><strong>Include Character-Building Prompt</strong><span>Generate a dedicated identity and consistency prompt for the selected cast.</span></div><span className="production-switch"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></span></label>
+
             <details className="advanced-panel production-accordion production-accordion-secondary">
               <summary><span className="production-accordion-title">Character Library import and export</span><span className="production-accordion-icon">+</span></summary>
               <div className="advanced-content">
@@ -2135,8 +2191,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           <section className="production-section form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
             <main className="sceneSetup scene-editor">
-            {productionTab === "motion" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">05</span><div className="production-section-heading-copy"><h2>Motion &amp; Camera</h2><p>Fine-tune how your video is filmed, framed, and moved while preserving production delivery settings.</p></div></header>}
-            {productionTab === "audio" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Audio</h2><p>Configure narration, voices, music, character sounds, and synchronized sound effects.</p></div></header>}
+            {productionTab === "audio" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">06</span><div className="production-section-heading-copy"><h2>Audio &amp; Timing</h2><p>Configure narration, voices, music, character sounds, and synchronized sound effects.</p></div></header>}
             {productionTab === "advanced" && <header className="production-section-header"><span className="production-section-number" aria-hidden="true">07</span><div className="production-section-heading-copy"><h2>Review &amp; Generate</h2><p>Review advanced production settings before generating the selected output package.</p></div></header>}
             {productionTab === "core" && <section className="creative-direction-step" aria-label="Creative Direction">
               <header className="creative-direction-step-header">
@@ -2154,18 +2209,8 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               <footer className="creative-direction-step-navigation"><button type="button" onClick={() => setActiveWorkflowTab("characters")}><span aria-hidden="true">←</span><span>Back to Cast</span></button><button type="button" disabled>Next</button></footer>
             </section>}
             </main>
-            {productionTab !== "core" && <>{productionTab === "motion" && <CameraMotionPanel value={form.creativeDirection.cameraMotion} cameraStyleError={creativeDirectionErrors.cameraStyle} subjectMotionError={creativeDirectionErrors.subjectMotion} rulesExpanded={motionRulesExpanded} onChange={updateCameraMotion} onToggleRules={() => setMotionRulesExpanded((current) => !current)} />}<div className="form-grid">
-              <label className="field"><span>Publishing platform</span><select value={form.platform} onChange={(event) => update("platform", event.target.value)}>{platforms.map((value) => <option key={value}>{value}</option>)}</select>{form.platform === "Custom" && <input value={form.customPlatform} onChange={(event) => update("customPlatform", event.target.value)} placeholder="Custom platform" />}</label>
-              <label className="field"><span>AI video model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select>{form.videoModel === "Custom model" && <input value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
-              <label className="field"><span>Duration</span><select value={form.duration} onChange={(event) => update("duration", event.target.value)}>{durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select></label>
-              <label className="field"><span>Motion level</span><select value={form.motionLevel} onChange={(event) => update("motionLevel", event.target.value as ProductionForm["motionLevel"])}>{["Safe", "Balanced", "Ambitious"].map((value) => <option key={value}>{value}</option>)}</select></label>
-              <label className="field"><span>Visual style</span><select value={form.visualStyle} onChange={(event) => update("visualStyle", event.target.value)}>{visualStyles.map((value) => <option key={value}>{value}</option>)}</select>{form.visualStyle === "Custom" && <input value={form.customVisualStyle} onChange={(event) => update("customVisualStyle", event.target.value)} />}</label>
-              <label className="production-feature-toggle wide"><div className="production-feature-copy"><strong>Ultra Retention Mode</strong><span>Immediate opening hook, continuous visual micro-beats, a mid-video escalation, and a strong payoff.</span></div><span className="production-switch"><input type="checkbox" checked={form.ultraRetentionMode} onChange={(event) => update("ultraRetentionMode", event.target.checked)} /><span className="production-switch-track" /></span></label>
-              <section className="production-control-group production-ratio-group wide"><header className="production-control-header"><div><h3>Video Ratio</h3><p>Start and End Frames inherit this ratio.</p></div></header><div className="production-ratio-grid">{globalRatioControl}</div></section>
-              <label className="production-feature-toggle production-character-toggle wide"><div className="production-feature-copy"><strong>Include Character-Building Prompt</strong><span>Generate a dedicated identity and consistency prompt for the selected cast.</span></div><span className="production-switch"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></span></label>
-            </div>
-
-            <details className="advanced-panel production-accordion">
+            {productionTab === "motion" && <CameraMotionPanel value={form.creativeDirection.cameraMotion} cameraStyleError={creativeDirectionErrors.cameraStyle} subjectMotionError={creativeDirectionErrors.subjectMotion} advancedOpen={motionRulesExpanded} onChange={updateCameraMotion} onToggleAdvanced={() => setMotionRulesExpanded((current) => !current)} onBack={() => setProductionTab("core")} onContinue={() => setProductionTab("audio")} />}
+            {productionTab !== "core" && productionTab !== "motion" && <>{productionTab === "audio" && <details className="advanced-panel production-accordion" open>
               <summary className="production-accordion-trigger"><span className="production-accordion-icon" aria-hidden="true">♫</span><span className="production-accordion-copy"><strong>Narration, Voices, Music &amp; Sound</strong><small>Configure spoken audio, cartoon vocals, music, and SFX.</small></span><span className="production-accordion-chevron" aria-hidden="true">⌄</span></summary>
               <div className="advanced-content production-accordion-content">
                 <div className="form-grid">
@@ -2186,9 +2231,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                   {form.videoModel === "Custom model" && <label className="field wide"><span>Custom-model guidance</span><textarea value={form.customModelGuidance} onChange={(event) => update("customModelGuidance", event.target.value)} placeholder="Describe known prompt structure, camera, motion, reference-frame, and audio preferences." /></label>}
                 </div>
               </div>
-            </details>
+            </details>}
 
-            <details className="advanced-panel production-accordion production-accordion-secondary">
+            {productionTab === "advanced" && <><label className="field review-motion-level"><span>Motion level</span><select value={form.motionLevel} onChange={(event) => update("motionLevel", event.target.value as ProductionForm["motionLevel"])}>{["Safe", "Balanced", "Ambitious"].map((value) => <option key={value}>{value}</option>)}</select></label><details className="advanced-panel production-accordion production-accordion-secondary">
               <summary><span className="production-accordion-title">Project Presets and Saved Packs</span><span className="production-accordion-icon">+</span></summary>
               <div className="advanced-content">
                 <div className="preset-row">
@@ -2218,16 +2263,16 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                   {!savedPacks.length && <p className="empty-note">No saved packs yet.</p>}
                 </div>
               </div>
-            </details>
-            <ProductionSection
+            </details></>}
+            {productionTab === "advanced" && <ProductionSection
               number="05"
               title="Generation Summary"
               description={<>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</>}
               className="generate-section setup-generation"
             >
               <button className="generate-button selectable-generate production-primary-button" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
-            </ProductionSection>
-            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab(productionTab === "motion" ? "audio" : productionTab === "audio" ? "advanced" : "audio")}><span>{productionTab === "motion" ? "Continue to Audio" : productionTab === "audio" ? "Continue to Review & Generate" : "Back to Audio"}</span><span aria-hidden="true">{productionTab === "advanced" ? "←" : "→"}</span></button></footer></>}
+            </ProductionSection>}
+            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab(productionTab === "audio" ? "advanced" : "audio")}><span>{productionTab === "audio" ? "Continue to Review & Generate" : "Back to Audio & Timing"}</span><span aria-hidden="true">{productionTab === "advanced" ? "←" : "→"}</span></button></footer></>}
           </section>
 
           {error && <div className="message error" role="alert">{error}</div>}

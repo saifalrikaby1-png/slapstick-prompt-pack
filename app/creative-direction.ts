@@ -1,12 +1,14 @@
 import {
   CameraMotionState,
   CameraStabilityValue,
+  CameraStabilityOverride,
   CameraFramingValue,
   CameraStyleValue,
   CreativeDirectionState,
   DEFAULT_CAMERA_MOTION,
   MotionQualityRuleId,
   MovementIntensityValue,
+  MotionEnergyValue,
   RuleChipId,
   SubjectMotionValue,
   defaultCreativeDirection,
@@ -34,26 +36,44 @@ export const VISUAL_MOOD_OPTIONS = [
 ] as const satisfies readonly CreativeDirectionOption[];
 
 export const CAMERA_STYLE_OPTIONS = [
-  { value: "smooth-cinematic", label: "Smooth Cinematic", description: "Smooth tracking, stable framing, gentle push-ins, and polished cinematic movement." },
-  { value: "dynamic-energetic", label: "Dynamic & Energetic", description: "Active tracking, responsive reframing, and energetic camera movement." },
+  { value: "smooth-cinematic", label: "Smooth Cinematic", description: "Stable tracking, gentle reframing, and polished cinematic movement." },
+  { value: "character-follow", label: "Character Follow", description: "The camera follows the main subject while preserving visibility and screen direction." },
+  { value: "dynamic-action", label: "Dynamic Action", description: "Responsive tracking and energetic reframing for fast movement and action." },
   { value: "locked-stable", label: "Locked & Stable", description: "Fixed or highly controlled framing with minimal camera movement." },
-  { value: "character-follow", label: "Character Follow", description: "The camera follows the main character while preserving visibility and screen direction." },
-  { value: "slow-push-in", label: "Slow Push-In", description: "A gradual camera move toward the subject to create emphasis or anticipation." },
-  { value: "orbit-subject", label: "Orbit Around Subject", description: "The camera moves smoothly around the focal subject while keeping it clearly framed." },
-  { value: "handheld-realistic", label: "Handheld Realistic", description: "Subtle natural camera movement with restrained realistic shake." },
-  { value: "fast-action-camera", label: "Fast Action Camera", description: "Responsive tracking and energetic reframing for fast movement and action." },
-  { value: "overhead-top-down", label: "Overhead / Top-Down", description: "Elevated framing that clearly presents spatial movement and scene layout." },
+  { value: "handheld-realistic", label: "Handheld Realistic", description: "Natural handheld motion with restrained realistic shake." },
   { value: "custom", label: "Custom", description: "" },
 ] as const satisfies readonly CreativeDirectionOption[];
 
 export const CAMERA_FRAMING_OPTIONS = [
-  { value: "automatic", label: "Automatic", description: "Let the AI choose and adjust framing based on the scene and action." },
-  { value: "wide-shot", label: "Wide Shot", description: "Show the environment, characters, and full spatial relationship clearly." },
-  { value: "medium-shot", label: "Medium Shot", description: "Balance character performance with enough visible environmental context." },
+  { value: "automatic", label: "Automatic", description: "The AI adjusts framing based on action clarity, character visibility, and continuity." },
+  { value: "wide", label: "Wide", description: "Show the environment, characters, and spatial relationships clearly." },
+  { value: "medium", label: "Medium", description: "Balance character performance with useful environmental context." },
   { value: "close-up", label: "Close-Up", description: "Prioritize facial expressions, reactions, and important visual detail." },
   { value: "full-body", label: "Full Body", description: "Keep the complete character body visible for physical action and movement." },
   { value: "over-the-shoulder", label: "Over-the-Shoulder", description: "Frame interaction from behind or beside one subject toward another." },
 ] as const satisfies readonly CreativeDirectionOption[];
+
+export const MOTION_ENERGY_OPTIONS = [
+  { value: "controlled", label: "Controlled", description: "Stable, restrained, and precise movement with minimal distraction." },
+  { value: "balanced", label: "Balanced", description: "Smooth professional movement with moderate energy and clear readability." },
+  { value: "expressive", label: "Expressive", description: "Stronger, more dynamic movement suited to action, comedy, or heightened emotion." },
+] as const;
+
+export function resolveMotionEnergy(
+  motionEnergy: MotionEnergyValue,
+  cameraStabilityOverride: CameraStabilityOverride,
+): { movementIntensity: MovementIntensityValue; cameraStability: CameraStabilityValue } {
+  const defaults = {
+    controlled: { movementIntensity: "subtle" as const, cameraStability: "stable" as const },
+    balanced: { movementIntensity: "balanced" as const, cameraStability: "stable" as const },
+    expressive: { movementIntensity: "dynamic" as const, cameraStability: "expressive" as const },
+  };
+  const resolved = defaults[motionEnergy];
+  return {
+    movementIntensity: resolved.movementIntensity,
+    cameraStability: cameraStabilityOverride === "auto" ? resolved.cameraStability : cameraStabilityOverride,
+  };
+}
 
 export const MOVEMENT_INTENSITY_OPTIONS = [
   { value: "subtle", label: "Subtle", description: "Restrained camera movement that supports the scene without drawing attention." },
@@ -128,12 +148,14 @@ export function resolveCreativeRules(manualRules: string, selectedChipIds: reado
 }
 
 export function resolveCameraMotion(cameraMotion: CameraMotionState) {
+  const resolvedMotion = resolveMotionEnergy(cameraMotion.motionEnergy, cameraMotion.cameraStabilityOverride);
   return {
     cameraStyle: resolveCreativeDirectionValue(cameraMotion.cameraStyle, cameraMotion.cameraStyleCustom, CAMERA_STYLE_OPTIONS),
     customInstructions: cameraMotion.cameraCustomInstructions.trim(),
     framing: resolveCreativeDirectionValue(cameraMotion.framing, "", CAMERA_FRAMING_OPTIONS),
-    movementIntensity: cameraMotion.movementIntensity,
-    cameraStability: cameraMotion.cameraStability,
+    motionEnergy: cameraMotion.motionEnergy,
+    movementIntensity: resolvedMotion.movementIntensity,
+    cameraStability: resolvedMotion.cameraStability,
     subjectMotion: resolveCreativeDirectionValue(cameraMotion.subjectMotion, cameraMotion.subjectMotionCustom, SUBJECT_MOTION_OPTIONS),
     qualityRules: cameraMotion.motionQualityRuleIds.flatMap((id) => {
       const prompt = MOTION_QUALITY_RULES.find((rule) => rule.id === id)?.prompt;
@@ -159,24 +181,38 @@ export function migrateCreativeDirection(value: unknown): CreativeDirectionState
   const validRuleIds = Array.isArray(item.selectedRuleChipIds)
     ? item.selectedRuleChipIds.filter((id): id is RuleChipId => typeof id === "string" && ruleChipIds.includes(id as RuleChipId))
     : [];
+  const legacyMovementIntensity = typeof cameraItem.movementIntensity === "string" && MOVEMENT_INTENSITY_OPTIONS.some((option) => option.value === cameraItem.movementIntensity)
+    ? cameraItem.movementIntensity as MovementIntensityValue
+    : DEFAULT_CAMERA_MOTION.movementIntensity;
+  const legacyCameraStability = typeof cameraItem.cameraStability === "string" && CAMERA_STABILITY_OPTIONS.some((option) => option.value === cameraItem.cameraStability)
+    ? cameraItem.cameraStability as CameraStabilityValue
+    : DEFAULT_CAMERA_MOTION.cameraStability;
+  const migratedMotionEnergy: MotionEnergyValue = typeof cameraItem.motionEnergy === "string" && MOTION_ENERGY_OPTIONS.some((option) => option.value === cameraItem.motionEnergy)
+    ? cameraItem.motionEnergy as MotionEnergyValue
+    : legacyMovementIntensity === "subtle" ? "controlled" : legacyMovementIntensity === "dynamic" ? "expressive" : "balanced";
+  const migratedStabilityOverride: CameraStabilityOverride = typeof cameraItem.cameraStabilityOverride === "string" && ["auto", "stable", "natural", "expressive"].includes(cameraItem.cameraStabilityOverride)
+    ? cameraItem.cameraStabilityOverride as CameraStabilityOverride
+    : legacyCameraStability === resolveMotionEnergy(migratedMotionEnergy, "auto").cameraStability ? "auto" : legacyCameraStability;
   return {
     visualMood: typeof item.visualMood === "string" && VISUAL_MOOD_OPTIONS.some((option) => option.value === item.visualMood) ? item.visualMood : defaultCreativeDirection.visualMood,
     visualMoodCustom: typeof item.visualMoodCustom === "string" ? item.visualMoodCustom.slice(0, 200) : "",
     cameraMotion: {
       cameraStyle: typeof cameraItem.cameraStyle === "string" && CAMERA_STYLE_OPTIONS.some((option) => option.value === cameraItem.cameraStyle)
         ? cameraItem.cameraStyle as CameraStyleValue
+        : ["dynamic-energetic", "fast-action-camera"].includes(String(cameraItem.cameraStyle))
+          ? "dynamic-action"
         : DEFAULT_CAMERA_MOTION.cameraStyle,
       cameraStyleCustom: typeof cameraItem.cameraStyleCustom === "string" ? cameraItem.cameraStyleCustom.slice(0, 200) : "",
       cameraCustomInstructions: typeof cameraItem.cameraCustomInstructions === "string" ? cameraItem.cameraCustomInstructions.slice(0, 300) : "",
       framing: typeof cameraItem.framing === "string" && CAMERA_FRAMING_OPTIONS.some((option) => option.value === cameraItem.framing)
         ? cameraItem.framing as CameraFramingValue
+        : cameraItem.framing === "wide-shot" ? "wide"
+          : cameraItem.framing === "medium-shot" ? "medium"
         : DEFAULT_CAMERA_MOTION.framing,
-      movementIntensity: typeof cameraItem.movementIntensity === "string" && MOVEMENT_INTENSITY_OPTIONS.some((option) => option.value === cameraItem.movementIntensity)
-        ? cameraItem.movementIntensity as MovementIntensityValue
-        : DEFAULT_CAMERA_MOTION.movementIntensity,
-      cameraStability: typeof cameraItem.cameraStability === "string" && CAMERA_STABILITY_OPTIONS.some((option) => option.value === cameraItem.cameraStability)
-        ? cameraItem.cameraStability as CameraStabilityValue
-        : DEFAULT_CAMERA_MOTION.cameraStability,
+      motionEnergy: migratedMotionEnergy,
+      cameraStabilityOverride: migratedStabilityOverride,
+      movementIntensity: resolveMotionEnergy(migratedMotionEnergy, migratedStabilityOverride).movementIntensity,
+      cameraStability: resolveMotionEnergy(migratedMotionEnergy, migratedStabilityOverride).cameraStability,
       subjectMotion: typeof cameraItem.subjectMotion === "string" && SUBJECT_MOTION_OPTIONS.some((option) => option.value === cameraItem.subjectMotion)
         ? cameraItem.subjectMotion as SubjectMotionValue
         : DEFAULT_CAMERA_MOTION.subjectMotion,

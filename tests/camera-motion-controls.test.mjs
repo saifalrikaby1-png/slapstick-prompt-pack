@@ -11,15 +11,16 @@ const [page, types, helpers, engine, route] = await Promise.all([
   readFile(new URL("app/api/generate/route.ts", root), "utf8"),
 ]);
 
-test("expanded Camera & Motion panel renders every required accessible control", () => {
-  for (const id of ["camera-style", "camera-custom-instructions", "camera-framing", "subject-motion"]) {
+test("Motion & Camera default view renders exactly four focused primary controls", () => {
+  for (const id of ["camera-style", "camera-framing", "subject-motion"]) {
     assert.match(page, new RegExp(`(?:htmlFor|id)="${id}"`));
   }
-  assert.match(page, /aria-label="Movement intensity"/);
-  assert.match(page, /aria-label="Camera stability"/);
-  assert.match(page, /className="motion-quality-header" aria-expanded=/);
+  assert.match(page, /className="motion-camera-primary-grid"/);
+  assert.match(page, /aria-label="Motion Energy"/);
+  assert.match(page, /className="motion-safeguards-status"/);
+  assert.match(page, /className="motion-camera-advanced-header" aria-expanded=\{advancedOpen\}/);
   assert.match(page, /aria-pressed=\{selected\}/);
-  assert.match(page, /Different from Camera Style/);
+  assert.doesNotMatch(page, /<CameraMotionPanel[\s\S]{0,300}rulesExpanded=/);
 });
 
 test("custom camera and subject motion fields validate independently while instructions stay optional", () => {
@@ -30,8 +31,8 @@ test("custom camera and subject motion fields validate independently while instr
   assert.doesNotMatch(page, /cameraCustomInstructions\.trim\(\)[^;\n]*directionErrors|directionErrors\.[A-Za-z]+\s*=.*cameraCustomInstructions/);
 });
 
-test("defaults, persistence migration, and toggleable rules use one nested cameraMotion state", () => {
-  assert.match(types, /export const DEFAULT_CAMERA_MOTION[\s\S]*cameraStyle: "smooth-cinematic"[\s\S]*framing: "automatic"[\s\S]*movementIntensity: "balanced"[\s\S]*cameraStability: "stable"[\s\S]*subjectMotion: "natural-controlled"/);
+test("defaults, persistence migration, and advanced rules use one nested cameraMotion state", () => {
+  assert.match(types, /export const DEFAULT_CAMERA_MOTION[\s\S]*cameraStyle: "smooth-cinematic"[\s\S]*framing: "automatic"[\s\S]*motionEnergy: "balanced"[\s\S]*cameraStabilityOverride: "auto"[\s\S]*movementIntensity: "balanced"[\s\S]*cameraStability: "stable"[\s\S]*subjectMotion: "natural-controlled"/);
   assert.match(types, /cameraMotion: CameraMotionState/);
   assert.match(helpers, /const cameraItem = item\.cameraMotion[\s\S]*: item;/);
   assert.match(page, /motionQualityRuleIds: selected \? value\.motionQualityRuleIds\.filter/);
@@ -40,10 +41,11 @@ test("defaults, persistence migration, and toggleable rules use one nested camer
   assert.match(page, /cameraMotion: \{ \.\.\.current\.creativeDirection\.cameraMotion, \.\.\.cameraMotionStyleDefaults\[activeVideoStyle\.id\] \}/);
 });
 
-test("resolved payload and prompt include the complete Camera & Motion direction", () => {
+test("Motion Energy resolves into the compatible payload and prompt", () => {
   assert.match(helpers, /cameraMotion: resolveCameraMotion\(state\.cameraMotion\)/);
+  assert.match(helpers, /function resolveMotionEnergy\(/);
   assert.match(route, /cameraMotion: \{[\s\S]*qualityRules: string\[\]/);
-  for (const label of ["CAMERA & MOTION DIRECTION", "Camera Style:", "Additional Camera Instructions:", "Framing:", "Movement Intensity:", "Camera Stability:", "Subject Motion:", "Motion Quality Rules:"]) {
+  for (const label of ["MOTION & CAMERA", "Camera Style:", "Framing:", "Motion Energy:", "Resolved Movement Intensity:", "Resolved Camera Stability:", "Subject Motion:", "Additional Camera Instructions:", "Professional Motion Safeguards:"]) {
     assert.match(engine, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(engine, /Camera Style controls how the scene is filmed\. Subject Motion controls how characters and objects move\./);

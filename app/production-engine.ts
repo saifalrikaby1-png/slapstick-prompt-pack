@@ -1,6 +1,8 @@
 import {
   CharacterProfile,
   CreativeDirectionState,
+  CameraStabilityOverride,
+  MotionEnergyValue,
   CreativeAsset,
   LegacyPackItem,
   LegacySavedPack,
@@ -39,6 +41,22 @@ const stringValue = (value: unknown, fallback = "") =>
 const boolValue = (value: unknown, fallback: boolean) =>
   typeof value === "boolean" ? value : fallback;
 
+function resolveMotionEnergy(
+  motionEnergy: MotionEnergyValue,
+  cameraStabilityOverride: CameraStabilityOverride,
+) {
+  const defaults = {
+    controlled: { movementIntensity: "subtle" as const, cameraStability: "stable" as const },
+    balanced: { movementIntensity: "balanced" as const, cameraStability: "stable" as const },
+    expressive: { movementIntensity: "dynamic" as const, cameraStability: "expressive" as const },
+  };
+  const resolved = defaults[motionEnergy];
+  return {
+    movementIntensity: resolved.movementIntensity,
+    cameraStability: cameraStabilityOverride === "auto" ? resolved.cameraStability : cameraStabilityOverride,
+  };
+}
+
 // Keep these resolvers local because the engine is also loaded as a standalone
 // module by export workers and the deterministic prompt test harness.
 const engineDirectionOptions = {
@@ -54,20 +72,16 @@ const engineDirectionOptions = {
     ["minimal-clean", "Minimal & Clean", "Simple composition, controlled colors, clean lighting, and minimal visual distraction."],
   ],
   cameraStyle: [
-    ["smooth-cinematic", "Smooth Cinematic", "Smooth tracking, stable framing, gentle push-ins, and polished cinematic movement."],
-    ["dynamic-energetic", "Dynamic & Energetic", "Active tracking, responsive reframing, and energetic camera movement."],
+    ["smooth-cinematic", "Smooth Cinematic", "Stable tracking, gentle reframing, and polished cinematic movement."],
+    ["dynamic-action", "Dynamic Action", "Responsive tracking and energetic reframing for fast movement and action."],
     ["locked-stable", "Locked & Stable", "Fixed or highly controlled framing with minimal camera movement."],
     ["character-follow", "Character Follow", "The camera follows the main character while preserving visibility and screen direction."],
-    ["slow-push-in", "Slow Push-In", "A gradual camera move toward the subject to create emphasis or anticipation."],
-    ["orbit-subject", "Orbit Around Subject", "The camera moves smoothly around the focal subject while keeping it clearly framed."],
-    ["handheld-realistic", "Handheld Realistic", "Subtle natural camera movement with restrained realistic shake."],
-    ["fast-action-camera", "Fast Action Camera", "Responsive tracking and energetic reframing for fast movement and action."],
-    ["overhead-top-down", "Overhead / Top-Down", "Elevated framing that clearly presents spatial movement and scene layout."],
+    ["handheld-realistic", "Handheld Realistic", "Natural handheld motion with restrained realistic shake."],
   ],
   framing: [
-    ["automatic", "Automatic", "Let the AI choose and adjust framing based on the scene and action."],
-    ["wide-shot", "Wide Shot", "Show the environment, characters, and full spatial relationship clearly."],
-    ["medium-shot", "Medium Shot", "Balance character performance with enough visible environmental context."],
+    ["automatic", "Automatic", "The AI adjusts framing based on action clarity, character visibility, and continuity."],
+    ["wide", "Wide", "Show the environment, characters, and spatial relationships clearly."],
+    ["medium", "Medium", "Balance character performance with useful environmental context."],
     ["close-up", "Close-Up", "Prioritize facial expressions, reactions, and important visual detail."],
     ["full-body", "Full Body", "Keep the complete character body visible for physical action and movement."],
     ["over-the-shoulder", "Over-the-Shoulder", "Frame interaction from behind or beside one subject toward another."],
@@ -121,14 +135,16 @@ function resolveEngineDirection(value: string, custom: string, options: readonly
 
 function resolveCreativeDirection(state: CreativeDirectionState) {
   const camera = state.cameraMotion;
+  const resolvedMotion = resolveMotionEnergy(camera.motionEnergy, camera.cameraStabilityOverride);
   return {
     visualMood: resolveEngineDirection(state.visualMood, state.visualMoodCustom, engineDirectionOptions.visualMood),
     cameraMotion: {
       cameraStyle: resolveEngineDirection(camera.cameraStyle, camera.cameraStyleCustom, engineDirectionOptions.cameraStyle),
       customInstructions: camera.cameraCustomInstructions.trim(),
       framing: resolveEngineDirection(camera.framing, "", engineDirectionOptions.framing),
-      movementIntensity: camera.movementIntensity,
-      cameraStability: camera.cameraStability,
+      motionEnergy: camera.motionEnergy,
+      movementIntensity: resolvedMotion.movementIntensity,
+      cameraStability: resolvedMotion.cameraStability,
       subjectMotion: resolveEngineDirection(camera.subjectMotion, camera.subjectMotionCustom, engineDirectionOptions.subjectMotion),
       qualityRules: camera.motionQualityRuleIds.flatMap((id) => engineMotionRulePrompts[id] ? [engineMotionRulePrompts[id]] : []),
     },
@@ -145,16 +161,33 @@ function migrateCreativeDirection(value: unknown): CreativeDirectionState {
   const defaults = defaultCreativeDirection;
   const valid = (candidate: unknown, options: readonly (readonly [string, string, string])[], fallback: string) =>
     typeof candidate === "string" && (candidate === "custom" || options.some(([id]) => id === candidate)) ? candidate : fallback;
+  const legacyMovementIntensity = ["subtle", "balanced", "dynamic"].includes(String(camera.movementIntensity))
+    ? camera.movementIntensity as CreativeDirectionState["cameraMotion"]["movementIntensity"]
+    : defaults.cameraMotion.movementIntensity;
+  const legacyCameraStability = ["stable", "natural", "expressive"].includes(String(camera.cameraStability))
+    ? camera.cameraStability as CreativeDirectionState["cameraMotion"]["cameraStability"]
+    : defaults.cameraMotion.cameraStability;
+  const motionEnergy = ["controlled", "balanced", "expressive"].includes(String(camera.motionEnergy))
+    ? camera.motionEnergy as MotionEnergyValue
+    : legacyMovementIntensity === "subtle" ? "controlled" : legacyMovementIntensity === "dynamic" ? "expressive" : "balanced";
+  const cameraStabilityOverride = ["auto", "stable", "natural", "expressive"].includes(String(camera.cameraStabilityOverride))
+    ? camera.cameraStabilityOverride as CameraStabilityOverride
+    : legacyCameraStability === resolveMotionEnergy(motionEnergy, "auto").cameraStability ? "auto" : legacyCameraStability;
+  const resolvedMotion = resolveMotionEnergy(motionEnergy, cameraStabilityOverride);
   return {
     visualMood: valid(item.visualMood, engineDirectionOptions.visualMood, defaults.visualMood) as CreativeDirectionState["visualMood"],
     visualMoodCustom: stringValue(item.visualMoodCustom).slice(0, 200),
     cameraMotion: {
-      cameraStyle: valid(camera.cameraStyle, engineDirectionOptions.cameraStyle, defaults.cameraMotion.cameraStyle) as CreativeDirectionState["cameraMotion"]["cameraStyle"],
+      cameraStyle: (["dynamic-energetic", "fast-action-camera"].includes(String(camera.cameraStyle))
+        ? "dynamic-action"
+        : valid(camera.cameraStyle, engineDirectionOptions.cameraStyle, defaults.cameraMotion.cameraStyle)) as CreativeDirectionState["cameraMotion"]["cameraStyle"],
       cameraStyleCustom: stringValue(camera.cameraStyleCustom).slice(0, 200),
       cameraCustomInstructions: stringValue(camera.cameraCustomInstructions).slice(0, 300),
-      framing: valid(camera.framing, engineDirectionOptions.framing, defaults.cameraMotion.framing) as CreativeDirectionState["cameraMotion"]["framing"],
-      movementIntensity: ["subtle", "balanced", "dynamic"].includes(String(camera.movementIntensity)) ? camera.movementIntensity as CreativeDirectionState["cameraMotion"]["movementIntensity"] : defaults.cameraMotion.movementIntensity,
-      cameraStability: ["stable", "natural", "expressive"].includes(String(camera.cameraStability)) ? camera.cameraStability as CreativeDirectionState["cameraMotion"]["cameraStability"] : defaults.cameraMotion.cameraStability,
+      framing: (camera.framing === "wide-shot" ? "wide" : camera.framing === "medium-shot" ? "medium" : valid(camera.framing, engineDirectionOptions.framing, defaults.cameraMotion.framing)) as CreativeDirectionState["cameraMotion"]["framing"],
+      motionEnergy,
+      cameraStabilityOverride,
+      movementIntensity: resolvedMotion.movementIntensity,
+      cameraStability: resolvedMotion.cameraStability,
       subjectMotion: valid(camera.subjectMotion, engineDirectionOptions.subjectMotion, defaults.cameraMotion.subjectMotion) as CreativeDirectionState["cameraMotion"]["subjectMotion"],
       subjectMotionCustom: stringValue(camera.subjectMotionCustom).slice(0, 200),
       motionQualityRuleIds: Array.isArray(camera.motionQualityRuleIds)
@@ -824,14 +857,15 @@ export function generateDemoPack(
     ? `No understandable spoken dialogue, no narration, and no lip-sync. Communicate through poses, expressions, music, and synchronized sound.${cartoonSoundRule}`
     : `Voice layers: ${form.voiceLayers.join(", ")}. Language: ${form.language}. Vocal tone: ${form.vocalTone}. ${form.lipSyncRequired ? "Accurate lip-sync is required." : "Lip-sync is not required unless a selected speaker visibly speaks."} Narrator guidance: ${form.voiceLayers.includes("Narrator") ? form.narratorGuidance || "none" : "not enabled"}. Narration text: ${form.voiceLayers.includes("Narrator") ? form.narrationText || "none" : "not enabled"}. Character dialogue: ${form.voiceLayers.some((layer) => layer.includes("Voice")) ? form.characterDialogue || "none" : "not enabled"}. Character voice guidance: ${form.characterVoiceGuidance || "use the saved voice profiles."}.${cartoonSoundRule}`;
   const cameraMotion = derivedScene.creative.cameraMotion;
-  const cameraMotionDirection = `CAMERA & MOTION DIRECTION
+  const cameraMotionDirection = `MOTION & CAMERA
 Camera Style: ${cameraMotion.cameraStyle}
-Additional Camera Instructions: ${cameraMotion.customInstructions || "No additional camera instructions provided."}
 Framing: ${cameraMotion.framing}
-Movement Intensity: ${cameraMotion.movementIntensity}
-Camera Stability: ${cameraMotion.cameraStability}
+Motion Energy: ${cameraMotion.motionEnergy}
+Resolved Movement Intensity: ${cameraMotion.movementIntensity}
+Resolved Camera Stability: ${cameraMotion.cameraStability}
 Subject Motion: ${cameraMotion.subjectMotion}
-Motion Quality Rules:
+Additional Camera Instructions: ${cameraMotion.customInstructions || "No additional camera instructions provided."}
+Professional Motion Safeguards:
 ${cameraMotion.qualityRules.length ? cameraMotion.qualityRules.map((rule) => `- ${rule}`).join("\n") : "- No additional motion quality rules selected."}
 Camera Style controls how the scene is filmed. Subject Motion controls how characters and objects move. Keep both systems coordinated but distinct.
 Use the selected framing as a primary preference. When framing is Automatic, choose and adjust framing according to action clarity, character visibility, and continuity.`;

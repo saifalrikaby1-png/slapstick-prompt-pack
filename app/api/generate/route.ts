@@ -197,6 +197,16 @@ export async function POST(request: Request) {
       ].filter(Boolean).join(". ").slice(0, 200),
       cameraCustomInstructions: creativeDirection.cameraMotion.customInstructions.trim(),
       framing: "automatic",
+      motionEnergy: creativeDirection.cameraMotion.movementIntensity === "subtle"
+        ? "controlled"
+        : creativeDirection.cameraMotion.movementIntensity === "dynamic"
+          ? "expressive"
+          : "balanced",
+      cameraStabilityOverride: creativeDirection.cameraMotion.cameraStability === "natural"
+        ? "natural"
+        : creativeDirection.cameraMotion.cameraStability === "expressive"
+          ? "expressive"
+          : "auto",
       movementIntensity: creativeDirection.cameraMotion.movementIntensity === "subtle" || creativeDirection.cameraMotion.movementIntensity === "dynamic" ? creativeDirection.cameraMotion.movementIntensity : "balanced",
       cameraStability: creativeDirection.cameraMotion.cameraStability === "natural" || creativeDirection.cameraMotion.cameraStability === "expressive" ? creativeDirection.cameraMotion.cameraStability : "stable",
       subjectMotion: "custom",

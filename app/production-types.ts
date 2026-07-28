@@ -17,19 +17,17 @@ export type RuleChipId = (typeof ruleChipIds)[number];
 
 export type CameraStyleValue =
   | "smooth-cinematic"
-  | "dynamic-energetic"
+  | "dynamic-action"
   | "locked-stable"
   | "character-follow"
-  | "slow-push-in"
-  | "orbit-subject"
   | "handheld-realistic"
-  | "fast-action-camera"
-  | "overhead-top-down"
   | "custom";
 
-export type CameraFramingValue = "automatic" | "wide-shot" | "medium-shot" | "close-up" | "full-body" | "over-the-shoulder";
+export type CameraFramingValue = "automatic" | "wide" | "medium" | "close-up" | "full-body" | "over-the-shoulder";
 export type MovementIntensityValue = "subtle" | "balanced" | "dynamic";
 export type CameraStabilityValue = "stable" | "natural" | "expressive";
+export type MotionEnergyValue = "controlled" | "balanced" | "expressive";
+export type CameraStabilityOverride = "auto" | CameraStabilityValue;
 export type SubjectMotionValue = "natural-controlled" | "smooth-cinematic" | "fast-energetic" | "exaggerated-comedic" | "realistic-physical" | "custom";
 export type MotionQualityRuleId =
   | "smooth-continuous-movement"
@@ -47,6 +45,8 @@ export type CameraMotionState = {
   cameraStyleCustom: string;
   cameraCustomInstructions: string;
   framing: CameraFramingValue;
+  motionEnergy: MotionEnergyValue;
+  cameraStabilityOverride: CameraStabilityOverride;
   movementIntensity: MovementIntensityValue;
   cameraStability: CameraStabilityValue;
   subjectMotion: SubjectMotionValue;
@@ -71,6 +71,8 @@ export const DEFAULT_CAMERA_MOTION: CameraMotionState = {
   cameraStyleCustom: "",
   cameraCustomInstructions: "",
   framing: "automatic",
+  motionEnergy: "balanced",
+  cameraStabilityOverride: "auto",
   movementIntensity: "balanced",
   cameraStability: "stable",
   subjectMotion: "natural-controlled",

@@ -903,11 +903,11 @@ Music Style: ${resolvedMusicStyle}
 Music Presence: ${form.musicStyle === "no-music" ? "No music" : form.simplifiedMusicIntensity}
 Sound Effects Style: ${resolvedSoundEffectsStyle}
 SFX Presence: ${form.sfxIntensity}
-Audio Workflow: ${form.audioMode}
+Audio Workflow: Native-audio mode
 Voice Assignments: ${voiceAssignments}
-Additional Voice Instructions: ${form.customVoiceInstructions.trim() || "None"}
-Additional Music Instructions: ${form.customMusicInstructions.trim() || "None"}
-Additional SFX Instructions: ${form.customSfxInstructions.trim() || "None"}
+Additional Voice Instructions: None
+Additional Music Instructions: None
+Additional SFX Instructions: None
 ${form.voiceMode === "no-spoken-dialogue" ? "Do not generate narration, understandable spoken words, dialogue, or lip-sync. Nonverbal breaths, gasps, giggles, grunts, yelps, effort sounds, music, ambience, and synchronized sound effects remain permitted." : ""}`;
   const cameraMotion = derivedScene.creative.cameraMotion;
   const cameraMotionDirection = `MOTION & CAMERA

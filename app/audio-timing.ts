@@ -87,21 +87,21 @@ export function resolveAudioTiming(form: ProductionForm) {
     music: {
       style: resolveAudioOption(form.musicStyle, form.musicStyleCustom, MUSIC_STYLE_OPTIONS),
       presence: form.musicStyle === "no-music" ? null : form.simplifiedMusicIntensity,
-      customInstructions: form.customMusicInstructions.trim(),
+      customInstructions: "",
     },
     soundEffects: {
       style: resolveAudioOption(form.soundEffectsStylePreset, form.soundEffectsStyleCustom, SOUND_EFFECTS_STYLE_OPTIONS),
       presence: form.sfxIntensity,
-      customInstructions: form.customSfxInstructions.trim(),
+      customInstructions: "",
     },
-    workflow: form.audioMode,
+    workflow: "Native-audio mode",
     voiceAssignments: {
       narrator: assignments.includes("Narrator"),
       hero: assignments.includes("Hero Voice"),
       companions: assignments.includes("Companion Voices"),
       enemies: assignments.includes("Enemy Voices"),
     },
-    customVoiceInstructions: form.customVoiceInstructions.trim(),
+    customVoiceInstructions: "",
     lipSyncEnabled: noSpokenDialogue ? false : form.lipSyncRequired,
   };
 }

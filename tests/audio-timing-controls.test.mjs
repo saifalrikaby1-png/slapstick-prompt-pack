@@ -47,19 +47,14 @@ test("music and SFX controls expose three presence choices and No Music disables
   assert.match(audio, /presence: form\.musicStyle === "no-music" \? null/);
 });
 
-test("custom values validate and Audio settings remain collapsed until requested", () => {
+test("custom values validate without rendering advanced audio options", () => {
   for (const field of ["voiceModeCustom", "musicStyleCustom", "soundEffectsStyleCustom"]) {
     assert.match(audio, new RegExp(field));
   }
-  assert.match(page, /useState\(false\).*audioAdvancedOpen|audioAdvancedOpen, setAudioAdvancedOpen\] = useState\(false\)/);
-  assert.match(panel, /Advanced audio options/);
-  assert.match(panel, /Audio Workflow/);
-  assert.match(panel, /Individual Voice Assignments/);
-  assert.match(panel, /advancedOpen && <section className="audio-advanced-panel"/);
-  const visibleBeforeAdvanced = panel.slice(panel.indexOf("return <section"), panel.indexOf("{advancedOpen &&"));
-  for (const technicalControl of ["Audio Workflow", "Individual Voice Assignments", "Lip-Sync Preference", "Detailed Audio Safeguards"]) {
-    assert.doesNotMatch(visibleBeforeAdvanced, new RegExp(technicalControl));
+  for (const removedControl of ["Advanced audio options", "Audio Workflow", "Individual Voice Assignments", "Lip-Sync Preference", "Custom Voice Instructions", "Custom Music Instructions", "Custom SFX Instructions", "Detailed Audio Safeguards"]) {
+    assert.doesNotMatch(panel, new RegExp(removedControl));
   }
+  assert.doesNotMatch(page, /audioAdvancedOpen|setAudioAdvancedOpen/);
 });
 
 test("new defaults, persistence migration, payload, and prompt are wired", () => {
@@ -69,6 +64,9 @@ test("new defaults, persistence migration, payload, and prompt are wired", () =>
   assert.match(types, /simplifiedMusicIntensity: "balanced"/);
   assert.match(types, /soundEffectsStylePreset: "cartoon-foley"/);
   assert.match(audio, /export function resolveAudioTiming/);
+  assert.match(audio, /workflow: "Native-audio mode"/);
+  assert.equal((audio.match(/customInstructions: ""/g) || []).length, 2);
+  assert.match(audio, /customVoiceInstructions: ""/);
   assert.match(page, /audioTiming: resolveAudioTiming\(form\)/);
   assert.match(engine, /AUDIO & TIMING/);
   assert.match(engine, /Do not generate narration, understandable spoken words, dialogue, or lip-sync/);

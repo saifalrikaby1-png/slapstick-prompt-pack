@@ -14,6 +14,7 @@ import {
   LegacySavedPack,
   ProductionForm,
   ProductionPack,
+  ProductionTimelineBeat,
   RequestedOutput,
   ProjectPreset,
   QualityFinding,
@@ -80,6 +81,7 @@ import { MarketingHome } from "./marketing-home";
 import { getVideoStyle, VideoStyleId } from "./video-styles";
 import { findProductionRecord, markProductionFailed, upsertProductionRecord } from "./production-records";
 import { optimizePromptPackage } from "./prompt-quality";
+import { buildAutomaticTimeline, formatTimelineTime, validateProductionTimeline } from "./production-format";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -99,7 +101,7 @@ const roles: CharacterRole[] = ["Hero", "Companion", "Enemy"];
 type OutputSelectionMode = "custom" | "fullPack";
 type CreativeGenerationMode = "ai" | "demo";
 type IdeaCreationMethod = "manual" | "ai";
-type WorkflowTab = "outputs" | "videoIdea" | "characters" | "setup" | "generate" | "library";
+type WorkflowTab = "outputs" | "videoIdea" | "productionFormat" | "characters" | "setup" | "generate" | "library";
 type CreativeSuggestionKind = CreativeAssetKind | "title";
 type CreativeSuggestion = { name?: string; description?: string; title?: string };
 type RecentSuggestions = Record<CreativeSuggestionKind, CreativeSuggestion[]>;
@@ -722,6 +724,8 @@ export function ProductionWorkspace({ styleId, productionId }: { styleId?: Video
   const [audioTimingErrors, setAudioTimingErrors] = useState<Partial<Record<"voiceMode" | "musicStyle" | "soundEffectsStyle", string>>>({});
   const [motionRulesExpanded, setMotionRulesExpanded] = useState(false);
   const [moreCreativeRulesOpen, setMoreCreativeRulesOpen] = useState(false);
+  const [timelineRegeneration, setTimelineRegeneration] = useState(0);
+  const [expandedTimelineBeatIds, setExpandedTimelineBeatIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const libraryImportRef = useRef<HTMLInputElement>(null);
   const presetImportRef = useRef<HTMLInputElement>(null);
@@ -906,6 +910,17 @@ export function ProductionWorkspace({ styleId, productionId }: { styleId?: Video
   const productionCharacters = activeIds
     .map((id) => characters.find((profile) => profile.id === id))
     .filter((entry): entry is CharacterProfile => Boolean(entry));
+  const automaticTimeline = useMemo(() => buildAutomaticTimeline({
+    durationSeconds: Number(form.duration) || 15,
+    videoModel: selectedModel(form),
+    characterCount: productionCharacters.length,
+    pacing: resolveCreativeDirection(form.creativeDirection).pacingStyle,
+    actionComplexity: form.motionLevel === "Safe" ? "simple" : form.motionLevel === "Ambitious" ? "complex" : "moderate",
+    endingType: form.endingPayoff || form.payoffName || "payoff",
+    variation: timelineRegeneration,
+  }), [form, productionCharacters.length, timelineRegeneration]);
+  const productionTimeline = form.timingStructureMode === "custom" ? form.productionTimeline : automaticTimeline;
+  const timelineValidation = validateProductionTimeline(productionTimeline, Number(form.duration) || 15);
   const hero = productionCharacters.find((profile) => profile.role === "Hero");
   const viewedCharacter = characters[characterIndex] || characters[0];
   const qualityReport = useMemo(
@@ -946,9 +961,11 @@ export function ProductionWorkspace({ styleId, productionId }: { styleId?: Video
     productionCharacters.filter((profile) => profile.role === "Hero").length === 1,
   );
   const conceptComplete = Boolean(form.videoTitle.trim() && effectiveRequestedOutputs.length > 0);
+  const productionFormatComplete = Boolean(form.videoModel && form.duration && form.videoRatio && timelineValidation.valid);
   const workflowSteps = [
-    { id: "concept", tabId: "workflow-tab-videoIdea", title: "Concept", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
-    { id: "cast", tabId: "workflow-tab-characters", title: "Cast", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
+    { id: "concept", tabId: "workflow-tab-videoIdea", title: "Complete Video Idea", status: activeWorkflowTab === "videoIdea" ? "active" : conceptComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("videoIdea") },
+    { id: "format", tabId: "workflow-tab-productionFormat", title: "Production Format", status: activeWorkflowTab === "productionFormat" ? "active" : productionFormatComplete ? "completed" : "pending", activate: () => setActiveWorkflowTab("productionFormat") },
+    { id: "cast", tabId: "workflow-tab-characters", title: "Characters", status: activeWorkflowTab === "characters" ? "active" : productionCharacters.length > 0 ? "completed" : "pending", activate: () => setActiveWorkflowTab("characters") },
     { id: "scene", tabId: "workflow-tab-setup", title: "Creative Direction", status: activeWorkflowTab === "setup" && productionTab === "core" ? "active" : isReady ? "completed" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("core"); } },
     { id: "motion", tabId: undefined, title: "Motion & Camera", status: activeWorkflowTab === "setup" && productionTab === "motion" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("motion"); } },
     { id: "audio", tabId: undefined, title: "Audio & Timing", status: activeWorkflowTab === "setup" && productionTab === "audio" ? "active" : "pending", activate: () => { setActiveWorkflowTab("setup"); setProductionTab("audio"); } },
@@ -967,6 +984,40 @@ export function ProductionWorkspace({ styleId, productionId }: { styleId?: Video
 
   function update<K extends keyof ProductionForm>(key: K, value: ProductionForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function setTimingStructureMode(timingStructureMode: ProductionForm["timingStructureMode"]) {
+    setForm((current) => ({ ...current, timingStructureMode, productionTimeline: timingStructureMode === "custom" ? { ...productionTimeline, mode: "custom" } : automaticTimeline }));
+  }
+
+  function updateTimelineBeat(id: string, patch: Partial<ProductionTimelineBeat>) {
+    setForm((current) => ({ ...current, productionTimeline: { ...current.productionTimeline, mode: "custom", beats: current.productionTimeline.beats.map((beat) => beat.id === id ? { ...beat, ...patch } : beat) } }));
+  }
+
+  function addTimelineBeat() {
+    setForm((current) => {
+      const beats = current.productionTimeline.beats;
+      const previous = beats[beats.length - 1];
+      const startSeconds = previous?.endSeconds || 0;
+      const durationSeconds = Number(current.duration) || 15;
+      const beat: ProductionTimelineBeat = { id: crypto.randomUUID(), startSeconds, endSeconds: Math.min(durationSeconds, startSeconds + 1), label: "New beat", visualAction: "" };
+      return { ...current, productionTimeline: { ...current.productionTimeline, mode: "custom", beats: [...beats, beat] } };
+    });
+  }
+
+  function removeTimelineBeat(id: string) {
+    setForm((current) => ({ ...current, productionTimeline: { ...current.productionTimeline, beats: current.productionTimeline.beats.filter((beat) => beat.id !== id) } }));
+  }
+
+  function moveTimelineBeat(id: string, direction: -1 | 1) {
+    setForm((current) => {
+      const beats = [...current.productionTimeline.beats];
+      const index = beats.findIndex((beat) => beat.id === id);
+      const destination = index + direction;
+      if (index < 0 || destination < 0 || destination >= beats.length) return current;
+      [beats[index], beats[destination]] = [beats[destination], beats[index]];
+      return { ...current, productionTimeline: { ...current.productionTimeline, beats } };
+    });
   }
 
   function updateAudioTiming(patch: Partial<ProductionForm>) {
@@ -1590,6 +1641,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setError("Select at least one output to generate.");
       return;
     }
+    if (form.timingStructureMode === "custom" && !timelineValidation.valid) {
+      setError(`Fix the custom timeline before generation: ${timelineValidation.errors[0]}`);
+      setActiveWorkflowTab("productionFormat");
+      return;
+    }
     const directionErrors: typeof creativeDirectionErrors = {};
     if (form.creativeDirection.visualMood === "custom" && !form.creativeDirection.visualMoodCustom.trim()) directionErrors.visualMood = "Describe your custom visual mood.";
     if (form.creativeDirection.cameraMotion.cameraStyle === "custom" && !form.creativeDirection.cameraMotion.cameraStyleCustom.trim()) directionErrors.cameraStyle = "Describe your custom camera style.";
@@ -1623,10 +1679,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     setError("");
     setNotice("");
     setIsGenerating(true);
+    const persistedForm = { ...form, productionTimeline };
     const generatingRecord = upsertProductionRecord({
       id: productionIdRef.current || undefined,
       status: "generating",
-      form,
+      form: persistedForm,
       characterProfiles: productionCharacters,
       pack: pack || undefined,
       qualityReport: qualityReport || undefined,
@@ -1642,7 +1699,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     try {
       const selectedFields = fieldsForRequestedOutputs(outputsForGeneration);
       const previousPack = pack;
-      const generationForm = formForGeneration();
+      const generationForm = { ...formForGeneration(), timingStructureMode: form.timingStructureMode, productionTimeline };
       // Demo compatibility contract: mode === "demo" ? generateDemoPack
       const nextPartial = mode === "demo"
         ? Object.fromEntries(Object.entries(generateDemoPack({ ...form, ...generationForm } as ProductionForm, characters))
@@ -1654,6 +1711,11 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
               body: JSON.stringify({
                 action: "generate",
                 form: generationForm,
+                productionFormat: {
+                  videoModel: selectedModel(form), durationSeconds: Number(form.duration), videoRatio: form.videoRatio,
+                  generationMode: mode, timingStructureMode: form.timingStructureMode, timeline: productionTimeline,
+                  resolution: form.resolution,
+                },
                 creativeDirection: resolveCreativeDirection(form.creativeDirection),
                 audioTiming: resolveAudioTiming(form),
                 activeCharacterIds: activeIds,
@@ -1676,10 +1738,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       };
       const rawNextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       const nextGeneratedOutputs = [...new Set([...generatedOutputs, ...outputsForGeneration])];
-      const promptOptimization = optimizePromptPackage(rawNextPack, form, productionCharacters, mode, nextGeneratedOutputs);
+      const promptOptimization = optimizePromptPackage(rawNextPack, persistedForm, productionCharacters, mode, nextGeneratedOutputs);
       const nextPack = promptOptimization.pack;
       const nextQualityReport = nextGeneratedOutputs.length === requestedOutputValues.length
-        ? inspectProductionPack(nextPack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets)
+        ? inspectProductionPack(nextPack, persistedForm, characters, savedPacks.map((saved) => saved.title), creativeAssets)
         : {
             score: 0,
             findings: [{
@@ -1696,7 +1758,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       upsertProductionRecord({
         id: generatingRecord.id,
         status: "completed",
-        form,
+        form: persistedForm,
         characterProfiles: productionCharacters,
         pack: nextPack,
         qualityReport: nextQualityReport,
@@ -2268,7 +2330,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           <div className="studio-workflow-heading">Production</div>
           <nav className="studio-workflow-list" aria-label="Production workflow">
             {workflowSteps.map((step, index) => <button key={step.id} id={step.tabId} type="button" className={`studio-workflow-step is-${step.status}`} onClick={step.activate} aria-current={step.status === "active" ? "step" : undefined}>
-              <span className="studio-workflow-number">{String(index + 2).padStart(2, "0")}</span>
+              <span className="studio-workflow-number">{String(index + 1).padStart(2, "0")}</span>
               <span className="studio-workflow-copy"><strong>{step.title}</strong><small>{step.status === "completed" ? "Ready" : step.status === "active" ? "Open" : "Configure"}</small></span>
               <span className="studio-workflow-status-icon" aria-hidden="true">{step.status === "completed" ? "✓" : null}</span>
             </button>)}
@@ -2338,7 +2400,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
           </section>
 
           }<section className="production-section form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
-            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></header>
+            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">01</span><div className="production-section-heading-copy"><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></header>
             <div className="production-section-content concept-section">
               <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
               <section className="concept-field concept-output-package" aria-labelledby="concept-output-package-title">
@@ -2377,7 +2439,24 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
               </details>
             </div>
-            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" disabled={!conceptComplete} onClick={() => setActiveWorkflowTab("characters")}><span>Continue to Cast</span><span aria-hidden="true">→</span></button></footer>
+            <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" disabled={!conceptComplete} onClick={() => setActiveWorkflowTab("productionFormat")}><span>Continue to Production Format</span><span aria-hidden="true">→</span></button></footer>
+          </section>
+
+          <section className="production-section form-section production-format-step" id="production-format" role="tabpanel" aria-labelledby="workflow-tab-productionFormat" hidden={activeWorkflowTab !== "productionFormat"}>
+            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Production Format</h2><p>Choose the target model, duration, format, and timing structure used to build the production prompt.</p></div></header>
+            <div className="production-format-panel">
+              <div className="production-format-grid">
+                <label className="production-format-field"><span>Video Model</span><select value={form.videoModel} onChange={(event) => update("videoModel", event.target.value)}>{videoModels.map((value) => <option key={value}>{value}</option>)}</select><small>Select the AI video model this prompt will target.</small>{form.videoModel === "Custom model" && <input aria-label="Custom video model" value={form.customVideoModel} onChange={(event) => update("customVideoModel", event.target.value)} placeholder="Custom model" />}</label>
+                <label className="production-format-field"><span>Video Duration</span><select value={form.duration} onChange={(event) => update("duration", event.target.value)}>{durations.map((value) => <option key={value} value={value}>{value} seconds</option>)}</select><small>Controls action density, pacing, and timeline beats.</small></label>
+                <fieldset className="production-format-field production-format-ratio"><legend>Video Ratio</legend>{globalRatioControl}<small>Used by the video prompt, Start Frame, and End Frame.</small></fieldset>
+                <fieldset className="production-format-field"><legend>Generation Mode</legend><div className="timing-mode-control" role="radiogroup" aria-label="Generation Mode"><button type="button" role="radio" aria-checked={mode === "ai"} onClick={() => setMode("ai")}>AI Mode</button><button type="button" role="radio" aria-checked={mode === "demo"} onClick={() => setMode("demo")}>Demo Mode</button></div><small>Choose AI generation or deterministic Demo Mode.</small></fieldset>
+                <fieldset className="production-format-field"><legend>Timing Structure</legend><div className="timing-mode-control" role="radiogroup" aria-label="Timing Structure"><button type="button" role="radio" aria-checked={form.timingStructureMode === "automatic"} onClick={() => setTimingStructureMode("automatic")}>Automatic</button><button type="button" role="radio" aria-checked={form.timingStructureMode === "custom"} onClick={() => setTimingStructureMode("custom")}>Custom</button></div><small>Build the timed action plan automatically or define it manually.</small></fieldset>
+              </div>
+              <p className="model-capability-notice">Model-specific capabilities are preserved by the existing {selectedModel(form)} adapter. No unsupported capability is added by this screen.</p>
+              {form.timingStructureMode === "automatic" ? <section className="automatic-timeline-preview" aria-live="polite"><header><div><h3>Automatic Timeline</h3><p>The action timing is optimized for the selected duration and model.</p></div><button type="button" className="production-secondary-button" onClick={() => setTimelineRegeneration((value) => value + 1)}>Regenerate Timing</button></header><div className="timeline-preview-list">{productionTimeline.beats.map((beat) => <div className="timeline-preview-beat" key={beat.id}><time>{formatTimelineTime(beat.startSeconds)}–{formatTimelineTime(beat.endSeconds)}</time><strong>{beat.label}</strong><span>{beat.visualAction}</span></div>)}</div></section>
+                : <section className="custom-timeline-editor" aria-live="polite"><header><div><h3>Custom Timeline</h3><p>Define continuous chronological beats covering the full {form.duration} seconds.</p></div><button type="button" className="production-secondary-button" onClick={addTimelineBeat}>Add Beat</button></header>{productionTimeline.beats.map((beat, index) => <article className="custom-timeline-beat" key={beat.id}><div className="custom-timeline-beat-row"><label>Start<input type="number" min="0" max={form.duration} step=".1" value={beat.startSeconds} aria-label={`Beat ${index + 1} start time`} onChange={(event) => updateTimelineBeat(beat.id, { startSeconds: Number(event.target.value) })} /></label><label>End<input type="number" min="0" max={form.duration} step=".1" value={beat.endSeconds} aria-label={`Beat ${index + 1} end time`} onChange={(event) => updateTimelineBeat(beat.id, { endSeconds: Number(event.target.value) })} /></label><label>Label<input value={beat.label} aria-label={`Beat ${index + 1} label`} onChange={(event) => updateTimelineBeat(beat.id, { label: event.target.value })} /></label><div className="custom-timeline-actions"><button type="button" disabled={index === 0} onClick={() => moveTimelineBeat(beat.id, -1)}>Move up</button><button type="button" disabled={index === productionTimeline.beats.length - 1} onClick={() => moveTimelineBeat(beat.id, 1)}>Move down</button><button type="button" onClick={() => removeTimelineBeat(beat.id)}>Remove</button></div></div><label>Visual action<textarea value={beat.visualAction} aria-label={`Beat ${index + 1} visual action`} onChange={(event) => updateTimelineBeat(beat.id, { visualAction: event.target.value })} /></label><button type="button" aria-expanded={expandedTimelineBeatIds.includes(beat.id)} onClick={() => setExpandedTimelineBeatIds((current) => current.includes(beat.id) ? current.filter((id) => id !== beat.id) : [...current, beat.id])}>Advanced Timing Details</button>{expandedTimelineBeatIds.includes(beat.id) && <div className="custom-timeline-advanced"><label>Camera direction<textarea value={beat.cameraDirection || ""} onChange={(event) => updateTimelineBeat(beat.id, { cameraDirection: event.target.value })} /></label><label>Music direction<textarea value={beat.musicDirection || ""} onChange={(event) => updateTimelineBeat(beat.id, { musicDirection: event.target.value })} /></label><label>Sound effects direction<textarea value={beat.soundEffectsDirection || ""} onChange={(event) => updateTimelineBeat(beat.id, { soundEffectsDirection: event.target.value })} /></label></div>}</article>)}{!timelineValidation.valid && <div className="timeline-validation-errors" role="alert"><strong>Fix the timeline before generation:</strong><ul>{timelineValidation.errors.map((message) => <li key={message}>{message}</li>)}</ul></div>}</section>}
+            </div>
+            <footer className="scene-setup-footer"><button type="button" onClick={() => setActiveWorkflowTab("videoIdea")}>Back to Complete Video Idea</button><button className="scene-save-continue" type="button" disabled={!productionFormatComplete} onClick={() => setActiveWorkflowTab("characters")}><span>Continue to Characters</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
           <section className="production-section form-section characters-step" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
@@ -2427,7 +2506,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 </div>
               </div>
             </section>}
-            <footer className="characters-step-navigation"><button type="button" onClick={() => setActiveWorkflowTab("videoIdea")}><span aria-hidden="true">←</span><span>Back to Concept</span></button><button type="button" className="production-emerald-gold-cta" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("core"); }}><span>Continue to Creative Direction</span><span aria-hidden="true">→</span></button></footer>
+            <footer className="characters-step-navigation"><button type="button" onClick={() => setActiveWorkflowTab("productionFormat")}><span aria-hidden="true">←</span><span>Back to Production Format</span></button><button type="button" className="production-emerald-gold-cta" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("core"); }}><span>Continue to Creative Direction</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
           <section className="production-section form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>
@@ -2520,6 +2599,9 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 <span><small>Video ratio</small><strong>{form.videoRatio}</strong></span>
                 <span><small>Outputs</small><strong>{effectiveRequestedOutputs.length} selected</strong></span>
                 <span><small>Generation mode</small><strong>{mode === "ai" ? "AI Mode" : "Demo Mode"}</strong></span>
+                <span><small>Timing structure</small><strong>{form.timingStructureMode === "automatic" ? "Automatic Timing" : "Custom Timing"}</strong></span>
+                <span><small>Timeline beats</small><strong>{productionTimeline.beats.length} beats</strong></span>
+                {form.resolution && <span><small>Resolution</small><strong>{form.resolution}</strong></span>}
               </div>
               <button className="production-emerald-gold-cta" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating Production Pack…" : "Generate Production Pack"}</button>
             </ProductionSection>}

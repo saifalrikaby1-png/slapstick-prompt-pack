@@ -21,6 +21,7 @@ import {
   requestedOutputValues,
   ruleChipIds,
 } from "./production-types";
+import { normalizeProductionFormat } from "./production-format";
 import {
   inferMusicStyle,
   inferSoundEffectsStyle,
@@ -490,6 +491,14 @@ export function migrateForm(value: unknown): ProductionForm {
       .replace(/^Hailuo$/, "Hailuo / MiniMax"),
     customVideoModel: stringValue(item.customVideoModel),
     duration: stringValue(item.duration, defaultProductionForm.duration).replace(/\s*seconds?$/i, ""),
+    timingStructureMode: item.timingStructureMode === "custom" ? "custom" : "automatic",
+    productionTimeline: normalizeProductionFormat({
+      ...(item as Partial<ProductionForm>),
+      duration: stringValue(item.duration, defaultProductionForm.duration).replace(/\s*seconds?$/i, ""),
+      videoModel: stringValue(item.videoModel, defaultProductionForm.videoModel),
+      videoRatio: stringValue(item.videoRatio, stringValue(item.ratio, defaultProductionForm.videoRatio)).split(" ")[0],
+    }).timeline,
+    resolution: stringValue(item.resolution) || undefined,
     visualStyle: stringValue(item.visualStyle, stringValue(item.style, defaultProductionForm.visualStyle)),
     customVisualStyle: stringValue(item.customVisualStyle),
     ultraRetentionMode: boolValue(item.ultraRetentionMode, true),
@@ -997,7 +1006,10 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
-  const finalTimeline = adaptedTimeline;
+  const configuredTimeline = form.productionTimeline?.beats?.length
+    ? form.productionTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} — ${beat.label}: ${beat.visualAction} Action owner: ${heroName}. ${beat.characterAction || ""} ${beat.cameraDirection || ""} ${beat.musicDirection || ""} ${beat.soundEffectsDirection || ""} ${beat.continuityNote || ""}`.replace(/\s+/g, " ").trim()).join("\n")
+    : "";
+  const finalTimeline = configuredTimeline || adaptedTimeline;
   const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use wide or medium-wide visibility, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. Start active; do not show the payoff. This is the complete authorized scene inventory. Apply Creative Direction from frame zero.`;
   const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object supported at its final position in a stable completed pose, with contact shadows, completed settling, and matched perspective. Preserve the exact authorized inventory; nothing else appears.`;
   const generatedPack: ProductionPack = {

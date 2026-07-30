@@ -178,7 +178,7 @@ test("results labels use category counts and never hide active caps", () => {
 
 test("Demo Mode and AI Mode share the corrected analyzer and persistence path", () => {
   assert.match(source, /mode: "demo" \| "ai"/);
-  assert.match(page, /optimizePromptPackage\(rawNextPack, form, productionCharacters, mode/);
+  assert.match(page, /optimizePromptPackage\(rawNextPack, persistedForm, productionCharacters, mode/);
   assert.match(results, /maximizePromptQuality\(production\.pack as ProductionPack, production\.form, production\.characterProfiles, production\.generationMode/);
   assert.match(results, /production\.generationMode === "ai"/);
   assert.match(results, /promptQuality: repair\.newAnalysis/);

@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import { CharacterProfile, ProductionPack, RequestedOutput } from "../../../production-types";
 import { findProductionRecord, ProductionRecord, saveProductionRecord } from "../../../production-records";
 import { analyzePromptPackage, changedPromptSections, isRepairImprovement, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
+import { normalizeProductionFormat } from "../../../production-format";
 
 const RESULT_TAB_ORDER = ["character", "frames", "complete-production-prompt", "prompt-quality", "timeline", "negative-prompt"] as const;
 type ResultTabId = (typeof RESULT_TAB_ORDER)[number];
@@ -203,6 +204,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   async function downloadWord() {
     if (!production) return;
     const pack = production.pack;
+    const exportedFormat = normalizeProductionFormat({ ...production.form, generationMode: production.generationMode });
     const children: Paragraph[] = [
       new Paragraph({ heading: HeadingLevel.HEADING_1, text: "Production Summary" }),
       new Paragraph(`Production Title: ${production.title}`),
@@ -210,6 +212,10 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
       new Paragraph(`Duration: ${production.form.duration} seconds`),
       new Paragraph(`Video model: ${production.videoModel}`),
       new Paragraph(`Video ratio: ${production.form.videoRatio}`),
+      new Paragraph(`Generation mode: ${production.generationMode === "ai" ? "AI Mode" : "Demo Mode"}`),
+      new Paragraph(`Timing structure: ${production.form.timingStructureMode === "custom" ? "Custom Timing" : "Automatic Timing"}`),
+      new Paragraph(`Timing beats: ${exportedFormat.timeline.beats.length}`),
+      ...(production.form.resolution ? [new Paragraph(`Resolution: ${production.form.resolution}`)] : []),
     ];
     const addSection = (title: string, content?: string) => {
       if (!content?.trim()) return;
@@ -240,6 +246,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   if (production.status === "failed") return <main className="production-results-page"><section className="results-failure-state"><h1>We could not complete this production pack.</h1><p>{production.error?.message || "The generation could not be completed. Your production settings are still saved."}</p><div className="results-failure-actions"><Link href={`/production/${production.id}/edit`} className="production-emerald-gold-cta">Try Again</Link><Link href={`/production/${production.id}/edit`} className="production-secondary-button">Return to Production</Link></div></section></main>;
 
   const pack = production.pack;
+  const productionFormat = normalizeProductionFormat({ ...production.form, generationMode: production.generationMode });
   const completePrompt = buildCompleteProductionPrompt(pack);
   const allCharacters = buildAllCharacterDetails(production.characterProfiles);
   const bothFrames = buildBothFrames(pack);
@@ -256,7 +263,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
         {selectedTab === "timeline" && <section className="results-single-viewer"><header className="results-content-header"><div><p className="results-output-eyebrow">TIMELINE</p><h2>Action Timeline</h2></div><button type="button" className="production-secondary-button" onClick={() => copyText(pack.videoTimeline || "", "Timeline copied.")}>Copy Timeline</button></header><div className="results-output-content">{pack.videoTimeline}</div></section>}
         {selectedTab === "prompt-quality" && production.promptQuality && <PromptQualityPanel analysis={production.promptQuality} onMaximize={handleMaximizePromptQuality} isMaximizing={isMaximizing} lastRepair={production.lastPromptQualityRepair} />}
       </section>
-      <aside className="results-summary-sidebar"><h2>Production Summary</h2><SummaryItem label="Title" value={production.title} /><SummaryItem label="Characters" value={`${production.characterProfiles.length}`} /><SummaryItem label="Character names" value={production.characterProfiles.map((character) => character.shortName).join(", ") || "None"} /><SummaryItem label="Duration" value={`${production.form.duration} seconds`} /><SummaryItem label="Model" value={production.videoModel} /><SummaryItem label="Ratio" value={production.form.videoRatio} /><SummaryItem label="Outputs" value={`${(production.generatedOutputs || []).filter((output) => output !== "videoTitle").length} generated`} />{production.promptQuality && <button type="button" className="results-quality-summary-link" onClick={() => setActiveTab("prompt-quality")}><span>Prompt Quality</span><strong>{production.promptQuality.score}% — {production.promptQuality.label}</strong></button>}<Link href={`/production/${production.id}/edit`} className="production-secondary-button">Edit Production</Link></aside>
+      <aside className="results-summary-sidebar"><h2>Production Summary</h2><SummaryItem label="Title" value={production.title} /><SummaryItem label="Characters" value={`${production.characterProfiles.length}`} /><SummaryItem label="Character names" value={production.characterProfiles.map((character) => character.shortName).join(", ") || "None"} /><h2>Production Specifications</h2><SummaryItem label="Video Model" value={productionFormat.videoModel} /><SummaryItem label="Duration" value={`${productionFormat.durationSeconds} seconds`} /><SummaryItem label="Video Ratio" value={productionFormat.videoRatio} /><SummaryItem label="Generation Mode" value={productionFormat.generationMode === "ai" ? "AI Mode" : "Demo Mode"} /><SummaryItem label="Timing Structure" value={productionFormat.timingStructureMode === "custom" ? "Custom Timing" : "Automatic Timing"} /><SummaryItem label="Timeline beats" value={`${productionFormat.timeline.beats.length}`} />{productionFormat.resolution && <SummaryItem label="Resolution" value={productionFormat.resolution} />}<SummaryItem label="Outputs" value={`${(production.generatedOutputs || []).filter((output) => output !== "videoTitle").length} generated`} />{production.promptQuality && <button type="button" className="results-quality-summary-link" onClick={() => setActiveTab("prompt-quality")}><span>Prompt Quality</span><strong>{production.promptQuality.score}% — {production.promptQuality.label}</strong></button>}<Link href={`/production/${production.id}/edit`} className="production-secondary-button">Edit Production</Link></aside>
     </div>
     <footer className="results-bottom-actions"><Link href={`/production/${production.id}/edit`} className="production-secondary-button">Regenerate Selected Output</Link><Link href="/production/new" className="production-emerald-gold-cta">Generate Another Pack</Link></footer>
   </main>;

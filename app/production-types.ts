@@ -1,4 +1,11 @@
 export type GeneratorMode = "demo" | "ai";
+export type TimingStructureMode = "automatic" | "custom";
+export type ProductionTimelineBeat = {
+  id: string; startSeconds: number; endSeconds: number; label: string; visualAction: string;
+  characterAction?: string; cameraDirection?: string; musicDirection?: string;
+  soundEffectsDirection?: string; continuityNote?: string;
+};
+export type ProductionTimeline = { mode: TimingStructureMode; durationSeconds: number; beats: ProductionTimelineBeat[] };
 
 export type CharacterRole = "Hero" | "Enemy" | "Companion";
 
@@ -183,6 +190,9 @@ export type ProductionForm = {
   videoModel: string;
   customVideoModel: string;
   duration: string;
+  timingStructureMode: TimingStructureMode;
+  productionTimeline: ProductionTimeline;
+  resolution?: string;
   visualStyle: string;
   customVisualStyle: string;
   ultraRetentionMode: boolean;
@@ -362,6 +372,8 @@ export const defaultProductionForm: ProductionForm = {
   videoModel: "Seedance",
   customVideoModel: "",
   duration: "15",
+  timingStructureMode: "automatic",
+  productionTimeline: { mode: "automatic", durationSeconds: 15, beats: [] },
   visualStyle: "Cinematic 3D family animation",
   customVisualStyle: "",
   ultraRetentionMode: true,

@@ -1,4 +1,5 @@
-import type { CharacterProfile, ProductionForm, ProductionPack } from "./production-types";
+import type { CharacterProfile, ProductionForm, ProductionPack, ProductionTimeline } from "./production-types";
+import { normalizeProductionFormat, validateProductionTimeline } from "./production-format";
 
 export type PromptQualityLevel = "maximum" | "expert" | "production-ready" | "needs-refinement" | "major-issues";
 export type PromptQualityStatus = "pass" | "warning" | "fail";
@@ -51,6 +52,7 @@ export type PromptQualityContext = {
   mode: "demo" | "ai"; selectedCharacters: CharacterProfile[]; durationSeconds: number;
   videoRatio: string; videoModel: string; videoType: string; voiceMode: string;
   musicEnabled: boolean; selectedOutputTypes: string[];
+  timingStructureMode: "automatic" | "custom"; timeline: ProductionTimeline;
 };
 export type PromptQualityRepairResult = {
   previousScore: number; newScore: number; previousAnalysis: PromptQualityAnalysis; newAnalysis: PromptQualityAnalysis;
@@ -234,6 +236,7 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   const namesInLock = allNames(pack.videoLock, context.selectedCharacters);
   const frameNames = context.selectedCharacters.length === 0 || context.selectedCharacters.some((character) => contains(`${pack.startFramePrompt}\n${pack.endFramePrompt}`, [character.shortName]));
   const actionDensity = calculateActionDensity(pack.videoTimeline, context.durationSeconds);
+  const timelineValidation = validateProductionTimeline(context.timeline, context.durationSeconds);
   const promptBalance = calculatePromptBalanceScore(pack, context.selectedCharacters.map((character) => character.shortName));
   const noDialogueConflict = /no spoken dialogue/i.test(context.voiceMode) && /\b(?:says|speaks|dialogue:)\b/i.test(`${pack.videoTimeline}\n${pack.soundEffects}`);
   const characterIdentityConflict = context.selectedCharacters.some((character) => {
@@ -244,7 +247,7 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   const checks: PromptQualityCheck[] = [
     makeCheck("character-consistency", namesInCharacter && namesInLock && !characterIdentityConflict, (namesInCharacter || namesInLock) && !characterIdentityConflict, namesInCharacter && namesInLock && !characterIdentityConflict ? "Every selected character and role is consistently represented." : characterIdentityConflict ? "One or more character identities conflict across the prompt package." : "One or more selected character identities are missing from Character information or Video Lock.", ["characters", "video-lock"], "critical", characterIdentityConflict ? "character-identity-conflict-core" : "character-consistency-core"),
     makeCheck("video-lock", Boolean(pack.videoLock.trim()) && ratioPresent && durationPresent && /continu|lock|immutable/i.test(pack.videoLock), Boolean(pack.videoLock.trim()), "Video Lock must define immutable identities, ratio, duration, and frame continuity.", ["video-lock"], "critical"),
-    makeCheck("action-flow", Boolean(pack.videoTimeline.trim()) && actionDensity <= 4 && /(?:opening|begin|start|0:00)/i.test(pack.videoTimeline) && /(?:payoff|final|end)/i.test(pack.videoTimeline), Boolean(pack.videoTimeline.trim()), "Video Prompt needs a clear opening hook, chronological action, and reachable payoff at duration-appropriate density.", ["video-prompt", "timeline"]),
+    makeCheck("action-flow", Boolean(pack.videoTimeline.trim()) && timelineValidation.valid && actionDensity <= 4 && /(?:opening|begin|start|0:00)/i.test(pack.videoTimeline) && /(?:payoff|final|end)/i.test(pack.videoTimeline), Boolean(pack.videoTimeline.trim()) && timelineValidation.errors.length <= 1, timelineValidation.valid ? "Video Prompt needs a clear opening hook, chronological action, and reachable payoff at duration-appropriate density." : `Timeline coverage is invalid: ${timelineValidation.errors.join(" ")}`, ["video-prompt", "timeline"]),
     makeCheck("frame-continuity", Boolean(pack.startFramePrompt.trim() && pack.endFramePrompt.trim()) && frameNames && ratioPresent, Boolean(pack.startFramePrompt.trim() || pack.endFramePrompt.trim()), "Start and End Frames must preserve the selected cast, scene continuity, and global ratio.", ["start-frame", "end-frame"], "critical"),
     makeCheck("camera-motion", /camera|framing|shot|track|locked/i.test(`${pack.videoLock}\n${pack.videoTimeline}`) && /motion|movement|move/i.test(pack.videoTimeline), /camera|shot/i.test(complete), "Camera direction and subject motion must be concrete, readable, and keep the main action visible.", ["video-lock", "video-prompt"]),
     makeCheck("physical-continuity", /gravity|ground|contact|ownership|no teleport|physical|screen direction/i.test(complete), /impact|collision|holds|grips/i.test(complete), "Add concise safeguards for gravity, ground contact, object ownership, impacts, and position continuity.", ["video-prompt", "video-rules"]),
@@ -280,7 +283,8 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
 }
 
 export function promptQualityContext(form: ProductionForm, characters: CharacterProfile[], mode: "demo" | "ai", selectedOutputTypes: string[]): PromptQualityContext {
-  return { mode, selectedCharacters: characters, durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel === "Custom model" ? form.customVideoModel : form.videoModel, videoType: form.videoStyleId || form.visualStyle, voiceMode: form.voiceLayers.join(", "), musicEnabled: !form.noMusic && form.musicStyle !== "no-music", selectedOutputTypes };
+  const format = normalizeProductionFormat({ ...form, generationMode: mode });
+  return { mode, selectedCharacters: characters, durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel === "Custom model" ? form.customVideoModel : form.videoModel, videoType: form.videoStyleId || form.visualStyle, voiceMode: form.voiceLayers.join(", "), musicEnabled: !form.noMusic && form.musicStyle !== "no-music", selectedOutputTypes, timingStructureMode: format.timingStructureMode, timeline: format.timeline };
 }
 
 function safelyDeduplicatePrompt(pack: ProductionPack, findings: PromptRepetitionFinding[]) {

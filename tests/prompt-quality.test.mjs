@@ -37,7 +37,7 @@ test("deterministic analyzer checks order, repetition, density, names, ratio, an
 });
 
 test("automatic repair runs below 90 for no more than two passes and retains only improvements", () => {
-  assert.match(source, /pass < Math\.min\(2, maxPasses\) && bestAnalysis\.score < 90/);
+  assert.match(source, /pass < Math\.min\(2, maxPasses\) && \(bestAnalysis\.score < 90 \|\| bestAnalysis\.promptBalance\.score < 5\.5\)/);
   assert.match(source, /if \(next\.score <= bestAnalysis\.score \|\| next\.criticalIssueCount > bestAnalysis\.criticalIssueCount\) break/);
   assert.match(page, /optimizePromptPackage\(rawNextPack/);
   assert.match(page, /promptQualityReason:.*"automatic-repair"/s);
@@ -62,7 +62,54 @@ test("Prompt Quality panel, summary, persistence, and Word export use prompt-onl
 });
 
 test("older saved packs are analyzed without automatic rewrite", () => {
-  assert.match(results, /record && !record\.promptQuality && record\.status === "completed"/);
+  assert.match(results, /record && \(!record\.promptQuality \|\| record\.promptQuality\.analysisVersion !== "1\.1\.0"\) && record\.status === "completed"/);
   assert.match(results, /analyzePromptPackage\(record\.pack/);
-  assert.doesNotMatch(results.slice(results.indexOf("record && !record.promptQuality"), results.indexOf("setProduction(record)")), /repairPromptPackage|maximizePromptQuality/);
+  assert.doesNotMatch(results.slice(results.indexOf("record && (!record.promptQuality"), results.indexOf("setProduction(record)")), /repairPromptPackage|maximizePromptQuality/);
+});
+
+test("Prompt Balance uses semantic repetition classifications and a five-part eight-point score", () => {
+  for (const type of ["exact-duplicate", "near-duplicate", "necessary-reinforcement", "structural-label", "entity-reference", "harmful-repetition"]) assert.match(source, new RegExp(type));
+  for (const part of ["repetitionControl", "lengthBalance", "sectionResponsibility", "contradictionControl", "formattingHierarchy"]) assert.match(source, new RegExp(part));
+  assert.match(source, /score >= 7\.2 \? "pass" : score >= 5\.5 \? "warning" : "fail"/);
+  assert.match(source, /Math\.min\(8,/);
+});
+
+test("normalization, layered similarity, and section-aware exemptions are present", () => {
+  assert.match(source, /normalizeInstructionForComparison/);
+  assert.match(source, /replace\(\/\[\^\\p\{L\}\\p\{N\}\\s\]\/gu/);
+  assert.match(source, /similarity >= \.88/);
+  assert.match(source, /STRUCTURAL_LABELS/);
+  assert.match(source, /METADATA_ONLY/);
+  assert.match(source, /CONTINUITY_REFERENCE/);
+});
+
+test("canonical analysis excludes assembled presentation aliases", () => {
+  const canonical = source.slice(source.indexOf("function canonicalPromptSections"), source.indexOf("function splitCanonicalInstructions"));
+  for (const field of ["characterBuildingPrompt", "startFramePrompt", "endFramePrompt", "videoLock", "videoTimeline", "musicPath", "soundEffects", "finalGenerationRule"]) assert.match(canonical, new RegExp(field));
+  assert.doesNotMatch(canonical, /completeProductionPrompt|buildCompleteProductionPrompt/);
+});
+
+test("ordinary repetition is progressive and zero is reserved for extreme large blocks", () => {
+  assert.match(source, /if \(harmful === 0\) return 3/);
+  assert.match(source, /if \(harmful <= 2\)/);
+  assert.match(source, /if \(harmful <= 5\)/);
+  assert.match(source, /if \(harmful <= 9\)/);
+  assert.match(source, /if \(harmful <= 14\)/);
+  assert.match(source, /if \(extreme\) return 0/);
+  assert.match(source, /item\.normalized\.split\(" "\)\.length >= 45/);
+});
+
+test("safe deduplication preserves Video Lock and rejects worse repairs", () => {
+  const dedupe = source.slice(source.indexOf("function safelyDeduplicatePrompt"), source.indexOf("export function repairPromptPackage"));
+  assert.match(dedupe, /Video Lock is authoritative and is never shortened/);
+  assert.doesNotMatch(dedupe, /\["videoLock", "video-lock"\]/);
+  assert.match(dedupe, /Preserve every locked character identity and follow the Video Lock/);
+  assert.match(source, /if \(next\.score <= bestAnalysis\.score \|\| next\.criticalIssueCount > bestAnalysis\.criticalIssueCount\) break/);
+});
+
+test("Prompt Balance details show only harmful findings and expose the breakdown", () => {
+  assert.match(results, /prompt-balance-details/);
+  assert.match(results, /analysis\.promptBalance\.breakdown/);
+  assert.match(results, /finding\.harmfulOccurrenceCount > 0/);
+  assert.match(results, /Unnecessary repetition detected/);
 });

@@ -759,6 +759,73 @@ body:has(> .production-studio-workflow){padding-bottom:0}
   .audio-step-navigation > button { justify-content: center; width: 100%; }
 }
 
+.production-page .audio-timing-step {
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(112, 135, 174, .24);
+  border-radius: 15px;
+  background: radial-gradient(circle at 80% 10%, rgba(34, 72, 115, .05), transparent 34%), linear-gradient(135deg, rgba(10, 25, 44, .99), rgba(7, 19, 34, 1));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .018), 0 10px 24px rgba(0, 0, 0, .11);
+}
+.production-page .audio-timing-step-header { padding: 0 0 11px; border-color: rgba(112, 135, 174, .18); }
+.production-page .audio-timing-heading-group { align-items: flex-start; }
+.production-page .audio-timing-heading-group h2 { margin: 0; color: #f7f6f1; font-family: var(--font-fraunces), Georgia, serif; font-size: clamp(1.55rem, 2vw, 1.95rem); font-weight: 500; }
+.production-page .audio-timing-heading-group p { margin: 5px 0 0; color: #aebdd4; font-size: .78rem; }
+.production-page .audio-simple-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.production-page .audio-sfx-row { display: grid; grid-template-columns: 1fr; }
+.production-page .audio-simple-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(74, 112, 162, .34);
+  border-radius: 13px;
+  background: radial-gradient(circle at 88% 10%, rgba(35, 80, 122, .04), transparent 34%), linear-gradient(135deg, rgba(16, 36, 63, .96), rgba(12, 30, 52, .98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .018);
+}
+.production-page .audio-simple-card-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+.production-page .audio-simple-card-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 34px; width: 34px; height: 34px; border: 1px solid rgba(224, 171, 49, .24); border-radius: 10px; background: linear-gradient(135deg, rgba(79, 69, 30, .42), rgba(44, 42, 26, .36)); color: #f1c45c; font-size: 12px; font-weight: 800; }
+.production-page .audio-simple-card-header h3 { margin: 0; color: #f7faf8; font-size: .96rem; font-weight: 750; }
+.production-page .audio-simple-card-header p { margin: 4px 0 0; color: #b8c4d6; font-size: .73rem; line-height: 1.42; }
+.production-page .audio-simple-card label { display: block; margin-bottom: 7px; color: #f7faf8; font-size: .73rem; font-weight: 700; }
+.production-page .audio-simple-card select,
+.production-page .audio-simple-card textarea,
+.production-page .audio-advanced-panel select,
+.production-page .audio-advanced-panel textarea { width: 100%; border: 1px solid rgba(128, 126, 102, .52); border-radius: 8px; background: #171c1f; color: #f7faf8; }
+.production-page .audio-simple-card select,
+.production-page .audio-advanced-panel select { min-height: 44px; padding: 0 12px; }
+.production-page .audio-simple-card textarea,
+.production-page .audio-advanced-panel textarea { min-height: 84px; padding: 11px 12px; resize: vertical; }
+.production-page .audio-simple-selected-description { min-height: 31px; margin: 8px 0 0; color: #adc0dd; font-size: .72rem; line-height: 1.42; }
+.production-page .audio-char-count { margin: 6px 0 0; color: #8fa6c5; font-size: .68rem; text-align: right; }
+.production-page .audio-compact-segmented { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; padding: 4px; border: 1px solid rgba(69, 107, 155, .32); border-radius: 9px; background: rgba(7, 19, 34, .76); }
+.production-page .audio-compact-segment { min-height: 40px; padding: 0 7px; border: 0; border-radius: 7px; background: transparent; color: #c2ccdc; font-size: .72rem; font-weight: 700; }
+.production-page .audio-compact-segment.is-active { background: linear-gradient(135deg, #dbc16a, #c9ab47); color: #102231; }
+.production-page .audio-compact-segment:disabled { opacity: .45; cursor: not-allowed; }
+.production-page .audio-compact-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(69, 107, 155, .28); border-radius: 10px; background: rgba(8, 24, 43, .6); }
+.production-page .audio-compact-switch-row strong { display: block; color: #f7faf8; font-size: .74rem; }
+.production-page .audio-compact-switch-row span { display: block; margin-top: 3px; color: #9fb0c8; font-size: .67rem; line-height: 1.35; }
+.production-page .audio-sfx-controls { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 18px; align-items: start; }
+.production-page .audio-auto-protection-note { margin: 0; color: #8fd8bb; font-size: .73rem; line-height: 1.45; }
+.production-page .audio-advanced-trigger-row { display: flex; justify-content: flex-start; }
+.production-page .audio-advanced-trigger { min-height: 38px; padding: 0 14px; border: 1px solid rgba(69, 107, 155, .34); border-radius: 10px; background: rgba(8, 24, 43, .76); color: #f1c45c; font-size: .74rem; font-weight: 700; }
+.production-page .audio-advanced-panel { overflow: hidden; border: 1px solid rgba(69, 107, 155, .3); border-radius: 12px; background: linear-gradient(135deg, rgba(11, 28, 49, .9), rgba(8, 22, 39, .96)); }
+.production-page .audio-advanced-panel-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 12px 14px; }
+.production-page .audio-advanced-panel-header h3 { margin: 0; font-size: .82rem; }
+.production-page .audio-advanced-panel-header p { margin: 3px 0 0; color: #b8c4d6; font-size: .68rem; }
+.production-page .audio-advanced-panel-header button { width: 32px; height: 32px; border: 1px solid rgba(69, 107, 155, .34); border-radius: 8px; background: transparent; color: #f1c45c; font-size: 18px; }
+.production-page .audio-advanced-panel-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 0 14px 14px; }
+.production-page .audio-step-navigation .production-emerald-gold-cta { min-height: 42px; color: #fff; }
+
+@media (max-width: 900px) {
+  .production-page .audio-simple-grid,
+  .production-page .audio-sfx-controls,
+  .production-page .audio-advanced-panel-content { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .production-page .audio-timing-step { gap: 11px; padding: 14px; }
+  .production-page .audio-simple-card { padding: 14px; }
+  .production-page .audio-compact-segmented { grid-template-columns: 1fr; gap: 4px; }
+}
+
 .production-page .production-section {
   position: relative;
   overflow: hidden;

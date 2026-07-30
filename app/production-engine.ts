@@ -900,9 +900,9 @@ export function generateDemoPack(
 Voice Mode: ${resolvedVoiceMode}
 Character Cartoon Sounds: ${form.characterCartoonSounds ? "Enabled" : "Disabled"}
 Music Style: ${resolvedMusicStyle}
-Music Intensity: ${form.musicStyle === "no-music" ? "No music" : form.simplifiedMusicIntensity}
+Music Presence: ${form.musicStyle === "no-music" ? "No music" : form.simplifiedMusicIntensity}
 Sound Effects Style: ${resolvedSoundEffectsStyle}
-SFX Intensity: ${form.sfxIntensity}
+SFX Presence: ${form.sfxIntensity}
 Audio Workflow: ${form.audioMode}
 Voice Assignments: ${voiceAssignments}
 Additional Voice Instructions: ${form.customVoiceInstructions.trim() || "None"}

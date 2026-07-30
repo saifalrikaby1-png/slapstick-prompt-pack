@@ -119,9 +119,9 @@ export type VoiceLayer =
   | "No Spoken Dialogue";
 
 export type VoiceModeValue = "no-spoken-dialogue" | "narrator-only" | "character-voices" | "narrator-and-characters" | "custom";
-export type MusicStyleValue = "playful-orchestral-comedy" | "warm-magical-adventure" | "epic-cinematic" | "gentle-emotional" | "suspenseful" | "energetic-electronic" | "minimal-ambient" | "no-music" | "custom";
+export type MusicStyleValue = "playful-comedy" | "warm-magical" | "cinematic" | "emotional" | "suspenseful" | "no-music" | "custom";
 export type MusicIntensityValue = "soft" | "balanced" | "strong";
-export type SoundEffectsStyleValue = "clean-cartoon-foley" | "exaggerated-slapstick" | "cinematic-realistic" | "soft-family-animation" | "minimal" | "custom";
+export type SoundEffectsStyleValue = "cartoon-foley" | "slapstick" | "cinematic" | "soft-animation" | "minimal" | "custom";
 export type SfxIntensityValue = "light" | "balanced" | "strong";
 
 export type CharacterProfile = {
@@ -382,13 +382,13 @@ export const defaultProductionForm: ProductionForm = {
   musicType: "Playful orchestral comedy",
   musicMood: "Playful",
   musicIntensity: "Medium",
-  musicStyle: "playful-orchestral-comedy",
+  musicStyle: "playful-comedy",
   musicStyleCustom: "",
   simplifiedMusicIntensity: "balanced",
   audioMode: "Native-audio mode",
   noMusic: false,
   soundEffectsStyle: "Clean synchronized cartoon Foley",
-  soundEffectsStylePreset: "clean-cartoon-foley",
+  soundEffectsStylePreset: "cartoon-foley",
   soundEffectsStyleCustom: "",
   sfxIntensity: "balanced",
   customVoiceInstructions: "",

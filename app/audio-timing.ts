@@ -9,44 +9,42 @@ import {
 export type AudioOption = { value: string; label: string; description: string };
 
 export const VOICE_MODE_OPTIONS = [
-  { value: "no-spoken-dialogue", label: "No Spoken Dialogue", description: "Disable narration, understandable words, and lip-sync while keeping nonverbal sounds, music, and SFX." },
-  { value: "narrator-only", label: "Narrator Only", description: "Use narration without spoken dialogue from the characters." },
-  { value: "character-voices", label: "Character Voices", description: "Use spoken character voices without a narrator." },
-  { value: "narrator-and-characters", label: "Narrator + Character Voices", description: "Use both narration and spoken character voices." },
+  { value: "no-spoken-dialogue", label: "No Spoken Dialogue", description: "No spoken words. Keep nonverbal character sounds, music, and synchronized effects." },
+  { value: "narrator-only", label: "Narrator", description: "Use narration without spoken character dialogue." },
+  { value: "character-voices", label: "Character Voices", description: "Use spoken character voices without narration." },
+  { value: "narrator-and-characters", label: "Narrator + Characters", description: "Use both narration and spoken character voices." },
   { value: "custom", label: "Custom", description: "" },
 ] as const satisfies readonly AudioOption[];
 
 export const MUSIC_STYLE_OPTIONS = [
-  { value: "playful-orchestral-comedy", label: "Playful Orchestral Comedy", description: "Light orchestral music with playful timing and comedic accents." },
-  { value: "warm-magical-adventure", label: "Warm Magical Adventure", description: "Warm melodic music with a gentle magical and adventurous feeling." },
-  { value: "epic-cinematic", label: "Epic Cinematic", description: "Large cinematic instrumentation with dramatic progression and scale." },
-  { value: "gentle-emotional", label: "Gentle Emotional", description: "Soft emotional music with restrained instrumentation and warm harmony." },
-  { value: "suspenseful", label: "Suspenseful", description: "Controlled tension, rhythmic anticipation, and restrained dramatic texture." },
-  { value: "energetic-electronic", label: "Energetic Electronic", description: "Modern electronic rhythm with strong energy and forward momentum." },
-  { value: "minimal-ambient", label: "Minimal Ambient", description: "Subtle atmospheric sound with minimal melodic distraction." },
-  { value: "no-music", label: "No Music", description: "Generate the production without a music layer." },
+  { value: "playful-comedy", label: "Playful Comedy", description: "Light, fun music with playful timing and upbeat personality." },
+  { value: "warm-magical", label: "Magical", description: "Warm, imaginative music with a soft magical atmosphere." },
+  { value: "cinematic", label: "Cinematic", description: "Polished cinematic music with scale and emotional direction." },
+  { value: "emotional", label: "Emotional", description: "Gentle emotional scoring with soft expressive support." },
+  { value: "suspenseful", label: "Suspenseful", description: "Controlled tension and anticipation without overwhelming the scene." },
+  { value: "no-music", label: "No Music", description: "Do not generate a music layer." },
   { value: "custom", label: "Custom", description: "" },
 ] as const satisfies readonly AudioOption[];
 
 export const MUSIC_INTENSITY_OPTIONS = [
-  { value: "soft", label: "Soft", description: "Subtle music that supports the scene without dominating it." },
-  { value: "balanced", label: "Balanced", description: "Clear musical presence while preserving dialogue and sound-effect readability." },
-  { value: "strong", label: "Strong", description: "Prominent music with heightened energy and emotional emphasis." },
+  { value: "soft", label: "Soft", description: "Subtle music that stays in the background." },
+  { value: "balanced", label: "Balanced", description: "Clear musical presence without overpowering dialogue or effects." },
+  { value: "strong", label: "Strong", description: "Prominent music with higher emotional or rhythmic presence." },
 ] as const;
 
 export const SOUND_EFFECTS_STYLE_OPTIONS = [
-  { value: "clean-cartoon-foley", label: "Clean Synchronized Cartoon Foley", description: "Clear, precisely timed cartoon effects that support every important action." },
-  { value: "exaggerated-slapstick", label: "Exaggerated Slapstick Foley", description: "Bold comedic impacts, springs, swishes, slips, and exaggerated reactions." },
-  { value: "cinematic-realistic", label: "Cinematic Realistic", description: "Natural layered effects with realistic weight, space, and environmental detail." },
-  { value: "soft-family-animation", label: "Soft Family Animation", description: "Gentle, clear, family-friendly effects without harsh or aggressive impact." },
-  { value: "minimal", label: "Minimal", description: "Use only essential synchronized effects and avoid unnecessary sound clutter." },
+  { value: "cartoon-foley", label: "Cartoon Foley", description: "Clear synchronized cartoon effects that support important action." },
+  { value: "slapstick", label: "Slapstick", description: "Exaggerated comedic effects with stronger playful impact." },
+  { value: "cinematic", label: "Cinematic", description: "Natural, polished, scene-supporting effects with realistic presence." },
+  { value: "soft-animation", label: "Soft Animation", description: "Gentle family-friendly effects with lighter impact and warmth." },
+  { value: "minimal", label: "Minimal", description: "Use only essential effects to keep the soundscape clean." },
   { value: "custom", label: "Custom", description: "" },
 ] as const satisfies readonly AudioOption[];
 
 export const SFX_INTENSITY_OPTIONS = [
-  { value: "light", label: "Light", description: "Use restrained effects only for essential actions." },
+  { value: "light", label: "Light", description: "Use restrained effects only where needed." },
   { value: "balanced", label: "Balanced", description: "Use clear synchronized effects without overwhelming the scene." },
-  { value: "strong", label: "Strong", description: "Use prominent, energetic effects for action and comedic emphasis." },
+  { value: "strong", label: "Strong", description: "Use more prominent effects for energetic action or comedy." },
 ] as const;
 
 export function resolveAudioOption(selectedValue: string, customValue: string, options: readonly AudioOption[]): string {
@@ -88,12 +86,12 @@ export function resolveAudioTiming(form: ProductionForm) {
     characterCartoonSounds: form.characterCartoonSounds,
     music: {
       style: resolveAudioOption(form.musicStyle, form.musicStyleCustom, MUSIC_STYLE_OPTIONS),
-      intensity: form.musicStyle === "no-music" ? null : form.simplifiedMusicIntensity,
+      presence: form.musicStyle === "no-music" ? null : form.simplifiedMusicIntensity,
       customInstructions: form.customMusicInstructions.trim(),
     },
     soundEffects: {
       style: resolveAudioOption(form.soundEffectsStylePreset, form.soundEffectsStyleCustom, SOUND_EFFECTS_STYLE_OPTIONS),
-      intensity: form.sfxIntensity,
+      presence: form.sfxIntensity,
       customInstructions: form.customSfxInstructions.trim(),
     },
     workflow: form.audioMode,
@@ -121,17 +119,18 @@ export function inferVoiceMode(layers: VoiceLayer[]): VoiceModeValue {
 export function inferMusicStyle(type: string, noMusic: boolean): MusicStyleValue {
   if (noMusic) return "no-music";
   const normalized = type.toLowerCase();
-  return normalized.includes("playful") && normalized.includes("orchestral") ? "playful-orchestral-comedy"
-    : normalized.includes("magical") ? "warm-magical-adventure"
-      : normalized.includes("epic") || normalized.includes("cinematic") ? "epic-cinematic"
+  return normalized.includes("playful") || normalized.includes("comedy") ? "playful-comedy"
+    : normalized.includes("magical") ? "warm-magical"
+      : normalized.includes("epic") || normalized.includes("cinematic") ? "cinematic"
+        : normalized.includes("emotional") ? "emotional"
         : "custom";
 }
 
 export function inferSoundEffectsStyle(style: string): SoundEffectsStyleValue {
   const normalized = style.toLowerCase();
-  return normalized.includes("clean") && normalized.includes("cartoon") ? "clean-cartoon-foley"
-    : normalized.includes("slapstick") ? "exaggerated-slapstick"
-      : normalized.includes("cinematic") || normalized.includes("realistic") ? "cinematic-realistic"
-        : normalized.includes("family") ? "soft-family-animation"
+  return normalized.includes("cartoon") ? "cartoon-foley"
+    : normalized.includes("slapstick") ? "slapstick"
+      : normalized.includes("cinematic") || normalized.includes("realistic") ? "cinematic"
+        : normalized.includes("family") || normalized.includes("soft") ? "soft-animation"
           : normalized === "minimal" ? "minimal" : "custom";
 }

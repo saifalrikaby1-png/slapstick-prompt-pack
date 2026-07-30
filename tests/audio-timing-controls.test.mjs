@@ -9,15 +9,20 @@ const types = await readFile(new URL("app/production-types.ts", root), "utf8");
 const engine = await readFile(new URL("app/production-engine.ts", root), "utf8");
 const panel = page.slice(page.indexOf("function AudioTimingPanel"), page.indexOf("const builtInCharacters"));
 
-test("compact Audio & Timing controls replace the old default controls", () => {
+test("main Audio & Timing workflow renders only three beginner-friendly decisions", () => {
+  assert.match(panel, /audio-simple-grid/);
+  assert.match(panel, /audio-sfx-row/);
+  assert.match(panel, /<h3>Voice<\/h3>/);
+  assert.match(panel, /<h3>Music<\/h3>/);
+  assert.match(panel, /<h3>Sound Effects<\/h3>/);
   assert.match(panel, /id="voice-mode"/);
-  assert.match(panel, /Character Cartoon Sounds/);
+  assert.match(panel, /Nonverbal Character Sounds/);
   assert.match(panel, /id="music-style"/);
-  assert.match(panel, /aria-label="Music Intensity"/);
+  assert.match(panel, /aria-label="Music Presence"/);
   assert.match(panel, /id="sound-effects-style"/);
-  assert.match(panel, /aria-label="SFX Intensity"/);
+  assert.match(panel, /aria-label="SFX Presence"/);
+  assert.match(panel, /Audio synchronization and voice consistency are automatically protected/);
   assert.doesNotMatch(panel, /Music mood|Music Mood/);
-  assert.doesNotMatch(panel, /No music<\/span>|No Spoken Dialogue<\/span>/);
 });
 
 test("voice modes map to normalized legacy assignments without contradictions", () => {
@@ -32,14 +37,14 @@ test("voice modes map to normalized legacy assignments without contradictions", 
   assert.match(audio, /lipSyncEnabled: noSpokenDialogue \? false/);
 });
 
-test("music and SFX controls expose three intensity choices and No Music disables intensity", () => {
+test("music and SFX controls expose three presence choices and No Music disables presence", () => {
   for (const value of ["soft", "balanced", "strong", "light"]) assert.match(audio, new RegExp(`value: "${value}"`));
   const musicIntensities = audio.slice(audio.indexOf("MUSIC_INTENSITY_OPTIONS"), audio.indexOf("SOUND_EFFECTS_STYLE_OPTIONS"));
   const sfxIntensities = audio.slice(audio.indexOf("SFX_INTENSITY_OPTIONS"), audio.indexOf("export function resolveAudioOption"));
   assert.equal((musicIntensities.match(/\{ value:/g) || []).length, 3);
   assert.equal((sfxIntensities.match(/\{ value:/g) || []).length, 3);
   assert.match(panel, /disabled=\{form\.musicStyle === "no-music"\}/);
-  assert.match(audio, /intensity: form\.musicStyle === "no-music" \? null/);
+  assert.match(audio, /presence: form\.musicStyle === "no-music" \? null/);
 });
 
 test("custom values validate and Audio settings remain collapsed until requested", () => {
@@ -47,18 +52,22 @@ test("custom values validate and Audio settings remain collapsed until requested
     assert.match(audio, new RegExp(field));
   }
   assert.match(page, /useState\(false\).*audioAdvancedOpen|audioAdvancedOpen, setAudioAdvancedOpen\] = useState\(false\)/);
-  assert.match(panel, /Advanced Audio Settings/);
+  assert.match(panel, /Advanced audio options/);
   assert.match(panel, /Audio Workflow/);
   assert.match(panel, /Individual Voice Assignments/);
-  assert.match(panel, /advancedOpen && <div className="advanced-audio-content"/);
+  assert.match(panel, /advancedOpen && <section className="audio-advanced-panel"/);
+  const visibleBeforeAdvanced = panel.slice(panel.indexOf("return <section"), panel.indexOf("{advancedOpen &&"));
+  for (const technicalControl of ["Audio Workflow", "Individual Voice Assignments", "Lip-Sync Preference", "Detailed Audio Safeguards"]) {
+    assert.doesNotMatch(visibleBeforeAdvanced, new RegExp(technicalControl));
+  }
 });
 
 test("new defaults, persistence migration, payload, and prompt are wired", () => {
   assert.match(types, /voiceMode: "no-spoken-dialogue"/);
   assert.match(types, /characterCartoonSounds: true/);
-  assert.match(types, /musicStyle: "playful-orchestral-comedy"/);
+  assert.match(types, /musicStyle: "playful-comedy"/);
   assert.match(types, /simplifiedMusicIntensity: "balanced"/);
-  assert.match(types, /soundEffectsStylePreset: "clean-cartoon-foley"/);
+  assert.match(types, /soundEffectsStylePreset: "cartoon-foley"/);
   assert.match(audio, /export function resolveAudioTiming/);
   assert.match(page, /audioTiming: resolveAudioTiming\(form\)/);
   assert.match(engine, /AUDIO & TIMING/);

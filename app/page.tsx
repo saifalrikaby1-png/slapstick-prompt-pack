@@ -79,6 +79,7 @@ import { CompleteIdeaRegistryEntry, actionSignatureHash, conceptHash, isComplete
 import { MarketingHome } from "./marketing-home";
 import { getVideoStyle, VideoStyleId } from "./video-styles";
 import { findProductionRecord, markProductionFailed, upsertProductionRecord } from "./production-records";
+import { optimizePromptPackage } from "./prompt-quality";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -1673,8 +1674,10 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         videoTitle: "", characterBuildingPrompt: "", startFramePrompt: "", endFramePrompt: "",
         videoLock: "", videoTimeline: "", musicPath: "", soundEffects: "", finalGenerationRule: "",
       };
-      const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
+      const rawNextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
       const nextGeneratedOutputs = [...new Set([...generatedOutputs, ...outputsForGeneration])];
+      const promptOptimization = optimizePromptPackage(rawNextPack, form, productionCharacters, mode, nextGeneratedOutputs);
+      const nextPack = promptOptimization.pack;
       const nextQualityReport = nextGeneratedOutputs.length === requestedOutputValues.length
         ? inspectProductionPack(nextPack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets)
         : {
@@ -1704,6 +1707,15 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         generationMode: mode,
         platform: selectedPlatform(form),
         videoModel: selectedModel(form),
+        promptQuality: promptOptimization.newAnalysis,
+        promptQualityReason: promptOptimization.newScore > promptOptimization.previousScore ? "automatic-repair" : "initial",
+        lastPromptQualityRepair: promptOptimization.newScore > promptOptimization.previousScore ? {
+          previousScore: promptOptimization.previousScore,
+          newScore: promptOptimization.newScore,
+          changedSections: promptOptimization.changedSections,
+          improvements: promptOptimization.improvements,
+          repairedAt: new Date().toISOString(),
+        } : undefined,
       });
       router.push(`/production/${generatingRecord.id}/results`);
     } catch (caught) {

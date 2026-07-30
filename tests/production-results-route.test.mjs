@@ -53,7 +53,7 @@ test("individual copy actions, no-music omission, and optional tabs are safe", (
   }
   assert.match(results, /if \(!content\?\.trim\(\)\) return null/);
   assert.match(results, /if \(pack\.videoTimeline\) tabs\.push\("timeline"\)/);
-  assert.match(results, /qualityReport\?\.findings\?\.length/);
+  assert.match(results, /tabs\.push\("prompt-quality"\)/);
 });
 
 test("older saved fields map into grouped categories without changing stored production data", () => {
@@ -66,7 +66,7 @@ test("older saved fields map into grouped categories without changing stored pro
 
 test("Word export uses grouped order and keeps the title as metadata", () => {
   const exportBlock = results.slice(results.indexOf("async function downloadWord"), results.indexOf("if (production === undefined)"));
-  const labels = ["Production Summary", "Production Title:", "Character Details", "Start Frame", "End Frame", "Complete Production Prompt", "Timeline", "Quality Control"];
+  const labels = ["Production Summary", "Production Title:", "Character Details", "Start Frame", "End Frame", "Complete Production Prompt", "Timeline", "Prompt Quality Control"];
   labels.reduce((position, label) => {
     const next = exportBlock.indexOf(label);
     assert.ok(next > position, `${label} must follow the previous export section`);

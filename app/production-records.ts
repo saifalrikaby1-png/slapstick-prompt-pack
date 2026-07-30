@@ -8,6 +8,7 @@ import {
   StoredPack,
 } from "./production-types";
 import { migrateStoredPack } from "./production-engine";
+import type { PromptPackageSectionId, PromptQualityAnalysis } from "./prompt-quality";
 
 export const PRODUCTION_RECORDS_KEY = "slapstick-saved-packs";
 
@@ -18,6 +19,9 @@ export type ProductionRecord = SavedProductionPack & {
   updatedAt: string;
   generationMode: "ai" | "demo";
   error?: { message: string; code?: string };
+  promptQuality?: PromptQualityAnalysis;
+  promptQualityHistory?: Array<{ score: number; label: string; analyzedAt: string; analysisVersion: string; reason: "initial" | "automatic-repair" | "manual-maximize" }>;
+  lastPromptQualityRepair?: { previousScore: number; newScore: number; changedSections: PromptPackageSectionId[]; improvements: string[]; repairedAt: string };
 };
 
 export type ProductionRecordInput = {
@@ -34,6 +38,9 @@ export type ProductionRecordInput = {
   generationMode: "ai" | "demo";
   platform: string;
   videoModel: string;
+  promptQuality?: PromptQualityAnalysis;
+  promptQualityReason?: "initial" | "automatic-repair" | "manual-maximize";
+  lastPromptQualityRepair?: ProductionRecord["lastPromptQualityRepair"];
 };
 
 function isProductionRecord(value: StoredPack | ProductionRecord): value is ProductionRecord {
@@ -94,6 +101,17 @@ export function upsertProductionRecord(input: ProductionRecordInput): Production
     generatedOutputs: [...input.generatedOutputs],
     packStatus: input.generatedOutputs.length === 7 ? "Complete Pack" : "Partial Pack",
     generationMode: input.generationMode,
+    promptQuality: input.promptQuality || existing?.promptQuality,
+    promptQualityHistory: input.promptQuality
+      ? [...(existing?.promptQualityHistory || []), {
+          score: input.promptQuality.score,
+          label: input.promptQuality.label,
+          analyzedAt: input.promptQuality.analyzedAt,
+          analysisVersion: input.promptQuality.analysisVersion,
+          reason: input.promptQualityReason || "initial",
+        }]
+      : existing?.promptQualityHistory,
+    lastPromptQualityRepair: input.lastPromptQualityRepair || existing?.lastPromptQualityRepair,
   };
   const next = [record, ...records.filter((entry) => entry.id !== record.id)];
   localStorage.setItem(PRODUCTION_RECORDS_KEY, JSON.stringify(next));

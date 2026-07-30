@@ -2,6 +2,7 @@
 
 import { ChangeEvent, ComponentPropsWithoutRef, ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CharacterProfile,
   CharacterRole,
@@ -77,6 +78,7 @@ import {
 import { CompleteIdeaRegistryEntry, actionSignatureHash, conceptHash, isCompleteIdeaTooSimilar, normalizeIdeaValue, parseCompleteIdeaRegistry, significantTerms } from "./complete-idea-registry";
 import { MarketingHome } from "./marketing-home";
 import { getVideoStyle, VideoStyleId } from "./video-styles";
+import { findProductionRecord, markProductionFailed, upsertProductionRecord } from "./production-records";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -673,7 +675,8 @@ function ProductionSection({
   );
 }
 
-export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
+export function ProductionWorkspace({ styleId, productionId }: { styleId?: VideoStyleId; productionId?: string }) {
+  const router = useRouter();
   const activeVideoStyle = styleId ? getVideoStyle(styleId) : null;
   const [form, setForm] = useState<ProductionForm>(defaultProductionForm);
   const [characters, setCharacters] = useState<CharacterProfile[]>(builtInCharacters);
@@ -725,6 +728,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const outputRef = useRef<HTMLDivElement>(null);
   const remainingIssuesRef = useRef<HTMLDivElement>(null);
   const hydratedRef = useRef(false);
+  const productionIdRef = useRef(productionId || "");
 
   useEffect(() => {
     const hydrationTask = window.setTimeout(() => {
@@ -752,8 +756,22 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
       setSavedPacks(safeArray(localStorage.getItem(STORAGE.packs))
         .map(migrateStoredPack)
         .filter((entry): entry is StoredPack => Boolean(entry)));
+      const editProduction = productionId ? findProductionRecord(productionId) : null;
+      if (editProduction) {
+        const restoredCharacters = mergeCharacterLibraries(mergedCharacters, editProduction.characterProfiles);
+        setCharacters(restoredCharacters);
+        setForm(migrateForm(editProduction.form));
+        setPack(editProduction.pack as ProductionPack);
+        setGeneratedOutputs(editProduction.generatedOutputs || []);
+        setRequestedOutputs(editProduction.requestedOutputs || ["videoPrompt"]);
+        independentSelectionsRef.current = editProduction.customRequestedOutputs || editProduction.requestedOutputs || ["videoPrompt"];
+        setSelectionMode(editProduction.outputSelectionMode === "fullPack" ? "fullPack" : "custom");
+        setMode(editProduction.generationMode);
+        productionIdRef.current = editProduction.id;
+        setNotice("Production restored for editing.");
+      }
       const libraryProject = migrateStoredPack(safeObject(localStorage.getItem("slapstick-library-open-project")));
-      if (libraryProject?.schemaVersion === 2) {
+      if (!editProduction && libraryProject?.schemaVersion === 2) {
         const restoredCharacters = mergeCharacterLibraries(mergedCharacters, libraryProject.characterProfiles);
         setCharacters(restoredCharacters);
         setForm(migrateForm(libraryProject.form));
@@ -820,7 +838,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
       hydratedRef.current = true;
     }, 0);
     return () => window.clearTimeout(hydrationTask);
-  }, []);
+  }, [productionId]);
 
   useEffect(() => {
     if (!activeVideoStyle) return;
@@ -1604,6 +1622,22 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     setError("");
     setNotice("");
     setIsGenerating(true);
+    const generatingRecord = upsertProductionRecord({
+      id: productionIdRef.current || undefined,
+      status: "generating",
+      form,
+      characterProfiles: productionCharacters,
+      pack: pack || undefined,
+      qualityReport: qualityReport || undefined,
+      outputSelectionMode: selectionMode,
+      customRequestedOutputs: [...independentSelectionsRef.current],
+      requestedOutputs: outputsForGeneration,
+      generatedOutputs,
+      generationMode: mode,
+      platform: selectedPlatform(form),
+      videoModel: selectedModel(form),
+    });
+    productionIdRef.current = generatingRecord.id;
     try {
       const selectedFields = fieldsForRequestedOutputs(outputsForGeneration);
       const previousPack = pack;
@@ -1640,14 +1674,43 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         videoLock: "", videoTimeline: "", musicPath: "", soundEffects: "", finalGenerationRule: "",
       };
       const nextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
+      const nextGeneratedOutputs = [...new Set([...generatedOutputs, ...outputsForGeneration])];
+      const nextQualityReport = nextGeneratedOutputs.length === requestedOutputValues.length
+        ? inspectProductionPack(nextPack, form, characters, savedPacks.map((saved) => saved.title), creativeAssets)
+        : {
+            score: 0,
+            findings: [{
+              label: "Full-pack Quality Control unavailable",
+              status: "Warning" as const,
+              detail: "Generate all production outputs before using the production-wide Quality Control score. Partial output selection remains available.",
+            }],
+          };
       setPack(nextPack);
       setFixSummary(null);
       setRemainingFixFindings([]);
-      setGeneratedOutputs((current) => [...new Set([...current, ...outputsForGeneration])]);
+      setGeneratedOutputs(nextGeneratedOutputs);
       setLegacyPack(null);
-      window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth" }), 80);
+      upsertProductionRecord({
+        id: generatingRecord.id,
+        status: "completed",
+        form,
+        characterProfiles: productionCharacters,
+        pack: nextPack,
+        qualityReport: nextQualityReport,
+        outputSelectionMode: selectionMode,
+        customRequestedOutputs: [...independentSelectionsRef.current],
+        requestedOutputs: outputsForGeneration,
+        generatedOutputs: nextGeneratedOutputs,
+        generationMode: mode,
+        platform: selectedPlatform(form),
+        videoModel: selectedModel(form),
+      });
+      router.push(`/production/${generatingRecord.id}/results`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Production-pack generation failed.");
+      const message = caught instanceof Error ? caught.message : "Production-pack generation failed.";
+      markProductionFailed(generatingRecord.id, message);
+      setError(message);
+      router.push(`/production/${generatingRecord.id}/results`);
     } finally {
       setIsGenerating(false);
     }
@@ -2176,7 +2239,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
       <header className="studio-toolbar">
         <div className="studio-project-identity"><span className="studio-project-icon" aria-hidden="true">▣</span><div className="studio-project-name"><span>Project:</span><strong>{form.videoTitle || "Untitled Production"}</strong></div><span className="studio-save-status"><span className="studio-save-dot" />Saved locally</span></div>
         <div className="studio-project-metadata"><div><span>Style</span><strong>{selectedStyle(form)}</strong></div><div><span>Duration</span><strong>{form.duration} Seconds</strong></div><div><span>Model</span><strong>{selectedModel(form)}</strong></div><div><span>Ratio</span><strong>{form.videoRatio}</strong></div><div className="studio-output-summary"><span>◆</span><span><small>Outputs</small><strong>{requestedOutputs.length} selected</strong></span></div></div>
-        <div className="studio-toolbar-actions"><button className="studio-toolbar-button studio-preview-button" type="button" onClick={() => { setActiveWorkflowTab("outputs"); window.setTimeout(() => outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }}>Preview Pack</button><button className="studio-toolbar-button" type="button" onClick={saveCurrentPack} disabled={!pack}>Save Draft</button><button className="studio-toolbar-button" type="button" onClick={downloadWord} disabled={!pack || isDownloading}>{isDownloading ? "Preparing…" : "Export"}</button><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating…" : "Generate Pack"}</button></div>
+        <div className="studio-toolbar-actions"><button className="studio-generate-button" type="button" onClick={generate} disabled={isGenerating}>{isGenerating ? "Generating Production Pack…" : "Generate Production Pack"}</button></div>
       </header>
 
       <section className="hero production-page-hero production-page-header" id="top">
@@ -2188,7 +2251,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <button className="demo-button production-load-demo" type="button" onClick={loadDemo}>Load Biscuit Demo</button>
       </section>
 
-      <div className={`workspace production-workspace studio-layout ${activeWorkflowTab === "outputs" ? "is-output-studio" : ""}`}>
+      <div className="workspace production-workspace studio-layout">
         <aside className="studio-workflow-rail" aria-label="Production workflow">
           <div className="studio-workflow-heading">Production</div>
           <nav className="studio-workflow-list" aria-label="Production workflow">
@@ -2208,7 +2271,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
         <section className="setup-panel production-card production-selection-panel studio-step-workspace">
           <ProductionPartialBorder />
           {activeVideoStyle && <section className="style-workspace-note" style={{ borderColor: activeVideoStyle.accent }}><b style={{ color: activeVideoStyle.accent }}>{activeVideoStyle.name}</b><span>{activeVideoStyle.characteristics.join(" · ")}</span><Link href="/#video-types">Change Video Style</Link></section>}
-          <section className="production-studio-dashboard" id="choose-outputs" aria-label="Production preview" hidden={activeWorkflowTab !== "outputs"}>
+          {Boolean(false) && <section className="production-studio-dashboard" id="choose-outputs" aria-label="Production preview">
             <aside className="studio-config-column">
               <section className="production-section studio-dashboard-card studio-config-card">
                 <header className="production-section-header"><span className="production-section-number" aria-hidden="true">01</span><div className="production-section-heading-copy"><h2>Configuration</h2><p>Choose the generator mode and global frame format.</p></div></header>
@@ -2262,7 +2325,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
           </section>
 
-          <section className="production-section form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
+          }<section className="production-section form-section complete-video-idea" id="episode-idea" role="tabpanel" aria-labelledby="workflow-tab-videoIdea" hidden={activeWorkflowTab !== "videoIdea"}>
             <header className="production-section-header"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Complete Video Idea</h2><p>Name the production and add any optional creative direction.</p></div></header>
             <div className="production-section-content concept-section">
               <label className="field concept-field concept-video-title"><span>Video Name</span><input value={form.videoTitle} onChange={(event) => update("videoTitle", event.target.value)} placeholder="Create a memorable original title" /></label>
@@ -2431,12 +2494,22 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
               </div>
             </details></>}
             {productionTab === "advanced" && <ProductionSection
-              number="05"
-              title="Generation Summary"
-              description={<>{requestedOutputs.length} selected outputs · {form.videoTitle || "Untitled video"} · {productionCharacters.length} characters · {form.duration} seconds · {selectedModel(form)} · {form.videoRatio} · {mode === "ai" ? "AI Mode" : "Demo Mode"}</>}
-              className="generate-section setup-generation"
+              number="07"
+              title="Review & Generate"
+              description="Confirm the production settings before generating your complete pack."
+              className="review-generate-step setup-generation"
             >
-              <button className="generate-button selectable-generate production-primary-button" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating selected outputs…" : `Generate ${requestedOutputs.length} Selected Outputs`}</button>
+              <div className="review-production-summary">
+                <span><small>Video</small><strong>{form.videoTitle || "Untitled video"}</strong></span>
+                <span><small>Video type</small><strong>{selectedStyle(form)}</strong></span>
+                <span><small>Characters</small><strong>{productionCharacters.length} selected</strong></span>
+                <span><small>Duration</small><strong>{form.duration} seconds</strong></span>
+                <span><small>AI video model</small><strong>{selectedModel(form)}</strong></span>
+                <span><small>Video ratio</small><strong>{form.videoRatio}</strong></span>
+                <span><small>Outputs</small><strong>{effectiveRequestedOutputs.length} selected</strong></span>
+                <span><small>Generation mode</small><strong>{mode === "ai" ? "AI Mode" : "Demo Mode"}</strong></span>
+              </div>
+              <button className="production-emerald-gold-cta" type="button" disabled={isGenerating} onClick={generate}>{isGenerating ? "Generating Production Pack…" : "Generate Production Pack"}</button>
             </ProductionSection>}
             <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" onClick={() => setProductionTab("audio")}><span>Back to Audio &amp; Timing</span><span aria-hidden="true">←</span></button></footer></>}
           </section>
@@ -2446,10 +2519,10 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
 
         </section>
 
-        <section className="production-section output-panel production-card production-output-panel studio-live-preview" hidden={activeWorkflowTab === "outputs"}>
+        {Boolean(false) && <section className="production-section output-panel production-card production-output-panel studio-live-preview">
           <ProductionPartialBorder />
           <div className="output-heading production-output-header">
-            <div className="production-section-header production-panel-heading"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Generated Production Outputs</h2><p>Your production pack will appear here.</p></div></div>
+            <div className="production-section-header production-panel-heading"><span className="production-section-number" aria-hidden="true">02</span><div className="production-section-heading-copy"><h2>Production Results</h2><p>Your production pack will appear here.</p></div></div>
             <div className="output-actions"><button className="production-save-library" type="button" onClick={saveCurrentPack} disabled={!pack}>Save to Prompt Library</button><button type="button" disabled={!pack || isDownloading} onClick={downloadWord}>{isDownloading ? "Preparing Full Pack…" : "Download Full Pack as Word"}</button></div>
           </div>
           {pack && <button className="change-output-button" type="button" onClick={() => document.getElementById("choose-outputs")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" })}>Generate More Outputs</button>}
@@ -2513,7 +2586,7 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             </>
           )}
         </section>
-      </div>
+        }</div>
 
       <footer>SLAPSTICK PROMPT PACK <span>•</span> REFERENCE-LOCKED PRODUCTION</footer>
     </main>

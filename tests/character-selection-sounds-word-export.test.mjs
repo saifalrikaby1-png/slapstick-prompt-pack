@@ -7,6 +7,7 @@ import ts from "typescript";
 const page = fs.readFileSync("app/page.tsx", "utf8");
 const engineSource = fs.readFileSync("app/production-engine.ts", "utf8");
 const typesSource = fs.readFileSync("app/production-types.ts", "utf8");
+const audioSource = fs.readFileSync("app/audio-timing.ts", "utf8");
 const route = fs.readFileSync("app/api/generate/route.ts", "utf8");
 
 function compile(source, requireMap = {}) {
@@ -25,7 +26,8 @@ function compile(source, requireMap = {}) {
 }
 
 const types = compile(typesSource);
-const engine = compile(engineSource, { "./production-types": types });
+const audio = compile(audioSource, { "./production-types": types });
+const engine = compile(engineSource, { "./production-types": types, "./audio-timing": audio });
 
 const characters = [
   { id: "hero", shortName: "Biscuit", fullIdentity: "Biscuit the Orange Squirrel", role: "Hero", description: "Appearance: small orange squirrel with cream belly and large brown eyes\nPrimary and secondary colors: orange and cream\nClothing and accessories: none\nScale and proportions: smallest and agile\nMovement style: quick precise hops", appearanceLock: "small orange squirrel", personalityLock: "clever", colorLock: "orange and cream", scaleLock: "small", vocalStyleLock: "cheerful squeaks", movementStyle: "quick hops", continuityRules: "stable", negativeRules: "no duplicate" },

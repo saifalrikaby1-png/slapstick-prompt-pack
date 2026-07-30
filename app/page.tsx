@@ -710,6 +710,7 @@ export function ProductionWorkspace({ styleId }: { styleId?: VideoStyleId }) {
   const [ideaCreationMethod, setIdeaCreationMethod] = useState<IdeaCreationMethod>("manual");
   const [productionTab, setProductionTab] = useState<"core" | "motion" | "audio" | "advanced">("core");
   const [characterEditorOpen, setCharacterEditorOpen] = useState(false);
+  const [characterLibraryOpen, setCharacterLibraryOpen] = useState(false);
   const [activeWorkflowTab, setActiveWorkflowTab] = useState<WorkflowTab>("videoIdea");
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState("");
@@ -2304,10 +2305,14 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
             <footer className="scene-setup-footer"><button className="scene-save-continue" type="button" disabled={!conceptComplete} onClick={() => setActiveWorkflowTab("characters")}><span>Continue to Cast</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
-          <section className="production-section form-section" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
-            <header className="production-section-header"><span className="production-section-number" aria-hidden="true">03</span><div className="production-section-heading-copy"><h2>Characters</h2><p>Browse the library and explicitly choose who appears in this production.</p></div></header>
-            <div className="production-section-content character-summary-grid">{characters.map((profile) => <article key={profile.id} className={`production-card-surface production-character-card character-summary-card ${activeIds.includes(profile.id) ? "included" : ""}`}><div><strong>{profile.shortName}</strong><small>{profile.role} · {activeIds.includes(profile.id) ? "Included" : "Not included"}</small><p>{profile.fullIdentity || profile.description.slice(0, 96)}</p></div><button className="production-edit-button" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); }}>Edit Character</button></article>)}</div>
-            <details className="character-block character-editor-drawer production-accordion" open={characterEditorOpen} onToggle={(event) => setCharacterEditorOpen((event.currentTarget as HTMLDetailsElement).open)}><summary><span className="production-accordion-title">Character editor</span><span className="production-accordion-icon">{characterEditorOpen ? "−" : "+"}</span></summary>
+          <section className="production-section form-section characters-step" id="characters" role="tabpanel" aria-labelledby="workflow-tab-characters" hidden={activeWorkflowTab !== "characters"}>
+            <header className="characters-step-header"><div className="characters-heading-group production-section-heading-copy"><span className="production-section-number" aria-hidden="true">03</span><div><h2>Characters</h2><p>Choose which saved characters appear in this production.</p></div></div></header>
+            <div className="characters-selection-panel">
+              <div className="characters-grid">{characters.map((profile) => { const included = activeIds.includes(profile.id); return <article key={profile.id} className={`production-character-card ${included ? "is-included" : ""}`}><div className="production-character-card-top"><div className="production-character-copy"><h3>{profile.shortName}</h3><p className="production-character-role">{profile.role}</p></div><button type="button" className="character-included-toggle" aria-pressed={included} onClick={() => toggleActiveCharacter(profile.id)}><span aria-hidden="true">{included ? "✓" : "+"}</span>{included ? "Included" : "Include"}</button></div><p className="production-character-description">{profile.fullIdentity || profile.description.slice(0, 120)}</p><div className="production-character-actions"><button className="character-edit-button" type="button" aria-label={`Edit ${profile.shortName}`} onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); setCharacterEditorOpen(true); setCharacterLibraryOpen(false); }}>Edit</button></div></article>; })}</div>
+              <div className="characters-actions-row"><button type="button" className="character-add-button" onClick={() => { newCharacter(); setCharacterEditorOpen(true); setCharacterLibraryOpen(false); }}><span aria-hidden="true">+</span>Add Character</button><button type="button" className="character-library-button" aria-expanded={characterLibraryOpen} onClick={() => { setCharacterLibraryOpen((current) => !current); setCharacterEditorOpen(false); }}>Manage Library</button></div>
+            </div>
+            {characterEditorOpen && <section className="character-utility-panel character-editor-drawer" aria-label="Character editor">
+              <div className="character-utility-header"><div><h3>Character Editor</h3><p>Create a new character or update the selected profile.</p></div><button type="button" aria-label="Close character editor" onClick={() => setCharacterEditorOpen(false)}>×</button></div>
               <div className="character-browser-nav">
                 <button type="button" aria-label="Previous character" onClick={() => viewCharacter(characterIndex - 1)}>←</button>
                 <div><strong>{viewedCharacter?.fullIdentity || "No saved characters"}</strong><small>Character {characters.length ? characterIndex + 1 : 0} of {characters.length}</small></div>
@@ -2333,21 +2338,21 @@ Spoken-word rule: No understandable spoken words unless a spoken voice layer is 
                 {productionCharacters.map((profile) => <article key={profile.id}><button className="character-card-main" type="button" onClick={() => { setCharacterIndex(characters.findIndex((item) => item.id === profile.id)); editCharacter(profile); }}><b>{profile.shortName}</b><small>{profile.role}</small></button><button className="remove-chip" type="button" aria-label={`Remove ${profile.shortName} from video`} onClick={() => toggleActiveCharacter(profile.id)}>×</button></article>)}
                 {!productionCharacters.length && <p className="empty-note">No characters selected.</p>}
               </div></div>
-            </details>
+            </section>}
 
-            <label className="production-feature-toggle production-character-toggle"><div className="production-feature-copy"><strong>Include Character-Building Prompt</strong><span>Generate a dedicated identity and consistency prompt for the selected cast.</span></div><span className="production-switch"><input type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></span></label>
+            <section className="character-building-prompt-row"><div><h3>Include Character-Building Prompt</h3><p>Add a dedicated identity and consistency prompt to the output pack.</p></div><label className="production-switch"><input aria-label="Toggle character-building prompt" type="checkbox" checked={form.includeCharacterBuildingPrompt} onChange={(event) => update("includeCharacterBuildingPrompt", event.target.checked)} /><span className="production-switch-track" /></label></section>
 
-            <details className="advanced-panel production-accordion production-accordion-secondary">
-              <summary><span className="production-accordion-title">Character Library import and export</span><span className="production-accordion-icon">+</span></summary>
+            {characterLibraryOpen && <section className="character-utility-panel" aria-label="Character library controls">
+              <div className="character-utility-header"><div><h3>Manage Character Library</h3><p>Built-in profiles are protected. Imports are validated and merged.</p></div><button type="button" aria-label="Close character library" onClick={() => setCharacterLibraryOpen(false)}>×</button></div>
               <div className="advanced-content">
-                <p>Built-in profiles are protected. Imports are validated and merged; they never replace the whole library.</p>
                 <div className="button-row">
                   <button type="button" onClick={() => downloadJson({ characters }, "slapstick_prompt_pack_character_library.json")}>Export Character Library</button>
                   <button type="button" onClick={() => libraryImportRef.current?.click()}>Import and Merge Library</button>
                   <input hidden ref={libraryImportRef} type="file" accept=".json,application/json" onChange={(event) => importJson(event, "characters")} />
                 </div>
               </div>
-            </details>
+            </section>}
+            <footer className="characters-step-navigation"><button type="button" onClick={() => setActiveWorkflowTab("videoIdea")}><span aria-hidden="true">←</span><span>Back to Concept</span></button><button type="button" className="production-emerald-gold-cta" onClick={() => { setActiveWorkflowTab("setup"); setProductionTab("core"); }}><span>Continue to Creative Direction</span><span aria-hidden="true">→</span></button></footer>
           </section>
 
           <section className="production-section form-section scene-setup-shell" id="production-setup" role="tabpanel" aria-labelledby="workflow-tab-setup" hidden={activeWorkflowTab !== "setup"}>

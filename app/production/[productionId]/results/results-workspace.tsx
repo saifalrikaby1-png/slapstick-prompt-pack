@@ -6,7 +6,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from "docx";
 import { saveAs } from "file-saver";
 import { CharacterProfile, ProductionPack, RequestedOutput } from "../../../production-types";
 import { findProductionRecord, ProductionRecord, saveProductionRecord } from "../../../production-records";
-import { analyzePromptPackage, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
+import { analyzePromptPackage, changedPromptSections, isRepairImprovement, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
 
 const RESULT_TAB_ORDER = ["character", "frames", "complete-production-prompt", "prompt-quality", "timeline", "negative-prompt"] as const;
 type ResultTabId = (typeof RESULT_TAB_ORDER)[number];
@@ -85,7 +85,18 @@ function FrameResultPanel({ title, prompt, onCopy }: { title: string; prompt?: s
 function PromptQualityPanel({ analysis, onMaximize, isMaximizing, lastRepair }: { analysis: PromptQualityAnalysis; onMaximize: () => void; isMaximizing: boolean; lastRepair?: ProductionRecord["lastPromptQualityRepair"] }) {
   const balanceLabels = { repetitionControl: "Repetition control", lengthBalance: "Length balance", sectionResponsibility: "Section responsibility", contradictionControl: "Contradiction control", formattingHierarchy: "Formatting and hierarchy" };
   const balanceMaximums = { repetitionControl: 3, lengthBalance: 2, sectionResponsibility: 1, contradictionControl: 1, formattingHierarchy: 1 };
-  return <section className="prompt-quality-panel"><header className="prompt-quality-header"><div><p className="results-output-eyebrow">PROMPT QUALITY CONTROL</p><h2>Prompt Quality Score</h2><p>Measures the strength, clarity, consistency, completeness, and model-readiness of the generated production prompt.</p><strong className="prompt-quality-motto">The Strongest Prompts Ever Built.</strong></div><div className="prompt-quality-score"><strong>{analysis.score}%</strong><span>{analysis.label}</span></div></header><div className="prompt-quality-status-row"><strong>{analysis.label}</strong><span>{analysis.passedChecks.length} checks passed</span></div><div className="prompt-quality-meter" role="progressbar" aria-label="Prompt Quality Score" aria-valuemin={0} aria-valuemax={98} aria-valuenow={analysis.score}><span style={{ width: `${Math.min(100, analysis.score / 98 * 100)}%` }} /></div><div className="prompt-quality-category-grid">{analysis.categories.map((category) => <details className="prompt-quality-category" key={category.id}><summary className="prompt-quality-category-header"><h3>{category.label}</h3><span className="prompt-quality-category-score">{category.earnedScore} / {category.maxScore}</span></summary>{category.checks.map((check) => <p key={check.id}><strong>{check.status.toUpperCase()}</strong> — {check.message}</p>)}{category.id === "prompt-balance" && <div className="prompt-balance-details">{Object.entries(analysis.promptBalance.breakdown).map(([key, value]) => <p key={key}><span>{balanceLabels[key as keyof typeof balanceLabels]}</span><strong>{value} / {balanceMaximums[key as keyof typeof balanceMaximums]}</strong></p>)}{analysis.promptBalance.findings.some((finding) => finding.harmfulOccurrenceCount > 0) && <><h4>Unnecessary repetition detected:</h4><ul>{analysis.promptBalance.findings.filter((finding) => finding.harmfulOccurrenceCount > 0).map((finding) => <li key={finding.id}>“{finding.text}” appears in {finding.sections.join(" and ")}.</li>)}</ul></>}</div>}</details>)}</div>{analysis.warnings.length > 0 && <section className="prompt-quality-issues"><h3>Improvements available</h3>{analysis.warnings.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Warning · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}{analysis.failedChecks.length > 0 && <section className="prompt-quality-issues"><h3>Critical issues</h3>{analysis.failedChecks.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Failure · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}<button type="button" className="production-emerald-gold-cta" onClick={onMaximize} disabled={isMaximizing || analysis.score >= 98}>{isMaximizing ? "Maximizing Prompt Quality…" : analysis.score >= 98 ? "Maximum Quality Reached" : "Maximize Prompt Quality"}</button>{lastRepair && <section className="prompt-quality-repair-summary" aria-live="polite"><h3>AI optimization completed</h3><p>Before: {lastRepair.previousScore}% · After: {lastRepair.newScore}%</p>{lastRepair.improvements.length ? <ul>{lastRepair.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}</ul> : <p>We reviewed every repairable prompt issue, but no safe improvement could be applied without changing your approved creative choices.</p>}</section>}</section>;
+  const passedCategories = analysis.categories.filter((category) => category.earnedScore >= category.maxScore).length;
+  return <section className="prompt-quality-panel">
+    <header className="prompt-quality-header"><div><p className="results-output-eyebrow">PROMPT QUALITY CONTROL</p><h2>Prompt Quality Score</h2><p>Measures the strength, clarity, consistency, completeness, and model-readiness of the generated production prompt.</p><strong className="prompt-quality-motto">The Strongest Prompts Ever Built.</strong></div><div className="prompt-quality-score"><strong>{analysis.finalScore}%</strong><span>{analysis.label}</span>{analysis.appliedCaps.length > 0 && <small>Base {analysis.baseScore}%</small>}</div></header>
+    <div className="prompt-quality-status-row"><strong>{analysis.label}</strong><span>{passedCategories} of {analysis.categories.length} categories passed</span></div>
+    <div className="prompt-quality-meter" role="progressbar" aria-label="Prompt Quality Score" aria-valuemin={0} aria-valuemax={98} aria-valuenow={analysis.finalScore}><span style={{ width: `${Math.min(100, analysis.finalScore / 98 * 100)}%` }} /></div>
+    {analysis.appliedCaps.length > 0 && <details className="prompt-quality-caps"><summary>Score limits applied</summary>{analysis.appliedCaps.map((cap) => <article key={cap.id}><strong>{cap.label}</strong><span>Maximum possible score: {cap.maximumScore}%</span><p>{cap.reason}</p><small>Supporting failed checks: {cap.evidenceCheckIds.join(", ")} · Affected: {cap.affectedSections.join(", ")}</small></article>)}</details>}
+    <div className="prompt-quality-category-grid">{analysis.categories.map((category) => <details className="prompt-quality-category" key={category.id}><summary className="prompt-quality-category-header"><h3>{category.label}</h3><span className="prompt-quality-category-score">{category.earnedScore} / {category.maxScore}</span></summary>{category.checks.map((check) => <p key={check.id}><strong>{check.status.toUpperCase()}</strong> — {check.message}</p>)}{category.id === "prompt-balance" && <div className="prompt-balance-details">{Object.entries(analysis.promptBalance.breakdown).map(([key, value]) => <p key={key}><span>{balanceLabels[key as keyof typeof balanceLabels]}</span><strong>{value} / {balanceMaximums[key as keyof typeof balanceMaximums]}</strong></p>)}{analysis.promptBalance.findings.some((finding) => finding.penalty > 0) && <><h4>Redundant instruction groups:</h4><ul>{analysis.promptBalance.findings.filter((finding) => finding.penalty > 0).map((finding) => <li key={finding.id}>“{finding.text}” appears in {finding.sections.join(" and ")}.</li>)}</ul></>}</div>}</details>)}</div>
+    {analysis.warnings.length > 0 && <section className="prompt-quality-issues"><h3>Improvements available</h3>{analysis.warnings.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Warning · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}
+    {analysis.failedChecks.length > 0 && <section className="prompt-quality-issues"><h3>Critical issues</h3>{analysis.failedChecks.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Failure · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}
+    <button type="button" className="production-emerald-gold-cta" onClick={onMaximize} disabled={isMaximizing || analysis.finalScore >= 98}>{isMaximizing ? "Maximizing Prompt Quality…" : analysis.finalScore >= 98 ? "Maximum Quality Reached" : "Maximize Prompt Quality"}</button>
+    {lastRepair && <section className="prompt-quality-repair-summary" aria-live="polite"><h3>AI optimization completed</h3><p>Before: {lastRepair.previousScore}% · After: {lastRepair.newScore}%</p><p>Changed: {lastRepair.changedSections.join(", ")}</p><ul>{lastRepair.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}</ul></section>}
+  </section>;
 }
 
 export function ResultsWorkspace({ productionId }: { productionId: string }) {
@@ -98,7 +109,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   useEffect(() => {
     const load = () => {
       const record = findProductionRecord(productionId);
-      if (record && (!record.promptQuality || record.promptQuality.analysisVersion !== "1.1.0") && record.status === "completed") {
+      if (record && (!record.promptQuality || record.promptQuality.analysisVersion !== "2.0.0") && record.status === "completed") {
         const analysis = analyzePromptPackage(record.pack as ProductionPack, promptQualityContext(record.form, record.characterProfiles, record.generationMode, record.generatedOutputs || []));
         record.promptQuality = analysis;
         record.promptQualityHistory = [...(record.promptQualityHistory || []), { score: analysis.score, label: analysis.label, analyzedAt: analysis.analyzedAt, analysisVersion: analysis.analysisVersion, reason: "initial" }];
@@ -172,19 +183,20 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
         if (response?.ok && data.pack) {
           const candidatePack = { ...repair.pack, ...data.pack } as ProductionPack;
           const candidateAnalysis = analyzePromptPackage(candidatePack, promptQualityContext(production.form, production.characterProfiles, "ai", production.generatedOutputs || []));
-          if (candidateAnalysis.score > repair.newAnalysis.score && candidateAnalysis.criticalIssueCount <= repair.newAnalysis.criticalIssueCount) repair = { ...repair, pack: candidatePack, newScore: candidateAnalysis.score, newAnalysis: candidateAnalysis, improvements: [...repair.improvements, "AI semantic repair refined only the affected prompt sections."] };
+          const candidateChangedSections = changedPromptSections(repair.pack, candidatePack);
+          if (candidateChangedSections.length && isRepairImprovement(repair.newAnalysis, candidateAnalysis)) repair = { ...repair, pack: candidatePack, newScore: candidateAnalysis.finalScore, newAnalysis: candidateAnalysis, changedSections: [...new Set([...repair.changedSections, ...candidateChangedSections])], improvements: [...repair.improvements, "AI semantic repair refined only the affected canonical prompt sections."] };
         }
       }
     }
-    const updated = saveProductionRecord({
-      ...production,
-      pack: repair.pack,
-      promptQuality: repair.newAnalysis,
+    const canonicalChanges = changedPromptSections(production.pack as ProductionPack, repair.pack);
+    const accepted = canonicalChanges.length > 0 && isRepairImprovement(repair.previousAnalysis, repair.newAnalysis);
+    const updated = saveProductionRecord(accepted ? {
+      ...production, pack: repair.pack, promptQuality: repair.newAnalysis,
       promptQualityHistory: [...(production.promptQualityHistory || []), { score: repair.newScore, label: repair.newAnalysis.label, analyzedAt: repair.newAnalysis.analyzedAt, analysisVersion: repair.newAnalysis.analysisVersion, reason: "manual-maximize" }],
-      lastPromptQualityRepair: { previousScore: repair.previousScore, newScore: repair.newScore, changedSections: repair.changedSections, improvements: repair.improvements, repairedAt: new Date().toISOString() },
-    });
+      lastPromptQualityRepair: { previousScore: repair.previousScore, newScore: repair.newScore, changedSections: canonicalChanges, improvements: repair.improvements, repairedAt: new Date().toISOString() },
+    } : { ...production, lastPromptQualityRepair: undefined });
     setProduction(updated);
-    setNotice(repair.newScore > repair.previousScore ? `Prompt Quality improved from ${repair.previousScore}% to ${repair.newScore}%.` : "No safe prompt improvement was available.");
+    setNotice(accepted ? `Prompt Quality improved from ${repair.previousScore}% to ${repair.newScore}%.` : "No prompt changes were produced. Please try the optimization again.");
     setIsMaximizing(false);
   }
 

@@ -64,7 +64,7 @@ test("Prompt Quality panel, summary, persistence, and Word export use prompt-onl
 });
 
 test("older saved packs are analyzed without automatic rewrite", () => {
-  assert.match(results, /record && \(!record\.promptQuality \|\| record\.promptQuality\.analysisVersion !== "2\.0\.0"\) && record\.status === "completed"/);
+  assert.match(results, /record && \(!record\.promptQuality \|\| record\.promptQuality\.analysisVersion !== "2\.1\.0" \|\| record\.promptQuality\.packageHash !== currentHash\) && record\.status === "completed"/);
   assert.match(results, /analyzePromptPackage\(record\.pack/);
   assert.doesNotMatch(results.slice(results.indexOf("record && (!record.promptQuality"), results.indexOf("setProduction(record)")), /repairPromptPackage|maximizePromptQuality/);
 });

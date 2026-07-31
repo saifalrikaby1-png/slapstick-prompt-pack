@@ -6,7 +6,7 @@ import { Document, HeadingLevel, Packer, Paragraph } from "docx";
 import { saveAs } from "file-saver";
 import { CharacterProfile, ProductionPack } from "../../../production-types";
 import { findProductionRecord, ProductionRecord, saveProductionRecord } from "../../../production-records";
-import { analyzePromptPackage, changedPromptSections, isRepairImprovement, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
+import { analyzePromptPackage, changedPromptSections, createPromptPackageHash, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis, shouldAcceptRepairResult, verifyRepairs } from "../../../prompt-quality";
 import { normalizeProductionFormat } from "../../../production-format";
 import { normalizeProductionPackEncoding } from "../../../prompt-choreography";
 
@@ -90,7 +90,7 @@ function PromptQualityPanel({ analysis, onMaximize, optimizationStatus, optimiza
   const balanceMaximums = { repetitionControl: 3, lengthBalance: 2, sectionResponsibility: 1, contradictionControl: 1, formattingHierarchy: 1 };
   const passedCategories = analysis.categories.filter((category) => category.earnedScore >= category.maxScore).length;
   const active = ["analyzing", "repairing", "validating", "saving"].includes(optimizationStatus);
-  const labels: Record<PromptOptimizationStatus, string> = { idle: "Maximize Prompt Quality", analyzing: "Analyzing Prompt…", repairing: "Repairing Prompt…", validating: "Validating Improvements…", saving: "Saving Improvements…", complete: "Prompt Maximized", error: "Try Maximizing Again" };
+  const labels: Record<PromptOptimizationStatus, string> = { idle: "Maximize Prompt Quality", analyzing: "Analyzing Issues…", repairing: "Fixing Prompt Issues…", validating: "Checking Repairs…", saving: "Saving Repaired Prompt…", complete: "Prompt Issues Fixed", error: "Try Fixing Again" };
   return <section className="prompt-quality-panel">
     <header className="prompt-quality-header"><div><p className="results-output-eyebrow">PROMPT QUALITY CONTROL</p><h2>Prompt Quality Score</h2><p>Measures the strength, clarity, consistency, completeness, and model-readiness of the generated production prompt.</p><strong className="prompt-quality-motto">The Strongest Prompts Ever Built.</strong></div><div className="prompt-quality-score"><strong>{analysis.finalScore}%</strong><span>{analysis.label}</span>{analysis.appliedCaps.length > 0 && <small>Base {analysis.baseScore}%</small>}</div></header>
     <div className="prompt-quality-status-row"><strong>{analysis.label}</strong><span>{passedCategories} of {analysis.categories.length} categories passed</span></div>
@@ -103,7 +103,7 @@ function PromptQualityPanel({ analysis, onMaximize, optimizationStatus, optimiza
     <button type="button" className="production-emerald-gold-cta" onClick={onMaximize} disabled={active} aria-busy={active}>{active && <span aria-hidden="true">◌ </span>}{labels[optimizationStatus]}</button>
     {optimizationError && <section className="prompt-quality-issue" role="alert"><strong>Prompt optimization failed</strong><p>{optimizationError}</p><button type="button" className="production-secondary-button" onClick={onMaximize}>Try Again</button><details><summary>View Technical Details</summary><p>The original production was preserved because the candidate repair was not safely better.</p></details></section>}
     {canUndo && <button type="button" className="production-secondary-button" onClick={onUndo}>Undo Maximize</button>}
-    {lastRepair && <section className="prompt-quality-repair-summary" aria-live="polite"><h3>AI optimization completed</h3><p>Before: {lastRepair.previousScore}% · After: {lastRepair.newScore}%</p><p>Changed: {lastRepair.changedSections.join(", ")}</p><ul>{lastRepair.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}</ul></section>}
+    {lastRepair && <section className="prompt-quality-repair-summary" aria-live="polite"><h3>Prompt repairs applied</h3><p>Before: {lastRepair.previousScore}% · After: {lastRepair.newScore}%</p><p>Changed: {lastRepair.changedSections.join(", ")}</p><ul>{lastRepair.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}</ul>{lastRepair.changes?.length ? <details><summary>View Repairs</summary>{lastRepair.changes.map((change) => <article key={`${change.issueId}-${change.affectedSections.join("-")}`}><strong>{change.issueCode}</strong><p>{change.description}</p>{change.affectedSections.map((section) => <details key={section}><summary>{section}</summary><h4>Previous text</h4><pre>{change.before[section]}</pre><h4>Repaired text</h4><pre>{change.after[section]}</pre></details>)}</article>)}</details> : null}</section>}
   </section>;
 }
 
@@ -119,7 +119,8 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   useEffect(() => {
     const load = () => {
       const record = findProductionRecord(productionId);
-      if (record && (!record.promptQuality || record.promptQuality.analysisVersion !== "2.0.0") && record.status === "completed") {
+      const currentHash = record?.pack && Object.keys(record.pack).length === 9 ? createPromptPackageHash(record.pack as ProductionPack) : "";
+      if (record && (!record.promptQuality || record.promptQuality.analysisVersion !== "2.1.0" || record.promptQuality.packageHash !== currentHash) && record.status === "completed") {
         const analysis = analyzePromptPackage(record.pack as ProductionPack, promptQualityContext(record.form, record.characterProfiles, record.generationMode, record.generatedOutputs || []));
         record.promptQuality = analysis;
         record.promptQualityHistory = [...(record.promptQualityHistory || []), { score: analysis.score, label: analysis.label, analyzedAt: analysis.analyzedAt, analysisVersion: analysis.analysisVersion, reason: "initial" }];
@@ -196,14 +197,15 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
         setNotice("No prompt changes were produced. Please try the optimization again.");
         return;
       }
-      if (!isRepairImprovement(initialAnalysis, repairedAnalysis)) throw new Error("The repair did not safely improve the production prompt. Your original production was preserved.");
+      const verification = verifyRepairs({ before: initialAnalysis, after: repairedAnalysis, changes: repair.changes });
+      if (!shouldAcceptRepairResult({ before: initialAnalysis, after: repairedAnalysis, verification })) throw new Error("No reported prompt issue was safely repaired. The original prompt was preserved.");
       setPromptOptimizationStatus("saving");
       await Promise.resolve();
-      const updated = saveProductionRecord({ ...production, pack: candidatePack, promptQuality: repair.newAnalysis, promptQualityHistory: [...(production.promptQualityHistory || []), { score: repairedAnalysis.finalScore, label: repairedAnalysis.label, analyzedAt: repairedAnalysis.analyzedAt, analysisVersion: repairedAnalysis.analysisVersion, reason: "manual-maximize" }], lastPromptQualityRepair: { previousScore: initialAnalysis.finalScore, newScore: repairedAnalysis.finalScore, changedSections: [...new Set([...canonicalChanges, ...normalizationChanges])], improvements: repair.improvements, repairedAt: new Date().toISOString() } });
+      const updated = saveProductionRecord({ ...production, pack: candidatePack, promptQuality: repair.newAnalysis, promptQualityHistory: [...(production.promptQualityHistory || []), { score: repairedAnalysis.finalScore, label: repairedAnalysis.label, analyzedAt: repairedAnalysis.analyzedAt, analysisVersion: repairedAnalysis.analysisVersion, reason: "manual-maximize" }], lastPromptQualityRepair: { previousScore: initialAnalysis.finalScore, newScore: repairedAnalysis.finalScore, changedSections: [...new Set([...canonicalChanges, ...normalizationChanges])], improvements: repair.improvements, repairedAt: new Date().toISOString(), changes: repair.changes, packageHash: repairedAnalysis.packageHash } });
       setPreviousProductionVersion(original);
       setProduction(updated);
       setPromptOptimizationStatus("complete");
-      setNotice(`Prompt Quality improved from ${initialAnalysis.finalScore}% to ${repairedAnalysis.finalScore}%. ${canonicalChanges.length} prompt section${canonicalChanges.length === 1 ? "" : "s"} repaired; ${repairedAnalysis.repairableIssueCount} issue${repairedAnalysis.repairableIssueCount === 1 ? " remains" : "s remain"}.`);
+      setNotice(`${verification.resolvedIssueIds.length} prompt issue${verification.resolvedIssueIds.length === 1 ? "" : "s"} repaired. Quality changed from ${initialAnalysis.finalScore}% to ${repairedAnalysis.finalScore}%. ${canonicalChanges.length} prompt section${canonicalChanges.length === 1 ? "" : "s"} changed.`);
     } catch (error) {
       setPromptOptimizationError(error instanceof Error ? error.message : "We could not safely improve the prompt. Your original production was preserved.");
       setPromptOptimizationStatus("error");

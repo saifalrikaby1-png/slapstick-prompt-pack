@@ -8,7 +8,7 @@ import {
   StoredPack,
 } from "./production-types";
 import { migrateStoredPack } from "./production-engine";
-import type { PromptPackageSectionId, PromptQualityAnalysis } from "./prompt-quality";
+import type { PromptPackageSectionId, PromptQualityAnalysis, PromptRepairChange } from "./prompt-quality";
 import { conceptInputFromForm, generateWorkingTitleFromResolvedConcept, resolveProductionConceptSync } from "./production-concept";
 import { normalizeProductionPackEncoding } from "./prompt-choreography";
 
@@ -23,7 +23,7 @@ export type ProductionRecord = SavedProductionPack & {
   error?: { message: string; code?: string };
   promptQuality?: PromptQualityAnalysis;
   promptQualityHistory?: Array<{ score: number; label: string; analyzedAt: string; analysisVersion: string; reason: "initial" | "automatic-repair" | "manual-maximize" }>;
-  lastPromptQualityRepair?: { previousScore: number; newScore: number; changedSections: PromptPackageSectionId[]; improvements: string[]; repairedAt: string };
+  lastPromptQualityRepair?: { previousScore: number; newScore: number; changedSections: PromptPackageSectionId[]; improvements: string[]; repairedAt: string; changes?: PromptRepairChange[]; packageHash?: string };
 };
 
 export type ProductionRecordInput = {

@@ -2,8 +2,10 @@ import type { CharacterProfile, ProductionForm, ProductionPack, ResolvedProducti
 
 export type PromptPackageSectionId = "start-frame" | "end-frame" | "video-lock" | "video-prompt" | "music" | "sound-effects" | "video-rules" | "timeline";
 export type PromptPackageSections = Partial<Record<PromptPackageSectionId, string>>;
-export type InventoryEntityKind = "character" | "movable-object" | "environment-location" | "environment-surface" | "scene-zone" | "object-attribute" | "visual-effect" | "unknown";
+export type InventoryEntityKind = "character" | "authorized-movable-object" | "unauthorized-movable-object" | "filmmaking-term" | "environment-term" | "scene-zone" | "object-attribute" | "visual-effect" | "unknown";
 export type ClassifiedPromptEntity = { text: string; normalizedText: string; kind: InventoryEntityKind; sectionId: PromptPackageSectionId; evidence: string };
+export type InventoryCandidate = { rawText: string; normalizedText: string; kind: InventoryEntityKind; sectionId: PromptPackageSectionId; evidence: string; startIndex: number; endIndex: number };
+export type ProtectedInventorySpan = { startIndex: number; endIndex: number; kind: InventoryEntityKind; phrase: string };
 export type AuthorizedObjectDescriptor = { id: string; name: string; aliases: string[]; attributes: string[] };
 export type AuthorizedEnvironmentDescriptor = { locationName: string; surfaces: string[]; zones: string[]; allowedVocabulary: string[] };
 export type AuthorizedProductionInventory = { characterIds: string[]; characterNames: string[]; objects: AuthorizedObjectDescriptor[]; environment: AuthorizedEnvironmentDescriptor; location: { name: string; description: string } };
@@ -27,23 +29,41 @@ export function buildAuthorizedProductionInventory(concept: ResolvedProductionCo
   const attributes = [concept.primaryObject.visualIdentity.replace(new RegExp(`\\b${concept.primaryObject.objectName}\\b`, "i"), "").replace(/^one\s+/i, "").trim(), ...(concept.primaryObject.visualIdentity.match(/(?:leaf-shaped|printed|painted|striped|smooth|rounded|spiral|bright|dark|\w+-colored)\s+(?:mark|symbol|stripe|surface|shape|patch|pattern)/gi) || [])].filter(Boolean);
   return { characterIds: characters.map((character) => character.id), characterNames: characters.map((character) => character.shortName), objects: [{ id: "primary-object", name: concept.primaryObject.objectName, aliases: [...new Set([concept.primaryObject.objectName, objectWords.at(-1) || concept.primaryObject.objectName, concept.primaryObject.visualIdentity])], attributes: [...new Set(attributes)] }], environment: { locationName: concept.location.name, surfaces: ["path", "stone path", "route", "ground", "boardwalk", "forest floor", "slope", "edge"], zones: ["upper route", "lower route", "upper area", "lower area", "payoff area", "action area", "payoff zone", "slope top", "slope lower", "curved edge", "workshop entrance", "boardwalk center"], allowedVocabulary: [concept.location.name, concept.location.visualDescription, ...concept.location.fixedEnvironmentFacts] }, location: { name: concept.location.name, description: concept.location.visualDescription } };
 }
-const KNOWN_PROPS = ["folding screen", "hiding screen", "screen", "sign", "cart", "barrier", "platform", "table", "chair", "tool", "vehicle", "box", "basket", "lantern", "seashell", "acorn", "berry", "mushroom"];
+export const PROTECTED_FILMMAKING_PHRASES = ["screen direction", "screen axis", "screen-left", "screen-right", "screen left", "screen right", "screen position", "screen space", "screen framing", "screen composition", "on-screen", "off-screen", "on screen", "off screen", "camera direction", "camera axis", "action axis", "frame direction"] as const;
+export const PHYSICAL_SCREEN_PHRASES = ["hiding screen", "folding screen", "privacy screen", "projection screen", "wooden screen", "portable screen", "decorative screen", "room divider screen"] as const;
+const KNOWN_PROPS = [...PHYSICAL_SCREEN_PHRASES, "screen", "sign", "cart", "barrier", "platform", "table", "chair", "tool", "vehicle", "box", "basket", "lantern", "seashell", "acorn", "berry", "mushroom"];
 const LOCATION_SURFACES = ["ground", "sky", "sea", "boardwalk", "path", "slope", "stone path", "clearing", "floor", "wall"];
 const normalized = (value: string) => value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 const SCENE_ZONE_TERMS = ["path", "stone path", "route", "upper route", "lower route", "upper area", "lower area", "payoff area", "action area", "ground", "boardwalk", "workshop", "forest floor", "clearing", "payoff zone", "slope", "edge"];
 const ATTRIBUTE_TERMS = ["leaf-shaped mark", "printed mark", "painted symbol", "stripe", "texture", "pattern", "color patch"];
 const EFFECT_TERMS = ["shadow", "light", "dust", "water splash"];
+export function normalizeInventoryText(value: string): string { return value.toLowerCase().replace(/[â€œâ€"'`]/g, "").replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim(); }
+const phrasePattern = (phrase: string) => phrase.split(/\s+/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[\\s-]+");
+export function phraseExists(fullText: string, phrase: string): boolean { return new RegExp(`(?:^|\\b)${phrasePattern(normalizeInventoryText(phrase))}(?:\\b|$)`, "i").test(normalizeInventoryText(fullText)); }
+export function classifyScreenUsage(fullText: string): InventoryEntityKind {
+  if (PHYSICAL_SCREEN_PHRASES.some((phrase) => phraseExists(fullText, phrase))) return "unauthorized-movable-object";
+  if (PROTECTED_FILMMAKING_PHRASES.some((phrase) => phraseExists(fullText, phrase))) return "filmmaking-term";
+  return "unknown";
+}
+export function collectProtectedInventorySpans(text: string): ProtectedInventorySpan[] {
+  return PROTECTED_FILMMAKING_PHRASES.flatMap((phrase) => [...text.matchAll(new RegExp(`(?:^|\\b)${phrasePattern(phrase)}(?:\\b|$)`, "gi"))].map((match) => ({ startIndex: match.index || 0, endIndex: (match.index || 0) + match[0].length, kind: "filmmaking-term" as const, phrase })));
+}
+export function candidateInsideProtectedSpan({ startIndex, endIndex, spans }: { startIndex: number; endIndex: number; spans: ProtectedInventorySpan[] }): boolean { return spans.some((span) => startIndex >= span.startIndex && endIndex <= span.endIndex); }
 export function classifyPromptEntity(text: string, sectionId: PromptPackageSectionId, authorizedInventory?: AuthorizedProductionInventory): ClassifiedPromptEntity {
   const value = normalized(text);
   const object = authorizedInventory?.objects.find((entry) => entry.aliases.some((alias) => value === normalized(alias)) || entry.attributes.some((attribute) => value === normalized(attribute)));
-  const kind: InventoryEntityKind = authorizedInventory?.characterNames.some((name) => value === normalized(name)) ? "character" : object?.attributes.some((attribute) => value === normalized(attribute)) ? "object-attribute" : object ? "movable-object" : ATTRIBUTE_TERMS.includes(value) || /(?:mark|symbol|stripe|texture|pattern|color patch)$/.test(value) ? "object-attribute" : SCENE_ZONE_TERMS.includes(value) || /^(?:upper|lower|payoff|action|slope|boardwalk)\s+(?:path|route|area|zone|edge|center|top|lower)$/.test(value) ? "scene-zone" : EFFECT_TERMS.includes(value) ? "visual-effect" : KNOWN_PROPS.includes(value) ? "movable-object" : authorizedInventory && value.includes(normalized(authorizedInventory.location.name)) ? "environment-location" : "unknown";
+  const screenKind = /\bscreen\b/i.test(text) ? classifyScreenUsage(text) : "unknown";
+  const kind: InventoryEntityKind = authorizedInventory?.characterNames.some((name) => value === normalized(name)) ? "character" : object?.attributes.some((attribute) => value === normalized(attribute)) ? "object-attribute" : object ? "authorized-movable-object" : screenKind !== "unknown" ? screenKind : ATTRIBUTE_TERMS.includes(value) || /(?:mark|symbol|stripe|texture|pattern|color patch)$/.test(value) ? "object-attribute" : SCENE_ZONE_TERMS.includes(value) || /^(?:upper|lower|payoff|action|slope|boardwalk)\s+(?:path|route|area|zone|edge|center|top|lower)$/.test(value) ? "scene-zone" : EFFECT_TERMS.includes(value) ? "visual-effect" : KNOWN_PROPS.includes(value) ? "unauthorized-movable-object" : authorizedInventory && value.includes(normalized(authorizedInventory.location.name)) ? "environment-term" : "unknown";
   return { text, normalizedText: value, kind, sectionId, evidence: text };
 }
 export function detectUnauthorizedObjects({ sections, authorizedInventory }: { sections: PromptPackageSections; authorizedInventory: AuthorizedProductionInventory }): UnauthorizedObjectFinding[] {
   const authorized = authorizedInventory.objects.flatMap((object) => object.aliases.map(normalized));
-  return KNOWN_PROPS.filter((noun) => classifyPromptEntity(noun, "video-prompt", authorizedInventory).kind === "movable-object" && !LOCATION_SURFACES.includes(noun) && !authorized.some((name) => normalized(noun) === name || normalized(noun).includes(name) || name.includes(normalized(noun)))).map((noun) => {
-    const matches = Object.entries(sections).filter(([, value]) => new RegExp(`\\b${noun.replace(/ /g, "\\s+")}s?\\b`, "i").test(value || ""));
-    return matches.length ? { objectName: noun, sections: matches.map(([section]) => section as PromptPackageSectionId), evidence: matches.map(([, value]) => (value || "").match(new RegExp(`.{0,45}\\b${noun.replace(/ /g, "\\s+")}s?\\b.{0,45}`, "i"))?.[0] || noun) } : null;
+  return KNOWN_PROPS.filter((noun) => !LOCATION_SURFACES.includes(noun) && !authorized.some((name) => normalized(noun) === name || normalized(noun).includes(name) || name.includes(normalized(noun)))).map((noun) => {
+    const matches = Object.entries(sections).flatMap(([section, value]) => {
+      const source = value || ""; const spans = collectProtectedInventorySpans(source); const regex = new RegExp(`\\b${noun.replace(/ /g, "\\s+")}s?\\b`, "gi");
+      return [...source.matchAll(regex)].filter((match) => !candidateInsideProtectedSpan({ startIndex: match.index || 0, endIndex: (match.index || 0) + match[0].length, spans })).map((match) => ({ section: section as PromptPackageSectionId, evidence: source.slice(Math.max(0, (match.index || 0) - 45), Math.min(source.length, (match.index || 0) + match[0].length + 45)) }));
+    });
+    return matches.length ? { objectName: noun, sections: [...new Set(matches.map((match) => match.section))], evidence: matches.map((match) => match.evidence) } : null;
   }).filter((finding): finding is UnauthorizedObjectFinding => Boolean(finding));
 }
 export function repairUnauthorizedObjects(pack: ProductionPack, authorizedInventory: AuthorizedProductionInventory, concept: ResolvedProductionConcept): ProductionPack {

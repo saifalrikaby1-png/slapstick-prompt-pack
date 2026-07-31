@@ -1,9 +1,10 @@
 import type { CharacterProfile, ProductionForm, ProductionPack, ProductionTimeline, ResolvedProductionConcept, ResolvedSpatialActionPlan } from "./production-types";
 import { normalizeProductionFormat, validateProductionTimeline } from "./production-format";
 import { detectUnresolvedPromptLanguage, GENERIC_ACTION_PHRASES, validateCharacterParticipation, validateObjectTrajectory } from "./production-concept";
-import { analyzeCharacterParticipation, buildAuthorizedProductionInventory, buildCompleteObjectTrajectory, detectUnauthorizedObjects, normalizeGeneratedTextEncoding, normalizeProductionPackEncoding, packSections, validateCompleteObjectTrajectory } from "./prompt-choreography";
+import { analyzeCharacterParticipation, buildAuthorizedProductionInventory, buildCompleteObjectTrajectory, detectUnauthorizedObjects, normalizeGeneratedTextEncoding, normalizeProductionPackEncoding, packSections, repairUnauthorizedObjects, validateCompleteObjectTrajectory } from "./prompt-choreography";
 import { analyzeInternalValidationLanguage, buildResolvedSpatialActionPlan, removeInternalValidationLanguage, renderSpatialVideoPrompt, validateActionOwnership, validateCharacterPathContinuity, validateFinalStateReachability, validateLocationVocabulary, validateMeaningfulParticipation, validateObjectDirectionContinuity, validateSpatialActionPlan } from "./spatial-action-plan";
 import { buildMusicFromFinalizedBeats, buildSfxFromFinalizedBeats, getFinalizedProductionBeats, inferObjectMotionProfile, renderCoherentLocation, renderTimedDirections, resolveLocationPlan, validateAllCharacterFinalStates, validateLocationCoherence, validateObjectFinalState, validateObjectMotionCompatibility, validateRenderedPhysicalAction } from "./prompt-finalization";
+import { applyIssueSpecificPromptRepairs } from "./prompt-repair-engine";
 
 export type PromptQualityLevel = "maximum" | "expert" | "production-ready" | "needs-refinement" | "major-issues";
 export type PromptQualityStatus = "pass" | "warning" | "fail";
@@ -39,7 +40,9 @@ export type PromptQualityCheck = {
   score: number; maxScore: number; message: string; affectedSections: PromptPackageSectionId[];
   repairable: boolean; severity: "critical" | "major" | "minor";
   evidence: string; recommendedRepair: string; pointsLost: number;
+  code: PromptQualityIssueCode; active: boolean; entity?: string;
 };
+export type PromptQualityIssueCode = "unauthorized-movable-object" | "inventory-false-positive" | "missing-character-final-state" | "missing-object-final-state" | "incomplete-object-trajectory" | "wrong-action-owner" | "contradictory-object-direction" | "malformed-physical-action" | "multiple-contact-methods" | "impossible-collision" | "unreachable-final-state" | "audio-timing-mismatch" | "location-vocabulary-conflict" | "internal-model-facing-language" | "generic-payoff" | "generic-video-beat" | "unresolved-placeholder";
 export type PromptQualityCategory = { id: PromptQualityCategoryId; label: string; weight: number; earnedScore: number; maxScore: number; checks: PromptQualityCheck[] };
 export type PromptQualityCap = {
   id: string; label: string; reason: string; maximumScore: number; isActive: boolean;
@@ -51,7 +54,7 @@ export type PromptQualityAnalysis = {
   passedChecks: PromptQualityCheck[]; warnings: PromptQualityCheck[]; failedChecks: PromptQualityCheck[];
   hardCapsApplied: PromptQualityCap[]; appliedCaps: PromptQualityCap[]; repairableIssueCount: number; criticalIssueCount: number;
   promptBalance: PromptBalanceResult;
-  analyzedAt: string; analysisVersion: string; mode: "demo" | "ai";
+  analyzedAt: string; analysisVersion: string; mode: "demo" | "ai"; issues: PromptQualityCheck[]; packageHash: string;
 };
 export type PromptQualityContext = {
   mode: "demo" | "ai"; selectedCharacters: CharacterProfile[]; durationSeconds: number;
@@ -63,8 +66,11 @@ export type PromptQualityContext = {
 };
 export type PromptQualityRepairResult = {
   previousScore: number; newScore: number; previousAnalysis: PromptQualityAnalysis; newAnalysis: PromptQualityAnalysis;
-  changedSections: PromptPackageSectionId[]; improvements: string[]; pack: ProductionPack;
+  changedSections: PromptPackageSectionId[]; improvements: string[]; pack: ProductionPack; changes: PromptRepairChange[]; verification: PromptRepairVerification;
 };
+export type PromptSectionKey = "startFramePrompt" | "endFramePrompt" | "videoLock" | "videoPrompt" | "musicDirection" | "soundEffectsDirection" | "videoRules";
+export type PromptRepairChange = { issueId: string; issueCode: PromptQualityIssueCode; affectedSections: PromptSectionKey[]; before: Partial<Record<PromptSectionKey, string>>; after: Partial<Record<PromptSectionKey, string>>; description: string };
+export type PromptRepairVerification = { resolvedIssueIds: string[]; unresolvedIssueIds: string[]; newIssueIds: string[] };
 export type PromptRepairAction = {
   id: string; issueIds: string[]; targetSections: PromptPackageSectionId[];
   protectedSections: PromptPackageSectionId[]; instruction: string; priority: number;
@@ -227,11 +233,30 @@ export function calculateActionDensity(value: string, durationSeconds: number) {
 }
 function contains(text: string, values: string[]) { const normalized = normalizePromptText(text); return values.some((value) => normalized.includes(normalizePromptText(value))); }
 function allNames(text: string, characters: CharacterProfile[]) { return characters.every((character) => contains(text, [character.shortName])); }
+function issueCodeFor(categoryId: PromptQualityCategoryId, message: string): PromptQualityIssueCode {
+  if (categoryId === "authorized-inventory") return "unauthorized-movable-object";
+  if (categoryId === "character-participation") return "missing-character-final-state";
+  if (categoryId === "object-trajectory") return /final|stop|sett/i.test(message) ? "missing-object-final-state" : "incomplete-object-trajectory";
+  if (categoryId === "action-ownership") return "wrong-action-owner";
+  if (categoryId === "direction-continuity") return "contradictory-object-direction";
+  if (categoryId === "spatial-consistency") return "impossible-collision";
+  if (categoryId === "final-state-reachability") return /object/i.test(message) ? "missing-object-final-state" : "missing-character-final-state";
+  if (categoryId === "audio-synchronization") return "audio-timing-mismatch";
+  if (categoryId === "concept-specificity") return /placeholder/i.test(message) ? "unresolved-placeholder" : "generic-payoff";
+  if (categoryId === "action-flow") return "generic-video-beat";
+  if (categoryId === "model-facing-clarity") return /foot or tail|paw or hand|pushes or taps|sidesteps or jumps/i.test(message) ? "multiple-contact-methods" : /location|boardwalk|workshop|forest/i.test(message) ? "location-vocabulary-conflict" : /internal|authorized|source zone|target zone/i.test(message) ? "internal-model-facing-language" : "malformed-physical-action";
+  return "internal-model-facing-language";
+}
 function makeCheck(categoryId: PromptQualityCategoryId, ok: boolean, partial: boolean, message: string, sections: PromptPackageSectionId[], severity: PromptQualityCheck["severity"] = "major", checkId = `${categoryId}-core`): PromptQualityCheck {
   const maxScore = categoryId === "prompt-balance" ? 0 : PROMPT_QUALITY_WEIGHTS[categoryId];
   const status: PromptQualityStatus = ok ? "pass" : partial ? "warning" : "fail";
   const score = ok ? maxScore : partial ? Math.round(maxScore * .65) : 0;
-  return { id: checkId, categoryId, label: CATEGORY_LABELS[categoryId], status, score, maxScore, message, evidence: message, recommendedRepair: ok ? "No repair needed." : `Repair ${sections.join(", ")} and re-run Prompt Quality.`, pointsLost: maxScore - score, affectedSections: sections, repairable: !ok, severity };
+  return { id: checkId, categoryId, label: CATEGORY_LABELS[categoryId], status, score, maxScore, message, evidence: message, recommendedRepair: ok ? "No repair needed." : `Repair ${sections.join(", ")} and re-run Prompt Quality.`, pointsLost: maxScore - score, affectedSections: sections, repairable: !ok, severity, code: issueCodeFor(categoryId, message), active: !ok };
+}
+
+export function createPromptPackageHash(pack: ProductionPack): string {
+  const value = JSON.stringify({ startFrame: pack.startFramePrompt, endFrame: pack.endFramePrompt, videoLock: pack.videoLock, videoPrompt: pack.videoTimeline, music: pack.musicPath, soundEffects: pack.soundEffects, videoRules: pack.finalGenerationRule });
+  let hash = 2166136261; for (let index = 0; index < value.length; index += 1) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 16777619); } return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 export function analyzePromptPackage(pack: ProductionPack, context: PromptQualityContext): PromptQualityAnalysis {
@@ -351,7 +376,8 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   if (promptBalance.extremeDuplication) addCap("extremePromptDuplication", "Extreme prompt duplication", "Large repeated blocks make the prompt materially unusable.", 89, byCategory("model-facing-clarity"), ["video-lock", "video-prompt", "video-rules"]);
   const scoreResult = calculateFinalPromptQualityScore(categories, caps);
   const level = getPromptQualityLevel(scoreResult.finalScore);
-  const analysis: PromptQualityAnalysis = { score: scoreResult.finalScore, ...scoreResult, ...level, categories, passedChecks: checks.filter((check) => check.status === "pass"), warnings: checks.filter((check) => check.status === "warning" || (check.status === "fail" && check.severity !== "critical")), failedChecks: checks.filter((check) => check.status === "fail" && check.severity === "critical"), hardCapsApplied: scoreResult.appliedCaps, repairableIssueCount: checks.filter((check) => check.repairable).length, criticalIssueCount: checks.filter((check) => check.severity === "critical" && check.status !== "pass").length, promptBalance, analyzedAt: new Date().toISOString(), analysisVersion: "2.0.0", mode: context.mode };
+  const activeIssues = checks.filter((check) => check.active);
+  const analysis: PromptQualityAnalysis = { score: scoreResult.finalScore, ...scoreResult, ...level, categories, passedChecks: checks.filter((check) => check.status === "pass"), warnings: checks.filter((check) => check.status === "warning" || (check.status === "fail" && check.severity !== "critical")), failedChecks: checks.filter((check) => check.status === "fail" && check.severity === "critical"), hardCapsApplied: scoreResult.appliedCaps, repairableIssueCount: activeIssues.filter((check) => check.repairable).length, criticalIssueCount: activeIssues.filter((check) => check.severity === "critical").length, promptBalance, analyzedAt: new Date().toISOString(), analysisVersion: "2.1.0", mode: context.mode, issues: activeIssues, packageHash: createPromptPackageHash(pack) };
   assertPromptQualityScoreConsistency(analysis);
   return analysis;
 }
@@ -417,10 +443,39 @@ export function isRepairImprovement(before: PromptQualityAnalysis, after: Prompt
   return after.finalScore === before.finalScore && after.baseScore === before.baseScore && after.failedChecks.length < before.failedChecks.length;
 }
 
+const SECTION_KEY_MAP: Record<PromptPackageSectionId, PromptSectionKey | undefined> = { characters: undefined, "start-frame": "startFramePrompt", "end-frame": "endFramePrompt", "video-lock": "videoLock", "video-prompt": "videoPrompt", music: "musicDirection", "sound-effects": "soundEffectsDirection", "video-rules": "videoRules", timeline: "videoPrompt", "negative-prompt": undefined };
+const PACK_KEY_MAP: Record<PromptSectionKey, keyof ProductionPack> = { startFramePrompt: "startFramePrompt", endFramePrompt: "endFramePrompt", videoLock: "videoLock", videoPrompt: "videoTimeline", musicDirection: "musicPath", soundEffectsDirection: "soundEffects", videoRules: "finalGenerationRule" };
+export function didRepairChangeContent(change: PromptRepairChange): boolean { return change.affectedSections.some((section) => change.before[section] !== change.after[section]); }
+export function verifyRepairs({ before, after }: { before: PromptQualityAnalysis; after: PromptQualityAnalysis; changes: PromptRepairChange[] }): PromptRepairVerification {
+  const beforeActive = new Map(before.issues.filter((issue) => issue.active).map((issue) => [issue.id, issue]));
+  const afterActive = new Map(after.issues.filter((issue) => issue.active).map((issue) => [issue.id, issue]));
+  return { resolvedIssueIds: [...beforeActive.keys()].filter((id) => !afterActive.has(id)), unresolvedIssueIds: [...beforeActive.keys()].filter((id) => afterActive.has(id)), newIssueIds: [...afterActive.keys()].filter((id) => !beforeActive.has(id)) };
+}
+export function shouldAcceptRepairResult({ before, after, verification }: { before: PromptQualityAnalysis; after: PromptQualityAnalysis; verification: PromptRepairVerification }): boolean {
+  const introducedCriticalIssue = after.issues.some((issue) => issue.active && issue.severity === "critical" && !before.issues.some((prior) => prior.id === issue.id && prior.active));
+  const majorCount = (analysis: PromptQualityAnalysis) => analysis.issues.filter((issue) => issue.active && (issue.severity === "critical" || issue.severity === "major")).length;
+  return verification.resolvedIssueIds.length > 0 && !introducedCriticalIssue && majorCount(after) <= majorCount(before);
+}
+export function sortPromptIssuesByRepairPriority(issues: PromptQualityCheck[]): PromptQualityCheck[] {
+  const priority: Record<PromptQualityIssueCode, number> = { "inventory-false-positive": 1, "unauthorized-movable-object": 2, "wrong-action-owner": 3, "contradictory-object-direction": 4, "incomplete-object-trajectory": 5, "malformed-physical-action": 6, "multiple-contact-methods": 7, "impossible-collision": 8, "missing-character-final-state": 9, "missing-object-final-state": 10, "unreachable-final-state": 11, "audio-timing-mismatch": 12, "location-vocabulary-conflict": 13, "internal-model-facing-language": 14, "generic-video-beat": 15, "generic-payoff": 16, "unresolved-placeholder": 17 };
+  return [...issues].sort((left, right) => priority[left.code] - priority[right.code]);
+}
+function buildRepairChanges(beforePack: ProductionPack, afterPack: ProductionPack, issues: PromptQualityCheck[], improvements: string[]): PromptRepairChange[] {
+  const actuallyChanged = new Set(changedPromptSections(beforePack, afterPack).map((section) => SECTION_KEY_MAP[section]).filter((section): section is PromptSectionKey => Boolean(section)));
+  return sortPromptIssuesByRepairPriority(issues).map((issue) => {
+    const requested = issue.affectedSections.map((section) => SECTION_KEY_MAP[section]).filter((section): section is PromptSectionKey => Boolean(section));
+    const affectedSections = [...new Set(requested.filter((section) => actuallyChanged.has(section)))];
+    const before = Object.fromEntries(affectedSections.map((section) => [section, beforePack[PACK_KEY_MAP[section]]])) as Partial<Record<PromptSectionKey, string>>;
+    const after = Object.fromEntries(affectedSections.map((section) => [section, afterPack[PACK_KEY_MAP[section]]])) as Partial<Record<PromptSectionKey, string>>;
+    return { issueId: issue.id, issueCode: issue.code, affectedSections, before, after, description: improvements.find(Boolean) || `Repaired ${issue.label} in ${affectedSections.join(", ")}.` };
+  }).filter((change) => change.affectedSections.length === 0 ? change.issueCode === "inventory-false-positive" : didRepairChangeContent(change));
+}
+
 export function repairPromptPackage(pack: ProductionPack, form: ProductionForm, characters: CharacterProfile[], analysis: PromptQualityAnalysis): { pack: ProductionPack; changedSections: PromptPackageSectionId[]; improvements: string[] } {
-  let repaired = { ...pack };
-  const changedSections: PromptPackageSectionId[] = [];
-  const improvements: string[] = [];
+  const concept = form.resolvedProductionConcept;
+  let repaired = applyIssueSpecificPromptRepairs(pack, analysis.issues, { characterNames: characters.map((character) => character.shortName), objectName: concept?.primaryObject.objectName || "important object", locationName: concept?.location.name || form.locationName || "selected location" });
+  const changedSections: PromptPackageSectionId[] = changedPromptSections(pack, repaired);
+  const improvements: string[] = changedSections.length ? ["Applied issue-specific prompt repairs and changed the affected model-facing sections."] : [];
   const names = characters.map((character) => `${character.shortName} (${character.role}: ${character.fullIdentity || character.description})`).join("; ");
   const update = (key: keyof ProductionPack, section: PromptPackageSectionId, addition: string, improvement: string) => {
     if (normalizePromptText(repaired[key]).includes(normalizePromptText(addition))) return;
@@ -428,6 +483,13 @@ export function repairPromptPackage(pack: ProductionPack, form: ProductionForm, 
     changedSections.push(section); improvements.push(improvement);
   };
   const issues = new Set([...analysis.warnings, ...analysis.failedChecks].map((check) => check.categoryId));
+  if (issues.has("authorized-inventory") && form.resolvedProductionConcept) {
+    const inventory = buildAuthorizedProductionInventory(form.resolvedProductionConcept, characters);
+    const beforeInventoryRepair = repaired;
+    repaired = repairUnauthorizedObjects(repaired, inventory, form.resolvedProductionConcept);
+    changedSections.push(...changedPromptSections(beforeInventoryRepair, repaired));
+    improvements.push("Removed genuine unauthorized movable props without changing the selected cast, object, or location.");
+  }
   if (issues.has("model-facing-clarity") && analysis.promptBalance.harmfulRepetitionCount > 0) {
     const groups: RepetitionGroup[] = analysis.promptBalance.findings.map((finding) => ({ id: finding.id, canonicalInstruction: finding.text, occurrences: finding.sections.map((section) => ({ section, text: finding.text })), classification: finding.classification, severity: finding.severity === "none" ? "minor" : finding.severity, penalty: finding.penalty }));
     const repairActions = buildDeduplicationRepairActions(groups);
@@ -438,7 +500,7 @@ export function repairPromptPackage(pack: ProductionPack, form: ProductionForm, 
   }
   if (issues.has("character-consistency")) update("characterBuildingPrompt", "characters", `Selected cast and fixed roles: ${names}.`, "Restored selected character identities and fixed roles.");
   if (issues.has("character-consistency") || issues.has("model-facing-clarity")) update("videoLock", "video-lock", `Immutable cast: ${names}. Global format: ${form.videoRatio}, ${form.duration} seconds, ${form.videoModel}. Preserve Start Frame to End Frame continuity.`, "Strengthened immutable identity, format, and frame-continuity locks.");
-  const spatialCategories: PromptQualityCategoryId[] = ["action-ownership", "direction-continuity", "spatial-consistency", "final-state-reachability", "character-participation", "object-trajectory", "model-facing-clarity"];
+  const spatialCategories: PromptQualityCategoryId[] = ["authorized-inventory", "action-ownership", "direction-continuity", "spatial-consistency", "final-state-reachability", "character-participation", "object-trajectory", "model-facing-clarity"];
   if (form.resolvedProductionConcept && spatialCategories.some((category) => issues.has(category))) {
     const plan = buildResolvedSpatialActionPlan(form.resolvedProductionConcept, characters);
     repaired.videoTimeline = renderSpatialVideoPrompt(plan, form.resolvedProductionConcept);
@@ -492,7 +554,8 @@ export function optimizePromptPackage(pack: ProductionPack, form: ProductionForm
     changedSections = [...new Set([...changedSections, ...repaired.changedSections])];
     improvements = [...new Set([...improvements, ...repaired.improvements])];
   }
-  return { previousScore: previousAnalysis.score, newScore: bestAnalysis.score, previousAnalysis, newAnalysis: bestAnalysis, changedSections, improvements, pack: bestPack };
+  const changes = buildRepairChanges(pack, bestPack, previousAnalysis.issues, improvements);
+  return { previousScore: previousAnalysis.score, newScore: bestAnalysis.score, previousAnalysis, newAnalysis: bestAnalysis, changedSections, improvements, pack: bestPack, changes, verification: verifyRepairs({ before: previousAnalysis, after: bestAnalysis, changes }) };
 }
 
 export function maximizePromptQuality(pack: ProductionPack, form: ProductionForm, characters: CharacterProfile[], mode: "demo" | "ai", selectedOutputTypes: string[]): PromptQualityRepairResult {
@@ -505,5 +568,8 @@ export function maximizePromptQuality(pack: ProductionPack, form: ProductionForm
     if (!repaired.changedSections.length || !isRepairImprovement(bestAnalysis, next)) break;
     bestPack = repaired.pack; bestAnalysis = next; changedSections = [...new Set([...changedSections, ...repaired.changedSections])]; improvements = [...new Set([...improvements, ...repaired.improvements])];
   }
-  return { previousScore: previousAnalysis.score, newScore: bestAnalysis.score, previousAnalysis, newAnalysis: bestAnalysis, changedSections, improvements, pack: bestPack };
+  const changes = buildRepairChanges(pack, bestPack, previousAnalysis.issues, improvements);
+  const verification = verifyRepairs({ before: previousAnalysis, after: bestAnalysis, changes });
+  if (!shouldAcceptRepairResult({ before: previousAnalysis, after: bestAnalysis, verification })) return { previousScore: previousAnalysis.score, newScore: previousAnalysis.score, previousAnalysis, newAnalysis: previousAnalysis, changedSections: [], improvements: [], pack, changes: [], verification };
+  return { previousScore: previousAnalysis.score, newScore: bestAnalysis.score, previousAnalysis, newAnalysis: bestAnalysis, changedSections, improvements, pack: bestPack, changes, verification };
 }

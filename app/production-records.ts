@@ -9,6 +9,7 @@ import {
 } from "./production-types";
 import { migrateStoredPack } from "./production-engine";
 import type { PromptPackageSectionId, PromptQualityAnalysis } from "./prompt-quality";
+import { conceptInputFromForm, generateWorkingTitleFromResolvedConcept, resolveProductionConceptSync } from "./production-concept";
 
 export const PRODUCTION_RECORDS_KEY = "slapstick-saved-packs";
 
@@ -55,7 +56,7 @@ export function readProductionRecords(): ProductionRecord[] {
     return parsed
       .map((raw) => ({ raw, migrated: migrateStoredPack(raw) }))
       .filter((entry): entry is { raw: unknown; migrated: SavedProductionPack } => Boolean(entry.migrated?.schemaVersion === 2))
-      .map(({ raw, migrated: entry }) => {
+      .map(({ raw, migrated: entry }): ProductionRecord => {
         if (raw && typeof raw === "object" && typeof (raw as Partial<ProductionRecord>).status === "string") {
           return { ...entry, ...(raw as ProductionRecord) };
         }
@@ -66,6 +67,11 @@ export function readProductionRecords(): ProductionRecord[] {
           updatedAt: entry.createdAt,
           generationMode: "demo",
         };
+      })
+      .map((record): ProductionRecord => {
+        if (record.resolvedProductionConcept || !record.characterProfiles.length) return record;
+        const resolvedProductionConcept = { ...resolveProductionConceptSync(conceptInputFromForm(record.form, record.characterProfiles, record.generationMode)), source: "migrated" as const };
+        return { ...record, resolvedProductionConcept, form: { ...record.form, resolvedProductionConcept } };
       });
   } catch {
     return [];
@@ -84,7 +90,7 @@ export function upsertProductionRecord(input: ProductionRecordInput): Production
   const record: ProductionRecord = {
     id: input.id || crypto.randomUUID(),
     schemaVersion: 2,
-    title: input.form.videoTitle.trim() || existing?.title || "Untitled Production",
+    title: input.form.videoTitle.trim() || (input.form.resolvedProductionConcept ? generateWorkingTitleFromResolvedConcept(input.form.resolvedProductionConcept) : existing?.title) || "Untitled Production",
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     status: input.status,
@@ -101,6 +107,7 @@ export function upsertProductionRecord(input: ProductionRecordInput): Production
     generatedOutputs: [...input.generatedOutputs],
     packStatus: input.generatedOutputs.length === 7 ? "Complete Pack" : "Partial Pack",
     generationMode: input.generationMode,
+    resolvedProductionConcept: input.form.resolvedProductionConcept || existing?.resolvedProductionConcept,
     promptQuality: input.promptQuality || existing?.promptQuality,
     promptQualityHistory: input.promptQuality
       ? [...(existing?.promptQualityHistory || []), {

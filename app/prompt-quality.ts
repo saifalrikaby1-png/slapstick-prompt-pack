@@ -1,5 +1,6 @@
-import type { CharacterProfile, ProductionForm, ProductionPack, ProductionTimeline } from "./production-types";
+import type { CharacterProfile, ProductionForm, ProductionPack, ProductionTimeline, ResolvedProductionConcept } from "./production-types";
 import { normalizeProductionFormat, validateProductionTimeline } from "./production-format";
+import { detectUnresolvedPromptLanguage, GENERIC_ACTION_PHRASES, validateCharacterParticipation, validateObjectTrajectory } from "./production-concept";
 
 export type PromptQualityLevel = "maximum" | "expert" | "production-ready" | "needs-refinement" | "major-issues";
 export type PromptQualityStatus = "pass" | "warning" | "fail";
@@ -28,7 +29,7 @@ export type PromptBalanceResult = {
   findings: PromptRepetitionFinding[]; harmfulRepetitionCount: number;
   extremeDuplication: boolean; message: string;
 };
-export type PromptQualityCategoryId = "character-consistency" | "video-lock" | "action-flow" | "frame-continuity" | "camera-motion" | "physical-continuity" | "audio-synchronization" | "model-compatibility" | "video-rules" | "prompt-balance";
+export type PromptQualityCategoryId = "character-consistency" | "concept-specificity" | "video-lock" | "action-flow" | "frame-continuity" | "camera-motion" | "physical-continuity" | "audio-synchronization" | "model-compatibility" | "video-rules" | "prompt-balance";
 
 export type PromptQualityCheck = {
   id: string; categoryId: PromptQualityCategoryId; label: string; status: PromptQualityStatus;
@@ -53,6 +54,7 @@ export type PromptQualityContext = {
   videoRatio: string; videoModel: string; videoType: string; voiceMode: string;
   musicEnabled: boolean; selectedOutputTypes: string[];
   timingStructureMode: "automatic" | "custom"; timeline: ProductionTimeline;
+  resolvedProductionConcept?: ResolvedProductionConcept;
 };
 export type PromptQualityRepairResult = {
   previousScore: number; newScore: number; previousAnalysis: PromptQualityAnalysis; newAnalysis: PromptQualityAnalysis;
@@ -65,9 +67,9 @@ export type PromptRepairAction = {
 export type PromptSectionHashes = Record<PromptPackageSectionId, string>;
 
 export const PROMPT_QUALITY_WEIGHTS: Record<PromptQualityCategoryId, number> = {
-  "character-consistency": 15, "video-lock": 13, "action-flow": 15, "frame-continuity": 10,
-  "camera-motion": 10, "physical-continuity": 8, "audio-synchronization": 7,
-  "model-compatibility": 7, "video-rules": 7, "prompt-balance": 8,
+  "character-consistency": 12, "concept-specificity": 15, "video-lock": 10, "action-flow": 15, "frame-continuity": 10,
+  "camera-motion": 8, "physical-continuity": 8, "audio-synchronization": 6,
+  "model-compatibility": 6, "video-rules": 4, "prompt-balance": 6,
 };
 export const PROMPT_QUALITY_CAPS = {
   missingVideoLock: 84, missingVideoRules: 87, characterIdentityConflict: 79,
@@ -77,6 +79,7 @@ export const PROMPT_QUALITY_CAPS = {
 } as const;
 const CATEGORY_LABELS: Record<PromptQualityCategoryId, string> = {
   "character-consistency": "Character Consistency", "video-lock": "Video Lock", "action-flow": "Action Flow",
+  "concept-specificity": "Concept Specificity",
   "frame-continuity": "Frame Continuity", "camera-motion": "Camera & Motion",
   "physical-continuity": "Physical Continuity", "audio-synchronization": "Audio Synchronization",
   "model-compatibility": "Model Compatibility", "video-rules": "Video Rules", "prompt-balance": "Prompt Balance",
@@ -244,8 +247,13 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
     const escapedName = character.shortName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return new RegExp(`\\b${escapedName}\\b\\s*(?::|—|-|is\\s+(?:the\\s+)?|as\\s+(?:the\\s+)?|has\\s+role\\s+)\\s*(?:${otherRoles})\\b`, "i").test(`${pack.characterBuildingPrompt}\n${pack.videoLock}`);
   });
+  const unresolvedPatterns = detectUnresolvedPromptLanguage(complete);
+  const concept = context.resolvedProductionConcept;
+  const conceptSpecific = Boolean(concept && concept.location.name && concept.primaryObject.objectName && concept.initiatingCause && concept.escalation && concept.payoff && concept.finalComposition && !validateObjectTrajectory(concept.primaryObject).length && !validateCharacterParticipation(concept, context.selectedCharacters).length && unresolvedPatterns.length === 0);
+  const genericTimeline = GENERIC_ACTION_PHRASES.some((phrase) => normalizePromptText(pack.videoTimeline).includes(phrase));
   const checks: PromptQualityCheck[] = [
     makeCheck("character-consistency", namesInCharacter && namesInLock && !characterIdentityConflict, (namesInCharacter || namesInLock) && !characterIdentityConflict, namesInCharacter && namesInLock && !characterIdentityConflict ? "Every selected character and role is consistently represented." : characterIdentityConflict ? "One or more character identities conflict across the prompt package." : "One or more selected character identities are missing from Character information or Video Lock.", ["characters", "video-lock"], "critical", characterIdentityConflict ? "character-identity-conflict-core" : "character-consistency-core"),
+    makeCheck("concept-specificity", conceptSpecific, Boolean(concept) && unresolvedPatterns.length === 0, conceptSpecific ? "The package uses one concrete resolved story with exact cause, object trajectory, character functions, payoff, and final composition." : unresolvedPatterns.length ? "Unresolved placeholder language is blocked from finished prompt packages." : "Resolve a concrete location, object trajectory, initiating cause, character participation, payoff, and final composition.", ["start-frame", "end-frame", "video-prompt", "video-lock"], "critical"),
     makeCheck("video-lock", Boolean(pack.videoLock.trim()) && ratioPresent && durationPresent && /continu|lock|immutable/i.test(pack.videoLock), Boolean(pack.videoLock.trim()), "Video Lock must define immutable identities, ratio, duration, and frame continuity.", ["video-lock"], "critical"),
     makeCheck("action-flow", Boolean(pack.videoTimeline.trim()) && timelineValidation.valid && actionDensity <= 4 && /(?:opening|begin|start|0:00)/i.test(pack.videoTimeline) && /(?:payoff|final|end)/i.test(pack.videoTimeline), Boolean(pack.videoTimeline.trim()) && timelineValidation.errors.length <= 1, timelineValidation.valid ? "Video Prompt needs a clear opening hook, chronological action, and reachable payoff at duration-appropriate density." : `Timeline coverage is invalid: ${timelineValidation.errors.join(" ")}`, ["video-prompt", "timeline"]),
     makeCheck("frame-continuity", Boolean(pack.startFramePrompt.trim() && pack.endFramePrompt.trim()) && frameNames && ratioPresent, Boolean(pack.startFramePrompt.trim() || pack.endFramePrompt.trim()), "Start and End Frames must preserve the selected cast, scene continuity, and global ratio.", ["start-frame", "end-frame"], "critical"),
@@ -254,7 +262,7 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
     makeCheck("audio-synchronization", context.musicEnabled ? Boolean(pack.musicPath.trim() && pack.soundEffects.trim()) : /no music/i.test(pack.musicPath), Boolean(pack.soundEffects.trim()), context.musicEnabled ? "Music and sound effects must exist and synchronize only with visible actions." : "No Music must be explicit while visible-action sound effects remain synchronized.", ["music", "sound-effects"]),
     makeCheck("model-compatibility", contains(complete, [context.videoModel]) && ratioPresent && durationPresent, ratioPresent && durationPresent, "The prompt package must identify the selected model, duration, ratio, and reference-frame structure.", ["video-lock", "start-frame", "end-frame"]),
     makeCheck("video-rules", Boolean(pack.finalGenerationRule.trim()) && /identity|continu|camera|motion|audio|object|error|do not|no /i.test(pack.finalGenerationRule), Boolean(pack.finalGenerationRule.trim()), "Video Rules must end the package with concise identity, continuity, motion, object, audio, and error-prevention safeguards.", ["video-rules"], "critical"),
-    { id: "prompt-balance-core", categoryId: "prompt-balance", label: "Prompt Balance", status: promptBalance.status, score: promptBalance.score, maxScore: 8, message: promptBalance.message, affectedSections: [...new Set(promptBalance.findings.filter((finding) => finding.harmfulOccurrenceCount).flatMap((finding) => finding.sections))], repairable: promptBalance.harmfulRepetitionCount > 0, severity: promptBalance.extremeDuplication ? "major" : "minor" },
+    { id: "prompt-balance-core", categoryId: "prompt-balance", label: "Prompt Balance", status: promptBalance.status, score: Math.min(6, promptBalance.score), maxScore: 6, message: promptBalance.message, affectedSections: [...new Set(promptBalance.findings.filter((finding) => finding.harmfulOccurrenceCount).flatMap((finding) => finding.sections))], repairable: promptBalance.harmfulRepetitionCount > 0, severity: promptBalance.extremeDuplication ? "major" : "minor" },
   ];
   const categories = checks.map((check) => ({ id: check.categoryId, label: CATEGORY_LABELS[check.categoryId], weight: check.maxScore, earnedScore: check.score, maxScore: check.maxScore, checks: [check] }));
   const caps: PromptQualityCap[] = [];
@@ -274,6 +282,8 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   if (noDialogueConflict) addCap("conflictingDialogueRules", "Conflicting dialogue rules", "Spoken dialogue conflicts with No Spoken Dialogue.", PROMPT_QUALITY_CAPS.conflictingDialogueRules, byCategory("audio-synchronization"), ["sound-effects", "video-prompt"]);
   if (!/(?:opening|begin|start|0:00)/i.test(pack.videoTimeline)) addCap("missingOpeningHook", "Missing opening hook", "The Video Prompt lacks a clear opening hook.", PROMPT_QUALITY_CAPS.missingOpeningHook, byCategory("action-flow"), ["video-prompt"]);
   if (!/(?:payoff|final|end)/i.test(pack.videoTimeline)) addCap("missingEndPayoff", "Missing end payoff", "The Video Prompt lacks a readable final payoff.", PROMPT_QUALITY_CAPS.missingEndPayoff, byCategory("action-flow"), ["video-prompt"]);
+  if (unresolvedPatterns.length) addCap("unresolvedPlaceholder", "Unresolved placeholder", "A finished prompt contains unresolved template language.", 74, byCategory("concept-specificity"), ["start-frame", "end-frame", "video-prompt", "video-lock", "music", "sound-effects", "video-rules"]);
+  if (genericTimeline) addCap("genericTimeline", "Generic timeline beats", "Timeline beats must contain concrete physical actions from the resolved concept.", 78, checks.filter((check) => check.categoryId === "action-flow"), ["video-prompt", "timeline"]);
   if (promptBalance.extremeDuplication) addCap("extremePromptDuplication", "Extreme prompt duplication", "Large repeated blocks make the prompt materially unusable.", 89, byCategory("prompt-balance"), ["video-lock", "video-prompt", "video-rules"]);
   const scoreResult = calculateFinalPromptQualityScore(categories, caps);
   const level = getPromptQualityLevel(scoreResult.finalScore);
@@ -284,7 +294,7 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
 
 export function promptQualityContext(form: ProductionForm, characters: CharacterProfile[], mode: "demo" | "ai", selectedOutputTypes: string[]): PromptQualityContext {
   const format = normalizeProductionFormat({ ...form, generationMode: mode });
-  return { mode, selectedCharacters: characters, durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel === "Custom model" ? form.customVideoModel : form.videoModel, videoType: form.videoStyleId || form.visualStyle, voiceMode: form.voiceLayers.join(", "), musicEnabled: !form.noMusic && form.musicStyle !== "no-music", selectedOutputTypes, timingStructureMode: format.timingStructureMode, timeline: format.timeline };
+  return { mode, selectedCharacters: characters, durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel === "Custom model" ? form.customVideoModel : form.videoModel, videoType: form.videoStyleId || form.visualStyle, voiceMode: form.voiceLayers.join(", "), musicEnabled: !form.noMusic && form.musicStyle !== "no-music", selectedOutputTypes, timingStructureMode: format.timingStructureMode, timeline: format.timeline, resolvedProductionConcept: form.resolvedProductionConcept };
 }
 
 function safelyDeduplicatePrompt(pack: ProductionPack, findings: PromptRepetitionFinding[]) {

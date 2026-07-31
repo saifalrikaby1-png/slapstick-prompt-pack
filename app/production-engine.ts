@@ -22,6 +22,8 @@ import {
   ruleChipIds,
 } from "./production-types";
 import { normalizeProductionFormat } from "./production-format";
+import * as ProductionConcept from "./production-concept";
+import type { ResolvedProductionConcept } from "./production-types";
 import {
   inferMusicStyle,
   inferSoundEffectsStyle,
@@ -477,6 +479,7 @@ export function migrateForm(value: unknown): ProductionForm {
   const migrated: ProductionForm = {
     ...defaultProductionForm,
     videoTitle: stringValue(item.videoTitle),
+    resolvedProductionConcept: item.resolvedProductionConcept && typeof item.resolvedProductionConcept === "object" ? item.resolvedProductionConcept as ProductionForm["resolvedProductionConcept"] : undefined,
     creativeDirection: migrateCreativeDirection(item.creativeDirection),
     additionalDirection: stringValue(item.additionalDirection, stringValue(item.notes)),
     heroId: stringValue(item.heroId, defaultProductionForm.heroId),
@@ -706,25 +709,42 @@ export interface ObjectContinuityState {
 
 export function deriveScenePlan(form: ProductionForm, heroName = "The Hero") {
   const creative = resolveCreativeDirection(form.creativeDirection);
-  const concept = form.videoTitle.trim() || "the selected video concept";
+  const location = form.location.trim() || "sunlit woodland picnic clearing";
+  const importantObject = form.importantObject.trim() || "oversized acorn";
   return {
-    location: `a coherent, production-ready setting derived from “${concept},” with ${creative.visualMood}`,
-    importantObject: `one clearly identifiable supporting story object derived from “${concept}”`,
-    mainAction: `${heroName} leads a clear cause-and-effect action progression derived from the concept, cast, and ${creative.pacingStyle}`,
-    endingPayoff: `${heroName} completes a relevant, safe ending/payoff that resolves “${concept}” and supports a replayable finish`,
+    location: `${location} with ${creative.visualMood}`,
+    importantObject,
+    mainAction: form.trapAction.trim() || `${heroName} redirects the rolling ${importantObject} along the visible stone path`,
+    endingPayoff: form.endingPayoff.trim() || `${heroName} stops safely beside the grounded ${importantObject} while the opposing characters settle unharmed behind their flattened hiding screen`,
     creative,
   };
 }
 
-export function buildAuthorizedSceneInventory(form: ProductionForm, cast: CharacterProfile[]): AuthorizedSceneInventory {
-  const resolved = deriveScenePlan(form, cast.find((profile) => profile.role === "Hero")?.shortName);
-  const direction = `${form.additionalDirection} ${resolved.creative.creativeRules}`.toLowerCase();
-  const locationElements = resolved.location.split(/[.;]/).map((value) => value.trim()).filter(Boolean).slice(0, 6);
+function resolveConceptForEngine(form: ProductionForm, cast: CharacterProfile[]): ResolvedProductionConcept {
+  if (form.resolvedProductionConcept) return form.resolvedProductionConcept;
+  if (typeof ProductionConcept.conceptInputFromForm === "function" && typeof ProductionConcept.resolveProductionConceptSync === "function") {
+    return ProductionConcept.resolveProductionConceptSync(ProductionConcept.conceptInputFromForm(form, cast, "demo"));
+  }
+  const hero = cast.find((character) => character.role === "Hero") || cast[0];
+  const others = cast.filter((character) => character.id !== hero?.id);
+  const initiator = others[0] || hero;
+  const location = form.location.trim() || "sunlit woodland picnic clearing";
+  const objectName = form.importantObject.trim() || "oversized acorn";
+  const cause = form.trapAction.trim() || `${initiator?.shortName || "The initiator"} pushes the ${objectName} down a stone slope`;
+  const payoff = form.endingPayoff.trim() || `${hero?.shortName || "The hero"} redirects the ${objectName}, leaving the others safely seated behind their flattened hiding screen`;
+  return { version: "1.0.0", oneSentenceStory: `${cause}; ${payoff}.`, location: { name: location, visualDescription: `${location} with one clear action path`, fixedEnvironmentFacts: ["one continuous ground plane"] }, primaryObject: { objectName, visualIdentity: `one unmistakable ${objectName}`, initialPosition: `on the ground beside ${initiator?.shortName || "the initiator"}`, ownerOrController: initiator?.shortName, forceOrTrigger: cause, movementPath: `down the slope toward ${hero?.shortName || "the hero"} and back after a redirect`, interactions: [`passes ${hero?.shortName || "the hero"}`], finalPosition: `on the ground beside ${hero?.shortName || "the hero"}` }, characters: cast.map((character) => ({ characterId: character.id, characterName: character.shortName, role: character.role, function: character.id === initiator?.id ? "initiator" : character.id === hero?.id ? "rescuer" : "witness", openingState: `visible beside the ${objectName}`, initiatingAction: character.id === initiator?.id ? cause : undefined, mainAction: character.id === hero?.id ? `redirects the ${objectName}` : character.id === initiator?.id ? cause : `tracks the moving ${objectName}`, reaction: `reacts to the visible reversal`, endingState: character.id === hero?.id ? `standing beside the stopped ${objectName}` : "seated safely behind the flattened screen" })), openingHook: cause, initiatingCause: cause, actionProgression: [cause, `${hero?.shortName || "The hero"} redirects the ${objectName}`, payoff], escalation: `${objectName} gains speed on the slope`, reversalOrBackfire: `${objectName} reverses toward the initiator`, payoff, finalComposition: `${hero?.shortName || "The hero"} stands beside the stopped ${objectName}; ${others.map((character) => character.shortName).join(" and ")} sit safely behind the flattened screen`, continuityFacts: [`exactly ${cast.length} selected characters`, `one ${objectName}`], durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel, source: "demo-resolved", confidence: .9 };
+}
+
+export function buildAuthorizedSceneInventory(form: ProductionForm, cast: CharacterProfile[], concept?: ResolvedProductionConcept): AuthorizedSceneInventory {
+  const resolved = concept || resolveConceptForEngine(form, cast);
+  const creative = resolveCreativeDirection(form.creativeDirection);
+  const direction = `${form.additionalDirection} ${creative.creativeRules}`.toLowerCase();
+  const locationElements = [resolved.location.name, ...resolved.location.fixedEnvironmentFacts];
   return {
     characters: cast.map((profile) => ({ id: profile.id, name: profile.shortName, role: profile.role })),
-    importantObjects: [{ name: resolved.importantObject, description: resolved.importantObject }],
-    actionObjects: [{ name: resolved.mainAction, source: "main-action" }],
-    fixedEnvironmentElements: locationElements.length ? locationElements : [resolved.location],
+    importantObjects: [{ name: resolved.primaryObject.objectName, description: resolved.primaryObject.visualIdentity }],
+    actionObjects: [{ name: resolved.initiatingCause, source: "main-action" }],
+    fixedEnvironmentElements: locationElements,
     authorizedEntrances: /\b(enter|entrance|arrive|reveal)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
     authorizedExits: /\b(exit|leave|off-screen|trapdoor)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
     authorizedTransformations: /\b(transform|break|destroy|collapse)\b/.test(direction) ? [form.additionalDirection.trim()] : [],
@@ -825,15 +845,16 @@ export function generateDemoPack(
   const ranges = timelineRanges(duration);
   const heroName = hero?.shortName || "Hero";
   const others = supporting.map((profile) => profile.shortName).join(" and ") || "the supporting cast";
-  const derivedScene = deriveScenePlan(form, heroName);
-  const location = removeUncheckedCharacters(derivedScene.location);
-  const object = removeUncheckedCharacters(derivedScene.importantObject);
-  const action = removeUncheckedCharacters(derivedScene.mainAction);
-  const ending = removeUncheckedCharacters(derivedScene.endingPayoff);
+  const resolvedConcept = resolveConceptForEngine(form, cast);
+  const derivedScene = { creative: resolveCreativeDirection(form.creativeDirection) };
+  const location = removeUncheckedCharacters(`${resolvedConcept.location.name}; ${resolvedConcept.location.visualDescription}`);
+  const object = removeUncheckedCharacters(`${resolvedConcept.primaryObject.objectName} (${resolvedConcept.primaryObject.visualIdentity})`);
+  const action = removeUncheckedCharacters(resolvedConcept.initiatingCause);
+  const ending = removeUncheckedCharacters(resolvedConcept.payoff);
   const ledger = visibilityLedger(cast, form.additionalDirection);
   const visibilityLock = presenceLock(ledger, object, form.additionalDirection);
-  const sceneInventory = buildAuthorizedSceneInventory(form, cast);
-  const objectLedger = buildObjectStateLedger(sceneInventory);
+  const sceneInventory = buildAuthorizedSceneInventory(form, cast, resolvedConcept);
+  const objectLedger: ObjectContinuityState[] = [{ name: resolvedConcept.primaryObject.objectName, presentAtStart: true, startPosition: resolvedConcept.primaryObject.initialPosition, supportOrHolder: resolvedConcept.primaryObject.ownerOrController || "visible ground support", currentState: resolvedConcept.primaryObject.visualIdentity, permittedMotion: `${resolvedConcept.primaryObject.forceOrTrigger}; ${resolvedConcept.primaryObject.movementPath}`, finalPosition: resolvedConcept.primaryObject.finalPosition, presentAtEnd: true }];
   const closedWorldLock = inventoryLock(sceneInventory, objectLedger);
   const cameraRule = form.motionLevel === "Safe"
     ? "locked camera axis with no meaningful camera move"
@@ -1002,16 +1023,19 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
 
   PHYSICAL GROUNDING LOCK, OBJECT SUPPORT LOCK, and GRAVITY LOCK: every character and object has visible support and gravity; no unexplained hovering. Every character and object remains continuously traceable from exact start to exact final position through smooth preparation, anticipation, acceleration, contact, follow-through, deceleration, landing where required, and complete settling. Customer-requested entrance, exit, transformation, destruction, cut, freeze, or magical floating must show the complete visible, physically traceable transition. Complete the planned payoff with every remaining authorized entity stable, visible, and supported.`;
   const sanitizedCharacterPrompts = removeUncheckedCharacters(characterPrompts);
-  const generatedTitle = form.videoTitle.trim() || `${heroName} and the Impossible Backfire`;
+  const generatedTitle = form.videoTitle.trim() || (typeof ProductionConcept.generateWorkingTitleFromResolvedConcept === "function" ? ProductionConcept.generateWorkingTitleFromResolvedConcept(resolvedConcept) : `${heroName} and the ${resolvedConcept.primaryObject.objectName} Reversal`);
   const adaptedTimeline = adapter.maxSingleClipSeconds && duration > adapter.maxSingleClipSeconds
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
-  const configuredTimeline = form.productionTimeline?.beats?.length
+  const resolvedTimeline = typeof ProductionConcept.buildTimelineFromResolvedConcept === "function" ? ProductionConcept.buildTimelineFromResolvedConcept(resolvedConcept) : { mode: "automatic" as const, durationSeconds: duration, beats: resolvedConcept.actionProgression.map((visualAction, index) => ({ id: `resolved-${index}`, startSeconds: Math.round(index * duration / resolvedConcept.actionProgression.length), endSeconds: index === resolvedConcept.actionProgression.length - 1 ? duration : Math.round((index + 1) * duration / resolvedConcept.actionProgression.length), label: `Action ${index + 1}`, visualAction })) };
+  const configuredTimeline = form.timingStructureMode === "custom" && form.productionTimeline?.beats?.length
     ? form.productionTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} — ${beat.label}: ${beat.visualAction} Action owner: ${heroName}. ${beat.characterAction || ""} ${beat.cameraDirection || ""} ${beat.musicDirection || ""} ${beat.soundEffectsDirection || ""} ${beat.continuityNote || ""}`.replace(/\s+/g, " ").trim()).join("\n")
-    : "";
+    : resolvedTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} â€” ${beat.visualAction}`).join("\n");
   const finalTimeline = configuredTimeline || adaptedTimeline;
-  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Location: ${location}. Authorized object: exactly ${objectLedger.length} ${object}, visibly supported in the central action area. ${heroName} starts foreground-center facing it; ${supporting.map((profile, index) => `${profile.shortName} stands ${index % 2 === 0 ? "camera-left" : "camera-right"}, facing the action`).join("; ")}. Use wide or medium-wide visibility, matching lens, contact shadows, contact with supporting surfaces, clear eye lines, and the first 0:00 motion cue. Start active; do not show the payoff. This is the complete authorized scene inventory. Apply Creative Direction from frame zero.`;
-  const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the primary continuity reference for ${adapter.displayName}. Preserve Creative Direction: mood=${form.creativeDirection.visualMood}; camera=${form.creativeDirection.cameraMotion.cameraStyle}; framing=${form.creativeDirection.cameraMotion.framing}; pacing=${form.creativeDirection.pacingStyle}. Use exactly the same ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Keep exactly the same environment, location, lighting, lens, scale, and same ${object}. ${ending}. ${heroName} finishes safe and smiling; ${supporting.map((profile, index) => `${profile.shortName} finishes ${index % 2 === 0 ? "camera-left" : "camera-right"} in a resolved ${profile.role.toLowerCase()} pose`).join("; ")}. Show the object supported at its final position in a stable completed pose, with contact shadows, completed settling, and matched perspective. Preserve the exact authorized inventory; nothing else appears.`;
+  const openingPositions = resolvedConcept.characters.map((character) => `${character.characterName}: ${character.openingState}`).join("; ");
+  const finalPositions = resolvedConcept.characters.map((character) => `${character.characterName}: ${character.endingState}; reaction: ${character.reaction}`).join("; ");
+  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Exact location: ${location}. Exact object: ${resolvedConcept.primaryObject.visualIdentity}, ${resolvedConcept.primaryObject.initialPosition}. Opening positions: ${openingPositions}. Initiating setup: ${resolvedConcept.openingHook}. Use wide or medium-wide visibility, matching lens, contact shadows, clear eye lines, and the first 0:00 motion cue. Do not show the payoff.`;
+  const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the continuity reference for ${adapter.displayName}. Preserve the same location, lighting, lens, scale, cast, and object. Exact payoff: ${ending}. Final positions and reactions: ${finalPositions}. Exact object final position: ${resolvedConcept.primaryObject.finalPosition}. Final composition: ${resolvedConcept.finalComposition}. Show complete settling and only the authorized inventory.`;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
     characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",

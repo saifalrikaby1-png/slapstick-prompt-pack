@@ -222,6 +222,8 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
       children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, text: title }));
       content.trim().split(/\n+/).forEach((text) => children.push(new Paragraph(text)));
     };
+    const resolvedStory = production.resolvedProductionConcept || production.form.resolvedProductionConcept;
+    if (resolvedStory) addSection("Resolved Production Concept", [`Working title: ${production.title}`, `Story: ${resolvedStory.oneSentenceStory}`, `Location: ${resolvedStory.location.name}`, `Important object: ${resolvedStory.primaryObject.objectName}`, `Initiating cause: ${resolvedStory.initiatingCause}`, `Escalation: ${resolvedStory.escalation}`, `Payoff: ${resolvedStory.payoff}`].join("\n"));
     addSection("Character Details", buildAllCharacterDetails(production.characterProfiles) || pack.characterBuildingPrompt);
     addSection("Start Frame", pack.startFramePrompt);
     addSection("End Frame", pack.endFramePrompt);
@@ -250,10 +252,12 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   const completePrompt = buildCompleteProductionPrompt(pack);
   const allCharacters = buildAllCharacterDetails(production.characterProfiles);
   const bothFrames = buildBothFrames(pack);
+  const resolvedStory = production.resolvedProductionConcept || production.form.resolvedProductionConcept;
 
   return <main className="production-results-page">
     <header className="results-page-header"><div><p className="results-eyebrow">GENERATED PRODUCTION PACK</p><h1>{production.title}</h1><p>Review, copy, edit, save, or export your completed production pack.</p></div><div className="results-header-actions"><button type="button" className="production-secondary-button" onClick={savePack}>Save Pack</button><button type="button" className="production-secondary-button" onClick={downloadWord}>Download Word</button><Link href="/production/new" className="production-emerald-gold-cta">Create Another</Link></div></header>
     {notice && <p className="results-notice" role="status">{notice}</p>}
+    {resolvedStory && <details className="results-resolved-story"><summary>Resolved Story</summary><div><SummaryItem label="Story" value={resolvedStory.oneSentenceStory} /><SummaryItem label="Location" value={resolvedStory.location.name} /><SummaryItem label="Important object" value={resolvedStory.primaryObject.objectName} /><SummaryItem label="Initiating cause" value={resolvedStory.initiatingCause} /><SummaryItem label="Payoff" value={resolvedStory.payoff} /></div></details>}
     <div className="results-tabs" role="tablist" aria-label="Generated outputs">{availableTabs.map((tab) => <button key={tab} type="button" role="tab" aria-selected={selectedTab === tab} className={`results-tab ${["character", "frames", "complete-production-prompt"].includes(tab) ? "is-primary-result" : "is-secondary-result"} ${selectedTab === tab ? "is-active" : ""}`} onClick={() => setActiveTab(tab)}>{RESULT_TAB_LABELS[tab]}</button>)}</div>
     <div className="results-workspace">
       <section className="results-output-viewer">

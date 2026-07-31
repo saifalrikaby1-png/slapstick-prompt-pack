@@ -5,11 +5,13 @@ import {
   ProductionPack,
   QualityFinding,
   RequestedOutput,
+  ResolvedProductionConcept,
   fieldsForRequestedOutputs,
   requestedOutputValues,
 } from "../../production-types";
 import { buildAuthorizedSceneInventory, buildObjectStateLedger, migrateForm, selectedModelAdapter } from "../../production-engine";
 import { MOTION_QUALITY_RULES } from "../../creative-direction";
+import { conceptInputFromForm, detectUnresolvedPromptLanguage, validateResolvedProductionConcept } from "../../production-concept";
 
 type RequestBody = {
   action?: "generate" | "fix";
@@ -41,6 +43,7 @@ type RequestBody = {
   pack?: ProductionPack;
   qualityFindings?: QualityFinding[];
   requestedOutputs?: RequestedOutput[];
+  resolvedProductionConcept?: ResolvedProductionConcept;
 };
 
 type OpenAIError = {
@@ -102,8 +105,11 @@ Create one synchronized, family-friendly cartoon-video production plan. The nine
 - finalGenerationRule: a concise final pass requiring the model to obey the locks and timelines as one continuous production.
 
 Hard requirements:
+- Use resolvedProductionConcept as the single story source for every output. Do not reconstruct story facts from the title or loose form fields. The title is optional metadata only.
+- Preserve its exact location, object trajectory, character functions, initiating cause, action progression, escalation, payoff, final composition, duration, ratio, and model.
+- Never emit unresolved template language. Every action must name its owner, physical movement, object path, cause, consequence, and transition.
 - Read the top-level creativeDirection object and include a CREATIVE DIRECTION block in the generated instructions: Visual Mood & Atmosphere, Camera & Motion Style, Pacing & Performance, and Creative Rules & Restrictions.
-- Determine a suitable location, supporting objects, action progression, and ending/payoff from the user's concept, selected characters, selected video type, selected video model, prompt model, duration, global video ratio, and Creative Direction. Keep every derived element relevant to the concept. Do not introduce unrelated objects, characters, locations, cuts, or events.
+- Read all story facts only from resolvedProductionConcept. Do not derive or substitute a second story from the title, model, or loose UI fields. Do not introduce unrelated objects, characters, locations, cuts, or events.
 - The selected global Video Ratio applies to the complete video and automatically governs the Start Frame and End Frame. Do not request or generate separate frame-ratio settings.
 - Apply Creative Direction to the main video prompt, both frame prompts, timeline, camera, motion, performance, lighting, color atmosphere, pacing-relevant audio timing, Quality Control, continuity, and negative constraints.
 - Materially follow the selected model adapter, including its prompt structure, camera, motion, pacing, reference-frame, audio, and negative policies. Do not merely mention the model name.
@@ -249,7 +255,15 @@ export async function POST(request: Request) {
   }
 
   const inventoryCharacters = body.characters.filter((character) => activeIds.includes(character.id));
-  const authorizedSceneInventory = buildAuthorizedSceneInventory(normalizedForm, inventoryCharacters);
+  if (!body.resolvedProductionConcept) {
+    return Response.json({ error: "We could not resolve this production into a concrete, physically executable story. Your selections have been preserved." }, { status: 400 });
+  }
+  const conceptValidation = validateResolvedProductionConcept(body.resolvedProductionConcept, conceptInputFromForm(normalizedForm, inventoryCharacters, "ai"));
+  if (!conceptValidation.valid || detectUnresolvedPromptLanguage(JSON.stringify(body.resolvedProductionConcept)).length) {
+    return Response.json({ error: "We could not resolve this production into a concrete, physically executable story. Your selections have been preserved.", conceptIssues: conceptValidation.issues }, { status: 400 });
+  }
+  normalizedForm.resolvedProductionConcept = body.resolvedProductionConcept;
+  const authorizedSceneInventory = buildAuthorizedSceneInventory(normalizedForm, inventoryCharacters, body.resolvedProductionConcept);
   const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
   const input = action === "fix"
     ? {
@@ -264,7 +278,7 @@ export async function POST(request: Request) {
         currentPack: body.pack,
         qualityFindings: body.qualityFindings || [],
       }
-    : { form: normalizedForm, creativeDirection, modelAdapter: selectedModelAdapter(normalizedForm), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
+    : { form: normalizedForm, resolvedProductionConcept: body.resolvedProductionConcept, creativeDirection, modelAdapter: selectedModelAdapter(normalizedForm), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -314,6 +328,10 @@ export async function POST(request: Request) {
     const pack = JSON.parse(outputText) as unknown;
     if (!requestedPack(pack, requestedOutputs)) {
       return Response.json({ error: "AI Mode returned an incomplete production pack. Please try again." }, { status: 502 });
+    }
+    const unresolved = detectUnresolvedPromptLanguage(Object.values(pack).join("\n"));
+    if (unresolved.length) {
+      return Response.json({ error: "AI Mode returned unresolved placeholder language. Your selections have been preserved; please try again." }, { status: 502 });
     }
     return Response.json({ pack, generatedOutputs: requestedOutputs });
   } catch (caught) {

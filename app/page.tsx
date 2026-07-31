@@ -82,6 +82,7 @@ import { getVideoStyle, VideoStyleId } from "./video-styles";
 import { findProductionRecord, markProductionFailed, upsertProductionRecord } from "./production-records";
 import { optimizePromptPackage } from "./prompt-quality";
 import { buildAutomaticTimeline, formatTimelineTime, validateProductionTimeline } from "./production-format";
+import { conceptInputFromForm, detectUnresolvedPromptLanguage, resolveProductionConcept } from "./production-concept";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -1679,7 +1680,15 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     setError("");
     setNotice("");
     setIsGenerating(true);
-    const persistedForm = { ...form, productionTimeline };
+    let resolvedProductionConcept;
+    try {
+      resolvedProductionConcept = await resolveProductionConcept(conceptInputFromForm({ ...form, productionTimeline }, productionCharacters, mode));
+    } catch {
+      setIsGenerating(false);
+      setError("We could not resolve this production into a concrete, physically executable story. Your selections have been preserved.");
+      return;
+    }
+    const persistedForm = { ...form, productionTimeline, resolvedProductionConcept };
     const generatingRecord = upsertProductionRecord({
       id: productionIdRef.current || undefined,
       status: "generating",
@@ -1699,7 +1708,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
     try {
       const selectedFields = fieldsForRequestedOutputs(outputsForGeneration);
       const previousPack = pack;
-      const generationForm = { ...formForGeneration(), timingStructureMode: form.timingStructureMode, productionTimeline };
+      const generationForm = { ...formForGeneration(), timingStructureMode: form.timingStructureMode, productionTimeline, resolvedProductionConcept };
       // Demo compatibility contract: mode === "demo" ? generateDemoPack
       const nextPartial = mode === "demo"
         ? Object.fromEntries(Object.entries(generateDemoPack({ ...form, ...generationForm } as ProductionForm, characters))
@@ -1716,6 +1725,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
                   generationMode: mode, timingStructureMode: form.timingStructureMode, timeline: productionTimeline,
                   resolution: form.resolution,
                 },
+                resolvedProductionConcept,
                 creativeDirection: resolveCreativeDirection(form.creativeDirection),
                 audioTiming: resolveAudioTiming(form),
                 activeCharacterIds: activeIds,
@@ -1740,6 +1750,9 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       const nextGeneratedOutputs = [...new Set([...generatedOutputs, ...outputsForGeneration])];
       const promptOptimization = optimizePromptPackage(rawNextPack, persistedForm, productionCharacters, mode, nextGeneratedOutputs);
       const nextPack = promptOptimization.pack;
+      if (detectUnresolvedPromptLanguage(Object.values(nextPack).join("\n")).length) {
+        throw new Error("We could not resolve this production into a concrete, physically executable story. Your selections have been preserved.");
+      }
       const nextQualityReport = nextGeneratedOutputs.length === requestedOutputValues.length
         ? inspectProductionPack(nextPack, persistedForm, characters, savedPacks.map((saved) => saved.title), creativeAssets)
         : {

@@ -7,6 +7,19 @@ export type ProductionTimelineBeat = {
 };
 export type ProductionTimeline = { mode: TimingStructureMode; durationSeconds: number; beats: ProductionTimelineBeat[] };
 
+export type ProductionCharacterFunction = "initiator" | "target" | "obstacle" | "assistant" | "witness" | "victim" | "rescuer" | "payoff-recipient";
+export type ResolvedCharacterAction = { characterId: string; characterName: string; role: string; function: ProductionCharacterFunction; openingState: string; initiatingAction?: string; mainAction: string; reaction: string; endingState: string };
+export type ResolvedObjectTrajectory = { objectName: string; visualIdentity: string; initialPosition: string; ownerOrController?: string; forceOrTrigger: string; movementPath: string; interactions: string[]; finalPosition: string };
+export type ResolvedProductionConcept = {
+  version: string; workingTitle?: string; oneSentenceStory: string;
+  location: { name: string; visualDescription: string; fixedEnvironmentFacts: string[] };
+  primaryObject: ResolvedObjectTrajectory; characters: ResolvedCharacterAction[];
+  openingHook: string; initiatingCause: string; actionProgression: string[]; escalation: string;
+  reversalOrBackfire?: string; payoff: string; finalComposition: string; continuityFacts: string[];
+  durationSeconds: number; videoRatio: string; videoModel: string;
+  source: "user-defined" | "demo-resolved" | "ai-resolved" | "migrated"; confidence: number;
+};
+
 export type CharacterRole = "Hero" | "Enemy" | "Companion";
 
 export type CreativeAssetKind = "location" | "object" | "action" | "payoff";
@@ -154,6 +167,7 @@ export type ProductionForm = {
   videoStyleId?: "slapstick" | "cinematic" | "family-3d" | "anime" | "live-action" | "cgi-fantasy" | "stylized-3d";
   styleWorkflowEnabled?: boolean;
   videoTitle: string;
+  resolvedProductionConcept?: ResolvedProductionConcept;
   creativeDirection: CreativeDirectionState;
   /** @deprecated Local migration-only values; never rendered or sent for generation. */
   locationAssetId: string;
@@ -313,6 +327,7 @@ export type SavedProductionPack = {
   requestedOutputs?: RequestedOutput[];
   generatedOutputs?: RequestedOutput[];
   packStatus?: "Partial Pack" | "Complete Pack" | "Legacy Pack";
+  resolvedProductionConcept?: ResolvedProductionConcept;
 };
 
 export type LegacyPackItem = {

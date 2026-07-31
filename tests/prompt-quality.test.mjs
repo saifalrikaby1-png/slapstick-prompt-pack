@@ -8,8 +8,10 @@ const page = fs.readFileSync("app/page.tsx", "utf8");
 const records = fs.readFileSync("app/production-records.ts", "utf8");
 
 test("quality weights total 100 and maximum score is 98", () => {
-  const weights = [...source.matchAll(/"[^"]+": (\d+),?/g)].slice(0, 10).map((match) => Number(match[1]));
+  const weightsBlock = source.slice(source.indexOf("PROMPT_QUALITY_WEIGHTS"), source.indexOf("PROMPT_QUALITY_CAPS"));
+  const weights = [...weightsBlock.matchAll(/"[^"]+": (\d+),?/g)].map((match) => Number(match[1]));
   assert.equal(weights.reduce((sum, value) => sum + value, 0), 100);
+  assert.equal(weights.length, 11);
   assert.match(source, /Math\.min\(98,/);
 });
 

@@ -51,7 +51,7 @@ test("generation payload and demo engine consume Production Format", () => {
   assert.match(page, /productionFormat: \{/);
   for (const field of ["videoModel", "durationSeconds", "videoRatio", "generationMode", "timingStructureMode", "timeline", "resolution"]) assert.match(page, new RegExp(field));
   assert.match(engine, /form\.productionTimeline\?\.beats\?\.length/);
-  assert.match(engine, /const finalTimeline = configuredTimeline \|\| adaptedTimeline/);
+  assert.match(engine, /const finalTimeline = form\.timingStructureMode === "custom" && configuredTimeline[\s\S]*\? configuredTimeline[\s\S]*: executableTimeline/);
 });
 
 test("review and results render Production Specifications", () => {

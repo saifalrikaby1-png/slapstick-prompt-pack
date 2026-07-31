@@ -8,6 +8,7 @@ import { CharacterProfile, ProductionPack, RequestedOutput } from "../../../prod
 import { findProductionRecord, ProductionRecord, saveProductionRecord } from "../../../production-records";
 import { analyzePromptPackage, changedPromptSections, isRepairImprovement, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
 import { normalizeProductionFormat } from "../../../production-format";
+import { normalizeProductionPackEncoding } from "../../../prompt-choreography";
 
 const RESULT_TAB_ORDER = ["character", "frames", "complete-production-prompt", "prompt-quality", "timeline", "negative-prompt"] as const;
 type ResultTabId = (typeof RESULT_TAB_ORDER)[number];
@@ -126,7 +127,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
 
   const availableTabs = useMemo<ResultTabId[]>(() => {
     if (!production) return [];
-    const pack = production.pack;
+    const pack = normalizeProductionPackEncoding(production.pack as ProductionPack);
     const tabs: ResultTabId[] = [];
     if (production.characterProfiles.length || pack.characterBuildingPrompt) tabs.push("character");
     if (pack.startFramePrompt || pack.endFramePrompt) tabs.push("frames");
@@ -247,7 +248,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   if (production.status === "generating") return <main className="production-results-page"><section className="results-generating-state"><div className="results-generating-spinner" /><h1>Generating your production pack…</h1><p>Building prompts, frames, timing, audio, and quality checks.</p><div className="results-generation-progress"><span /></div></section></main>;
   if (production.status === "failed") return <main className="production-results-page"><section className="results-failure-state"><h1>We could not complete this production pack.</h1><p>{production.error?.message || "The generation could not be completed. Your production settings are still saved."}</p><div className="results-failure-actions"><Link href={`/production/${production.id}/edit`} className="production-emerald-gold-cta">Try Again</Link><Link href={`/production/${production.id}/edit`} className="production-secondary-button">Return to Production</Link></div></section></main>;
 
-  const pack = production.pack;
+  const pack = normalizeProductionPackEncoding(production.pack as ProductionPack);
   const productionFormat = normalizeProductionFormat({ ...production.form, generationMode: production.generationMode });
   const completePrompt = buildCompleteProductionPrompt(pack);
   const allCharacters = buildAllCharacterDetails(production.characterProfiles);

@@ -48,9 +48,10 @@ test("all downstream generation uses the resolved concept", () => {
 });
 
 test("Concept Specificity weights and hard caps are integrated", () => {
-  assert.match(quality, /"concept-specificity": 15/);
+  assert.match(quality, /"concept-specificity": 12/);
   assert.match(quality, /"unresolvedPlaceholder"[\s\S]*74/);
-  assert.match(quality, /"genericTimeline"[\s\S]*78/);
+  assert.match(quality, /"genericVideoBeat"[\s\S]*80/);
+  assert.match(quality, /"genericPayoff"[\s\S]*84/);
   assert.match(quality, /GENERIC_ACTION_PHRASES/);
   const block = quality.slice(quality.indexOf("PROMPT_QUALITY_WEIGHTS"), quality.indexOf("PROMPT_QUALITY_CAPS"));
   const weights = [...block.matchAll(/"[^"]+": (\d+)/g)].map((match) => Number(match[1]));

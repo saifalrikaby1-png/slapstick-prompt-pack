@@ -24,6 +24,7 @@ import {
 import { normalizeProductionFormat } from "./production-format";
 import * as ProductionConcept from "./production-concept";
 import type { ResolvedProductionConcept } from "./production-types";
+import { buildAuthorizedProductionInventory, buildCompleteObjectTrajectory, buildConciseSoundEffects, buildConciseVideoLock, buildConciseVideoRules, buildExecutableVideoBeats, buildMusicDirection, normalizeProductionPackEncoding } from "./prompt-choreography";
 import {
   inferMusicStyle,
   inferSoundEffectsStyle,
@@ -715,7 +716,7 @@ export function deriveScenePlan(form: ProductionForm, heroName = "The Hero") {
     location: `${location} with ${creative.visualMood}`,
     importantObject,
     mainAction: form.trapAction.trim() || `${heroName} redirects the rolling ${importantObject} along the visible stone path`,
-    endingPayoff: form.endingPayoff.trim() || `${heroName} stops safely beside the grounded ${importantObject} while the opposing characters settle unharmed behind their flattened hiding screen`,
+    endingPayoff: form.endingPayoff.trim() || `${heroName} stops safely beside the grounded ${importantObject} while the opposing characters sit unharmed together on the authorized ground`,
     creative,
   };
 }
@@ -731,8 +732,8 @@ function resolveConceptForEngine(form: ProductionForm, cast: CharacterProfile[])
   const location = form.location.trim() || "sunlit woodland picnic clearing";
   const objectName = form.importantObject.trim() || "oversized acorn";
   const cause = form.trapAction.trim() || `${initiator?.shortName || "The initiator"} pushes the ${objectName} down a stone slope`;
-  const payoff = form.endingPayoff.trim() || `${hero?.shortName || "The hero"} redirects the ${objectName}, leaving the others safely seated behind their flattened hiding screen`;
-  return { version: "1.0.0", oneSentenceStory: `${cause}; ${payoff}.`, location: { name: location, visualDescription: `${location} with one clear action path`, fixedEnvironmentFacts: ["one continuous ground plane"] }, primaryObject: { objectName, visualIdentity: `one unmistakable ${objectName}`, initialPosition: `on the ground beside ${initiator?.shortName || "the initiator"}`, ownerOrController: initiator?.shortName, forceOrTrigger: cause, movementPath: `down the slope toward ${hero?.shortName || "the hero"} and back after a redirect`, interactions: [`passes ${hero?.shortName || "the hero"}`], finalPosition: `on the ground beside ${hero?.shortName || "the hero"}` }, characters: cast.map((character) => ({ characterId: character.id, characterName: character.shortName, role: character.role, function: character.id === initiator?.id ? "initiator" : character.id === hero?.id ? "rescuer" : "witness", openingState: `visible beside the ${objectName}`, initiatingAction: character.id === initiator?.id ? cause : undefined, mainAction: character.id === hero?.id ? `redirects the ${objectName}` : character.id === initiator?.id ? cause : `tracks the moving ${objectName}`, reaction: `reacts to the visible reversal`, endingState: character.id === hero?.id ? `standing beside the stopped ${objectName}` : "seated safely behind the flattened screen" })), openingHook: cause, initiatingCause: cause, actionProgression: [cause, `${hero?.shortName || "The hero"} redirects the ${objectName}`, payoff], escalation: `${objectName} gains speed on the slope`, reversalOrBackfire: `${objectName} reverses toward the initiator`, payoff, finalComposition: `${hero?.shortName || "The hero"} stands beside the stopped ${objectName}; ${others.map((character) => character.shortName).join(" and ")} sit safely behind the flattened screen`, continuityFacts: [`exactly ${cast.length} selected characters`, `one ${objectName}`], durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel, source: "demo-resolved", confidence: .9 };
+  const payoff = form.endingPayoff.trim() || `${hero?.shortName || "The hero"} redirects the ${objectName}, causing the opposing characters to collide softly and sit unharmed together on the authorized ground`;
+  return { version: "1.0.0", oneSentenceStory: `${cause}; ${payoff}.`, location: { name: location, visualDescription: `${location} with one clear action path`, fixedEnvironmentFacts: ["one continuous ground plane"] }, primaryObject: { objectName, visualIdentity: `one unmistakable ${objectName}`, initialPosition: `on the ground beside ${initiator?.shortName || "the initiator"}`, ownerOrController: initiator?.shortName, forceOrTrigger: cause, movementPath: `down the slope toward ${hero?.shortName || "the hero"}, then back along the same path after the hero visibly contacts the lower side, absorbs momentum, and pivots it`, interactions: [`passes ${hero?.shortName || "the hero"}`, `the hero makes visible side contact`, `the opposing characters collide softly`], finalPosition: `on the ground beside ${hero?.shortName || "the hero"}` }, characters: cast.map((character) => ({ characterId: character.id, characterName: character.shortName, role: character.role, function: character.id === initiator?.id ? "initiator" : character.id === hero?.id ? "rescuer" : "assistant", openingState: `visible beside the ${objectName}`, initiatingAction: character.id === initiator?.id ? cause : undefined, mainAction: character.id === hero?.id ? `plants one foot against the ${objectName}'s lower side, absorbs momentum, and pivots it onto the return path` : character.id === initiator?.id ? cause : `steps into the path and narrows the hero's escape lane`, reaction: `reacts to the visible reversal`, endingState: character.id === hero?.id ? `standing beside the stopped ${objectName}` : "seated safely on the authorized ground beside the other opposing character" })), openingHook: cause, initiatingCause: cause, actionProgression: [cause, `${hero?.shortName || "The hero"} physically redirects the ${objectName}`, payoff], escalation: `${objectName} gains speed on the slope`, reversalOrBackfire: `${objectName} reverses toward the initiator after visible contact`, payoff, finalComposition: `${hero?.shortName || "The hero"} stands beside the stopped ${objectName}; ${others.map((character) => character.shortName).join(" and ")} sit safely together on the authorized ground`, continuityFacts: [`exactly ${cast.length} selected characters`, `one ${objectName}`], durationSeconds: Number(form.duration) || 15, videoRatio: form.videoRatio, videoModel: form.videoModel, source: "demo-resolved", confidence: .9 };
 }
 
 export function buildAuthorizedSceneInventory(form: ProductionForm, cast: CharacterProfile[], concept?: ResolvedProductionConcept): AuthorizedSceneInventory {
@@ -1028,28 +1029,35 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
     ? `SEGMENTED GENERATION PLAN — ${adapter.displayName} practical clip budget is approximately ${adapter.maxSingleClipSeconds} seconds. Generate chronological adjacent clips using the same reference locks, then join without a visual jump.\n${timelineLines}`
     : timelineLines;
   const resolvedTimeline = typeof ProductionConcept.buildTimelineFromResolvedConcept === "function" ? ProductionConcept.buildTimelineFromResolvedConcept(resolvedConcept) : { mode: "automatic" as const, durationSeconds: duration, beats: resolvedConcept.actionProgression.map((visualAction, index) => ({ id: `resolved-${index}`, startSeconds: Math.round(index * duration / resolvedConcept.actionProgression.length), endSeconds: index === resolvedConcept.actionProgression.length - 1 ? duration : Math.round((index + 1) * duration / resolvedConcept.actionProgression.length), label: `Action ${index + 1}`, visualAction })) };
+  const authorizedProductionInventory = buildAuthorizedProductionInventory(resolvedConcept, cast);
+  const completeObjectTrajectory = buildCompleteObjectTrajectory(resolvedConcept);
+  const executableBeats = buildExecutableVideoBeats(resolvedConcept, completeObjectTrajectory);
   const configuredTimeline = form.timingStructureMode === "custom" && form.productionTimeline?.beats?.length
     ? form.productionTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} — ${beat.label}: ${beat.visualAction} Action owner: ${heroName}. ${beat.characterAction || ""} ${beat.cameraDirection || ""} ${beat.musicDirection || ""} ${beat.soundEffectsDirection || ""} ${beat.continuityNote || ""}`.replace(/\s+/g, " ").trim()).join("\n")
     : resolvedTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} â€” ${beat.visualAction}`).join("\n");
-  const finalTimeline = configuredTimeline || adaptedTimeline;
+  const executableTimeline = executableBeats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} — ${beat.label}. Owner: ${beat.actionOwnerIds.map((id) => cast.find((character) => character.id === id)?.shortName || id).join(" and ")}. ${beat.concreteAction}. Object movement: ${beat.objectMovement}. Cause: ${beat.physicalCause}. Visible reaction: ${beat.visibleReaction}. Camera: ${beat.cameraDirection}. Continuity: ${beat.continuityToNextBeat}.`).join("\n");
+  const finalTimeline = form.timingStructureMode === "custom" && configuredTimeline
+    ? configuredTimeline
+    : executableTimeline;
   const openingPositions = resolvedConcept.characters.map((character) => `${character.characterName}: ${character.openingState}`).join("; ");
   const finalPositions = resolvedConcept.characters.map((character) => `${character.characterName}: ${character.endingState}; reaction: ${character.reaction}`).join("; ");
   const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Exact location: ${location}. Exact object: ${resolvedConcept.primaryObject.visualIdentity}, ${resolvedConcept.primaryObject.initialPosition}. Opening positions: ${openingPositions}. Initiating setup: ${resolvedConcept.openingHook}. Use wide or medium-wide visibility, matching lens, contact shadows, clear eye lines, and the first 0:00 motion cue. Do not show the payoff.`;
   const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the continuity reference for ${adapter.displayName}. Preserve the same location, lighting, lens, scale, cast, and object. Exact payoff: ${ending}. Final positions and reactions: ${finalPositions}. Exact object final position: ${resolvedConcept.primaryObject.finalPosition}. Final composition: ${resolvedConcept.finalComposition}. Show complete settling and only the authorized inventory.`;
+  void adaptedTimeline; void musicLines; void sfxLines; void conciseLock; void conciseFinalRule;
   const generatedPack: ProductionPack = {
     videoTitle: generatedTitle,
     characterBuildingPrompt: form.includeCharacterBuildingPrompt ? sanitizedCharacterPrompts : "",
     startFramePrompt: conciseStartFrame,
     endFramePrompt: conciseEndFrame,
-    videoLock: conciseLock,
+    videoLock: buildConciseVideoLock({ concept: resolvedConcept, characters: cast, inventory: authorizedProductionInventory, form, style, model }),
     videoTimeline: finalTimeline,
-    musicPath: musicLines,
-    soundEffects: sfxLines,
-    finalGenerationRule: conciseFinalRule + (form.voiceLayers.includes("No Spoken Dialogue") ? " No understandable spoken words." : ""),
+    musicPath: buildMusicDirection(executableBeats, form),
+    soundEffects: buildConciseSoundEffects(executableBeats, cast, resolvedConcept.primaryObject.objectName),
+    finalGenerationRule: buildConciseVideoRules(),
   };
-  return Object.fromEntries(
+  return normalizeProductionPackEncoding(Object.fromEntries(
     Object.entries(generatedPack).map(([key, value]) => [key, removeUncheckedCharacters(value)]),
-  ) as ProductionPack;
+  ) as ProductionPack);
 }
 
 /** Applies deterministic, section-level Demo Mode corrections. The real

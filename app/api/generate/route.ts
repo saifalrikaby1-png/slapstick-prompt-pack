@@ -12,6 +12,7 @@ import {
 import { buildAuthorizedSceneInventory, buildObjectStateLedger, migrateForm, selectedModelAdapter } from "../../production-engine";
 import { MOTION_QUALITY_RULES } from "../../creative-direction";
 import { conceptInputFromForm, detectUnresolvedPromptLanguage, validateResolvedProductionConcept } from "../../production-concept";
+import { buildAuthorizedProductionInventory, normalizeProductionPackEncoding, repairUnauthorizedObjects } from "../../prompt-choreography";
 
 type RequestBody = {
   action?: "generate" | "fix";
@@ -325,7 +326,9 @@ export async function POST(request: Request) {
       return Response.json({ error: "AI Mode returned an empty production pack. Please try again." }, { status: 502 });
     }
 
-    const pack = JSON.parse(outputText) as unknown;
+    const parsedPack = JSON.parse(outputText) as unknown;
+    const normalizedPack = parsedPack && typeof parsedPack === "object" ? normalizeProductionPackEncoding(parsedPack as ProductionPack) : parsedPack;
+    const pack = normalizedPack && typeof normalizedPack === "object" ? repairUnauthorizedObjects(normalizedPack as ProductionPack, buildAuthorizedProductionInventory(body.resolvedProductionConcept, inventoryCharacters), body.resolvedProductionConcept) : normalizedPack;
     if (!requestedPack(pack, requestedOutputs)) {
       return Response.json({ error: "AI Mode returned an incomplete production pack. Please try again." }, { status: 502 });
     }

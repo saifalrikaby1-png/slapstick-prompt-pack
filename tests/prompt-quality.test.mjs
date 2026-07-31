@@ -11,7 +11,7 @@ test("quality weights total 100 and maximum score is 98", () => {
   const weightsBlock = source.slice(source.indexOf("PROMPT_QUALITY_WEIGHTS"), source.indexOf("PROMPT_QUALITY_CAPS"));
   const weights = [...weightsBlock.matchAll(/"[^"]+": (\d+),?/g)].map((match) => Number(match[1]));
   assert.equal(weights.reduce((sum, value) => sum + value, 0), 100);
-  assert.equal(weights.length, 11);
+  assert.equal(weights.length, 13);
   assert.match(source, /Math\.min\(98,/);
 });
 

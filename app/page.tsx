@@ -83,6 +83,7 @@ import { findProductionRecord, markProductionFailed, upsertProductionRecord } fr
 import { optimizePromptPackage } from "./prompt-quality";
 import { buildAutomaticTimeline, formatTimelineTime, validateProductionTimeline } from "./production-format";
 import { conceptInputFromForm, detectUnresolvedPromptLanguage, resolveProductionConcept } from "./production-concept";
+import { normalizeProductionPackEncoding } from "./prompt-choreography";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -1746,7 +1747,7 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
         videoTitle: "", characterBuildingPrompt: "", startFramePrompt: "", endFramePrompt: "",
         videoLock: "", videoTimeline: "", musicPath: "", soundEffects: "", finalGenerationRule: "",
       };
-      const rawNextPack = { ...(previousPack || emptyPack), ...nextPartial } as ProductionPack;
+      const rawNextPack = normalizeProductionPackEncoding({ ...(previousPack || emptyPack), ...nextPartial } as ProductionPack);
       const nextGeneratedOutputs = [...new Set([...generatedOutputs, ...outputsForGeneration])];
       const promptOptimization = optimizePromptPackage(rawNextPack, persistedForm, productionCharacters, mode, nextGeneratedOutputs);
       const nextPack = promptOptimization.pack;

@@ -10,6 +10,7 @@ import {
 import { migrateStoredPack } from "./production-engine";
 import type { PromptPackageSectionId, PromptQualityAnalysis } from "./prompt-quality";
 import { conceptInputFromForm, generateWorkingTitleFromResolvedConcept, resolveProductionConceptSync } from "./production-concept";
+import { normalizeProductionPackEncoding } from "./prompt-choreography";
 
 export const PRODUCTION_RECORDS_KEY = "slapstick-saved-packs";
 
@@ -86,7 +87,8 @@ export function upsertProductionRecord(input: ProductionRecordInput): Production
   const records = readProductionRecords();
   const existing = input.id ? records.find((record) => record.id === input.id) : undefined;
   const now = new Date().toISOString();
-  const pack = input.pack || existing?.pack || {};
+  const rawPack = input.pack || existing?.pack || {};
+  const pack = Object.keys(rawPack).length === 9 ? normalizeProductionPackEncoding(rawPack as ProductionPack) : rawPack;
   const record: ProductionRecord = {
     id: input.id || crypto.randomUUID(),
     schemaVersion: 2,

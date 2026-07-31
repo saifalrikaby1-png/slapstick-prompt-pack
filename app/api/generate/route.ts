@@ -13,6 +13,7 @@ import { buildAuthorizedSceneInventory, buildObjectStateLedger, migrateForm, sel
 import { MOTION_QUALITY_RULES } from "../../creative-direction";
 import { conceptInputFromForm, detectUnresolvedPromptLanguage, validateResolvedProductionConcept } from "../../production-concept";
 import { buildAuthorizedProductionInventory, normalizeProductionPackEncoding, repairUnauthorizedObjects } from "../../prompt-choreography";
+import { buildResolvedSpatialActionPlan, removeInternalValidationLanguage, renderSpatialVideoPrompt, validateLocationVocabulary, validateSpatialActionPlan } from "../../spatial-action-plan";
 
 type RequestBody = {
   action?: "generate" | "fix";
@@ -106,6 +107,9 @@ Create one synchronized, family-friendly cartoon-video production plan. The nine
 - finalGenerationRule: a concise final pass requiring the model to obey the locks and timelines as one continuous production.
 
 Hard requirements:
+- Before writing prose, build and obey the supplied resolvedSpatialActionPlan. Every actor must be close enough to perform the action. Every object segment must begin where the previous segment ends. Every collision must occur where character paths intersect. Every final position must be reachable from the preceding beat. Preserve the selected location vocabulary and do not introduce environment terms from unrelated templates.
+- Treat scene zones, initial and final character zones, initial and final object zones, action owner per beat, character paths, object segments, collision zone, and causal chain as structured facts. For a repair, correct only the invalid structured beat and its neighboring transitions; do not rewrite valid inventory or unrelated sections.
+- Never expose internal planning terms such as authorized path, authorized ground, source zone, target zone, validation state, ownership lock, unchanged cast, or begin the next beat from in model-facing prose.
 - Use resolvedProductionConcept as the single story source for every output. Do not reconstruct story facts from the title or loose form fields. The title is optional metadata only.
 - Preserve its exact location, object trajectory, character functions, initiating cause, action progression, escalation, payoff, final composition, duration, ratio, and model.
 - Never emit unresolved template language. Every action must name its owner, physical movement, object path, cause, consequence, and transition.
@@ -264,6 +268,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "We could not resolve this production into a concrete, physically executable story. Your selections have been preserved.", conceptIssues: conceptValidation.issues }, { status: 400 });
   }
   normalizedForm.resolvedProductionConcept = body.resolvedProductionConcept;
+  const resolvedSpatialActionPlan = body.form?.resolvedSpatialActionPlan || buildResolvedSpatialActionPlan(body.resolvedProductionConcept, inventoryCharacters);
+  const spatialIssues = validateSpatialActionPlan(resolvedSpatialActionPlan, body.resolvedProductionConcept, inventoryCharacters);
+  if (spatialIssues.length) {
+    return Response.json({ error: spatialIssues[0].message, spatialIssues }, { status: 400 });
+  }
+  normalizedForm.resolvedSpatialActionPlan = resolvedSpatialActionPlan;
   const authorizedSceneInventory = buildAuthorizedSceneInventory(normalizedForm, inventoryCharacters, body.resolvedProductionConcept);
   const objectStateLedger = buildObjectStateLedger(authorizedSceneInventory);
   const input = action === "fix"
@@ -274,12 +284,14 @@ export async function POST(request: Request) {
         characters: body.characters,
         activeCharacterIds: activeIds,
         activeCharacters,
+        resolvedProductionConcept: body.resolvedProductionConcept,
+        resolvedSpatialActionPlan,
         authorizedSceneInventory,
         objectStateLedger,
         currentPack: body.pack,
         qualityFindings: body.qualityFindings || [],
       }
-    : { form: normalizedForm, resolvedProductionConcept: body.resolvedProductionConcept, creativeDirection, modelAdapter: selectedModelAdapter(normalizedForm), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
+    : { form: normalizedForm, resolvedProductionConcept: body.resolvedProductionConcept, resolvedSpatialActionPlan, creativeDirection, modelAdapter: selectedModelAdapter(normalizedForm), characters: body.characters, activeCharacterIds: activeIds, activeCharacters, authorizedSceneInventory, objectStateLedger };
 
   try {
     const openAIResponse = await fetch("https://api.openai.com/v1/responses", {
@@ -328,7 +340,14 @@ export async function POST(request: Request) {
 
     const parsedPack = JSON.parse(outputText) as unknown;
     const normalizedPack = parsedPack && typeof parsedPack === "object" ? normalizeProductionPackEncoding(parsedPack as ProductionPack) : parsedPack;
-    const pack = normalizedPack && typeof normalizedPack === "object" ? repairUnauthorizedObjects(normalizedPack as ProductionPack, buildAuthorizedProductionInventory(body.resolvedProductionConcept, inventoryCharacters), body.resolvedProductionConcept) : normalizedPack;
+    let pack = normalizedPack && typeof normalizedPack === "object" ? repairUnauthorizedObjects(normalizedPack as ProductionPack, buildAuthorizedProductionInventory(body.resolvedProductionConcept, inventoryCharacters), body.resolvedProductionConcept) : normalizedPack;
+    if (pack && typeof pack === "object") {
+      const repairedPack = Object.fromEntries(Object.entries(pack).map(([key, value]) => [key, removeInternalValidationLanguage(String(value))])) as ProductionPack;
+      if (requestedOutputs.includes("videoPrompt")) repairedPack.videoTimeline = renderSpatialVideoPrompt(resolvedSpatialActionPlan, body.resolvedProductionConcept);
+      const locationIssues = validateLocationVocabulary(Object.values(repairedPack).join("\n"), resolvedSpatialActionPlan.locationVocabulary);
+      if (locationIssues.length) return Response.json({ error: locationIssues[0].message, spatialIssues: locationIssues }, { status: 502 });
+      pack = repairedPack;
+    }
     if (!requestedPack(pack, requestedOutputs)) {
       return Response.json({ error: "AI Mode returned an incomplete production pack. Please try again." }, { status: 502 });
     }

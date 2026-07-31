@@ -110,6 +110,7 @@ export function upsertProductionRecord(input: ProductionRecordInput): Production
     packStatus: input.generatedOutputs.length === 7 ? "Complete Pack" : "Partial Pack",
     generationMode: input.generationMode,
     resolvedProductionConcept: input.form.resolvedProductionConcept || existing?.resolvedProductionConcept,
+    resolvedSpatialActionPlan: input.form.resolvedSpatialActionPlan || existing?.resolvedSpatialActionPlan,
     promptQuality: input.promptQuality || existing?.promptQuality,
     promptQualityHistory: input.promptQuality
       ? [...(existing?.promptQualityHistory || []), {

@@ -98,7 +98,7 @@ test("quality weights total 100 and evidence-backed caps block 95+", () => {
 
 test("Demo repair is deterministic and AI repair preserves inventory", () => {
   assert.doesNotMatch(conceptSource, /hiding screen/i);
-  assert.match(conceptSource, /plants one foot against.*lower side.*absorbs momentum.*pivots/is);
+  assert.match(conceptSource, /visible contact.*lower side.*absorbs part of its momentum.*redirects/is);
   assert.match(routeSource, /repairUnauthorizedObjects/);
   assert.match(routeSource, /preserve authorized inventory exactly|single story source/i);
 });

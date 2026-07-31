@@ -20,6 +20,19 @@ export type ResolvedProductionConcept = {
   source: "user-defined" | "demo-resolved" | "ai-resolved" | "migrated"; confidence: number;
 };
 
+export type SceneZoneId = string;
+export type SceneZone = { id: SceneZoneId; label: string; description: string; relativePosition: "foreground" | "midground" | "background" | "left" | "center" | "right" | "upper" | "lower" | "near" | "far"; connectedZoneIds: SceneZoneId[] };
+export type CharacterSpatialState = { characterId: string; characterName: string; zoneId: SceneZoneId; posture: string; facing: string; movementState: "stationary" | "preparing" | "moving" | "falling" | "settling"; nearbyCharacterIds: string[]; nearbyObjectIds: string[] };
+export type ObjectSpatialState = { objectId: string; objectName: string; zoneId: SceneZoneId; supportSurface: string; movementState: "stationary" | "rolling" | "sliding" | "falling" | "launched" | "redirecting" | "settling"; direction?: string; speed?: "slow" | "medium" | "fast" };
+export type SpatialAction = { actorId: string; actorName: string; actionType: "push" | "pull" | "step" | "sidestep" | "jump" | "tap" | "kick" | "block" | "dodge" | "collide" | "fall" | "catch" | "stop" | "react" | "settle"; sourceZoneId: SceneZoneId; targetZoneId?: SceneZoneId; targetCharacterId?: string; targetObjectId?: string; bodyPartOrContactPoint?: string; forceDescription?: string; resultingDirection?: string; resultingState?: string };
+export type SpatialBeatState = { startSeconds: number; endSeconds: number; characterStatesBefore: CharacterSpatialState[]; objectStatesBefore: ObjectSpatialState[]; actions: SpatialAction[]; characterStatesAfter: CharacterSpatialState[]; objectStatesAfter: ObjectSpatialState[] };
+export type ObjectDirectionVector = { fromZoneId: SceneZoneId; toZoneId: SceneZoneId; directionLabel: string };
+export type ObjectMotionSegment = { startSeconds: number; endSeconds: number; fromZoneId: SceneZoneId; toZoneId: SceneZoneId; triggerActorId: string; triggerAction: string; movementType: "roll" | "slide" | "launch" | "bounce" | "redirect" | "slow" | "stop"; direction: ObjectDirectionVector; speedBefore: string; speedAfter: string; contactDescription?: string; physicalReason: string };
+export type ResolvedObjectPath = { objectId: string; objectName: string; segments: ObjectMotionSegment[]; finalZoneId: SceneZoneId };
+export type CharacterMovementSegment = { characterId: string; startSeconds: number; endSeconds: number; fromZoneId: SceneZoneId; toZoneId: SceneZoneId; movementType: "step" | "walk" | "run" | "sidestep" | "jump" | "fall" | "settle"; physicalReason: string };
+export type LocationVocabulary = { primaryLocationName: string; allowedTerms: string[]; disallowedInheritedTerms: string[] };
+export type ResolvedSpatialActionPlan = { environmentName: string; zones: SceneZone[]; initialCharacterStates: CharacterSpatialState[]; initialObjectStates: ObjectSpatialState[]; beats: SpatialBeatState[]; finalCharacterStates: CharacterSpatialState[]; finalObjectStates: ObjectSpatialState[]; objectPath: ResolvedObjectPath; characterPaths: CharacterMovementSegment[]; locationVocabulary: LocationVocabulary };
+
 export type CharacterRole = "Hero" | "Enemy" | "Companion";
 
 export type CreativeAssetKind = "location" | "object" | "action" | "payoff";
@@ -168,6 +181,7 @@ export type ProductionForm = {
   styleWorkflowEnabled?: boolean;
   videoTitle: string;
   resolvedProductionConcept?: ResolvedProductionConcept;
+  resolvedSpatialActionPlan?: ResolvedSpatialActionPlan;
   creativeDirection: CreativeDirectionState;
   /** @deprecated Local migration-only values; never rendered or sent for generation. */
   locationAssetId: string;
@@ -328,6 +342,7 @@ export type SavedProductionPack = {
   generatedOutputs?: RequestedOutput[];
   packStatus?: "Partial Pack" | "Complete Pack" | "Legacy Pack";
   resolvedProductionConcept?: ResolvedProductionConcept;
+  resolvedSpatialActionPlan?: ResolvedSpatialActionPlan;
 };
 
 export type LegacyPackItem = {

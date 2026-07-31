@@ -84,6 +84,7 @@ import { optimizePromptPackage } from "./prompt-quality";
 import { buildAutomaticTimeline, formatTimelineTime, validateProductionTimeline } from "./production-format";
 import { conceptInputFromForm, detectUnresolvedPromptLanguage, resolveProductionConcept } from "./production-concept";
 import { normalizeProductionPackEncoding } from "./prompt-choreography";
+import { buildResolvedSpatialActionPlan, validateSpatialActionPlan } from "./spatial-action-plan";
 
 const STORAGE = {
   characters: "slapstick-character-library",
@@ -1689,7 +1690,14 @@ Negative identity rules: do not duplicate ${current.shortName}; no extra copies,
       setError("We could not resolve this production into a concrete, physically executable story. Your selections have been preserved.");
       return;
     }
-    const persistedForm = { ...form, productionTimeline, resolvedProductionConcept };
+    const resolvedSpatialActionPlan = buildResolvedSpatialActionPlan(resolvedProductionConcept, productionCharacters);
+    const spatialIssues = validateSpatialActionPlan(resolvedSpatialActionPlan, resolvedProductionConcept, productionCharacters);
+    if (spatialIssues.length) {
+      setIsGenerating(false);
+      setError(spatialIssues[0].message);
+      return;
+    }
+    const persistedForm = { ...form, productionTimeline, resolvedProductionConcept, resolvedSpatialActionPlan };
     const generatingRecord = upsertProductionRecord({
       id: productionIdRef.current || undefined,
       status: "generating",

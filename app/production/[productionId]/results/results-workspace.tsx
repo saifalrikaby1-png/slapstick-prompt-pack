@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Document, HeadingLevel, Packer, Paragraph } from "docx";
 import { saveAs } from "file-saver";
-import { CharacterProfile, ProductionPack, RequestedOutput } from "../../../production-types";
+import { CharacterProfile, ProductionPack } from "../../../production-types";
 import { findProductionRecord, ProductionRecord, saveProductionRecord } from "../../../production-records";
 import { analyzePromptPackage, changedPromptSections, isRepairImprovement, maximizePromptQuality, promptQualityContext, PromptQualityAnalysis } from "../../../prompt-quality";
 import { normalizeProductionFormat } from "../../../production-format";
@@ -12,6 +12,7 @@ import { normalizeProductionPackEncoding } from "../../../prompt-choreography";
 
 const RESULT_TAB_ORDER = ["character", "frames", "complete-production-prompt", "prompt-quality", "timeline", "negative-prompt"] as const;
 type ResultTabId = (typeof RESULT_TAB_ORDER)[number];
+type PromptOptimizationStatus = "idle" | "analyzing" | "repairing" | "validating" | "saving" | "complete" | "error";
 
 const RESULT_TAB_LABELS: Record<ResultTabId, string> = {
   character: "Character",
@@ -84,10 +85,12 @@ function FrameResultPanel({ title, prompt, onCopy }: { title: string; prompt?: s
   return <article className="results-frame-panel"><header className="results-frame-panel-header"><h3>{title}</h3><button type="button" className="production-secondary-button" onClick={onCopy}>Copy {title}</button></header><div className="results-frame-prompt">{prompt}</div></article>;
 }
 
-function PromptQualityPanel({ analysis, onMaximize, isMaximizing, lastRepair }: { analysis: PromptQualityAnalysis; onMaximize: () => void; isMaximizing: boolean; lastRepair?: ProductionRecord["lastPromptQualityRepair"] }) {
+function PromptQualityPanel({ analysis, onMaximize, optimizationStatus, optimizationError, onUndo, canUndo, lastRepair }: { analysis: PromptQualityAnalysis; onMaximize: () => void; optimizationStatus: PromptOptimizationStatus; optimizationError: string | null; onUndo: () => void; canUndo: boolean; lastRepair?: ProductionRecord["lastPromptQualityRepair"] }) {
   const balanceLabels = { repetitionControl: "Repetition control", lengthBalance: "Length balance", sectionResponsibility: "Section responsibility", contradictionControl: "Contradiction control", formattingHierarchy: "Formatting and hierarchy" };
   const balanceMaximums = { repetitionControl: 3, lengthBalance: 2, sectionResponsibility: 1, contradictionControl: 1, formattingHierarchy: 1 };
   const passedCategories = analysis.categories.filter((category) => category.earnedScore >= category.maxScore).length;
+  const active = ["analyzing", "repairing", "validating", "saving"].includes(optimizationStatus);
+  const labels: Record<PromptOptimizationStatus, string> = { idle: "Maximize Prompt Quality", analyzing: "Analyzing Prompt…", repairing: "Repairing Prompt…", validating: "Validating Improvements…", saving: "Saving Improvements…", complete: "Prompt Maximized", error: "Try Maximizing Again" };
   return <section className="prompt-quality-panel">
     <header className="prompt-quality-header"><div><p className="results-output-eyebrow">PROMPT QUALITY CONTROL</p><h2>Prompt Quality Score</h2><p>Measures the strength, clarity, consistency, completeness, and model-readiness of the generated production prompt.</p><strong className="prompt-quality-motto">The Strongest Prompts Ever Built.</strong></div><div className="prompt-quality-score"><strong>{analysis.finalScore}%</strong><span>{analysis.label}</span>{analysis.appliedCaps.length > 0 && <small>Base {analysis.baseScore}%</small>}</div></header>
     <div className="prompt-quality-status-row"><strong>{analysis.label}</strong><span>{passedCategories} of {analysis.categories.length} categories passed</span></div>
@@ -96,7 +99,10 @@ function PromptQualityPanel({ analysis, onMaximize, isMaximizing, lastRepair }: 
     <div className="prompt-quality-category-grid">{analysis.categories.map((category) => <details className="prompt-quality-category" key={category.id}><summary className="prompt-quality-category-header"><h3>{category.label}</h3><span className="prompt-quality-category-score">{category.earnedScore} / {category.maxScore}</span></summary>{category.checks.map((check) => <p key={check.id}><strong>{check.status.toUpperCase()}</strong> — {check.message}</p>)}{category.id === "prompt-balance" && <div className="prompt-balance-details">{Object.entries(analysis.promptBalance.breakdown).map(([key, value]) => <p key={key}><span>{balanceLabels[key as keyof typeof balanceLabels]}</span><strong>{value} / {balanceMaximums[key as keyof typeof balanceMaximums]}</strong></p>)}{analysis.promptBalance.findings.some((finding) => finding.penalty > 0) && <><h4>Redundant instruction groups:</h4><ul>{analysis.promptBalance.findings.filter((finding) => finding.penalty > 0).map((finding) => <li key={finding.id}>“{finding.text}” appears in {finding.sections.join(" and ")}.</li>)}</ul></>}</div>}</details>)}</div>
     {analysis.warnings.length > 0 && <section className="prompt-quality-issues"><h3>Improvements available</h3>{analysis.warnings.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Warning · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}
     {analysis.failedChecks.length > 0 && <section className="prompt-quality-issues"><h3>Critical issues</h3>{analysis.failedChecks.map((check) => <article className="prompt-quality-issue" key={check.id}><strong>Failure · {check.label}</strong><p>{check.message}</p><small>Affected: {check.affectedSections.join(", ")}</small></article>)}</section>}
-    <button type="button" className="production-emerald-gold-cta" onClick={onMaximize} disabled={isMaximizing || analysis.finalScore >= 98}>{isMaximizing ? "Maximizing Prompt Quality…" : analysis.finalScore >= 98 ? "Maximum Quality Reached" : "Maximize Prompt Quality"}</button>
+    <details className="prompt-quality-caps"><summary>Detailed quality evidence</summary>{analysis.categories.flatMap((category) => category.checks).map((check) => <article key={`evidence-${check.id}`}><strong>{check.label} · {check.status.toUpperCase()} · {check.severity}</strong><p>{check.evidence}</p><small>Affected: {check.affectedSections.join(", ")}</small><small>Recommended repair: {check.recommendedRepair}</small><small>Points lost: {check.pointsLost}{analysis.appliedCaps.find((cap) => cap.evidenceCheckIds.includes(check.id)) ? ` · Hard cap ${analysis.appliedCaps.find((cap) => cap.evidenceCheckIds.includes(check.id))?.maximumScore}%` : ""}</small></article>)}</details>
+    <button type="button" className="production-emerald-gold-cta" onClick={onMaximize} disabled={active} aria-busy={active}>{active && <span aria-hidden="true">◌ </span>}{labels[optimizationStatus]}</button>
+    {optimizationError && <section className="prompt-quality-issue" role="alert"><strong>Prompt optimization failed</strong><p>{optimizationError}</p><button type="button" className="production-secondary-button" onClick={onMaximize}>Try Again</button><details><summary>View Technical Details</summary><p>The original production was preserved because the candidate repair was not safely better.</p></details></section>}
+    {canUndo && <button type="button" className="production-secondary-button" onClick={onUndo}>Undo Maximize</button>}
     {lastRepair && <section className="prompt-quality-repair-summary" aria-live="polite"><h3>AI optimization completed</h3><p>Before: {lastRepair.previousScore}% · After: {lastRepair.newScore}%</p><p>Changed: {lastRepair.changedSections.join(", ")}</p><ul>{lastRepair.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}</ul></section>}
   </section>;
 }
@@ -106,7 +112,9 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
   const [activeTab, setActiveTab] = useState<ResultTabId>("complete-production-prompt");
   const [expandedCharacterIds, setExpandedCharacterIds] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
-  const [isMaximizing, setIsMaximizing] = useState(false);
+  const [promptOptimizationStatus, setPromptOptimizationStatus] = useState<PromptOptimizationStatus>("idle");
+  const [promptOptimizationError, setPromptOptimizationError] = useState<string | null>(null);
+  const [previousProductionVersion, setPreviousProductionVersion] = useState<ProductionRecord | null>(null);
 
   useEffect(() => {
     const load = () => {
@@ -158,48 +166,58 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
     setNotice("Production pack saved.");
   }
 
-  async function handleMaximizePromptQuality() {
-    if (!production?.promptQuality || isMaximizing) return;
-    setIsMaximizing(true);
-    let repair = maximizePromptQuality(production.pack as ProductionPack, production.form, production.characterProfiles, production.generationMode, production.generatedOutputs || []);
-    if (production.generationMode === "ai" && repair.newAnalysis.score < 98 && repair.newAnalysis.repairableIssueCount > 0) {
-      const affected = new Set(repair.newAnalysis.warnings.concat(repair.newAnalysis.failedChecks).flatMap((check) => check.affectedSections));
-      const requestedOutputs: RequestedOutput[] = [];
-      if (affected.has("characters")) requestedOutputs.push("characterBuildingPrompt");
-      if (affected.has("start-frame")) requestedOutputs.push("startFramePrompt");
-      if (affected.has("end-frame")) requestedOutputs.push("endFramePrompt");
-      if (["video-lock", "video-prompt", "video-rules", "timeline"].some((section) => affected.has(section as never))) requestedOutputs.push("videoPrompt");
-      if (affected.has("music")) requestedOutputs.push("musicPath");
-      if (affected.has("sound-effects")) requestedOutputs.push("soundEffects");
-      const targets = [...new Set(requestedOutputs)].filter((output) => (production.generatedOutputs || []).includes(output));
-      if (targets.length) {
-        const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-          action: "fix", form: production.form, creativeDirection: production.form.creativeDirection,
-          activeCharacterIds: production.characterProfiles.map((character) => character.id),
-          activeCharacters: production.characterProfiles.map(({ id, shortName, role, fullIdentity, description, nonverbalSoundProfile }) => ({ id, name: shortName, role, fullIdentity, description, nonverbalSoundProfile })),
-          characters: production.characterProfiles, pack: repair.pack,
-          qualityFindings: repair.newAnalysis.warnings.concat(repair.newAnalysis.failedChecks).map((check) => ({ label: check.label, status: check.status === "fail" ? "Failed" : "Warning", detail: check.message })),
-          requestedOutputs: targets,
-        }) }).catch(() => null);
-        const data = response ? await response.json() as { pack?: Partial<ProductionPack> } : {};
-        if (response?.ok && data.pack) {
-          const candidatePack = { ...repair.pack, ...data.pack } as ProductionPack;
-          const candidateAnalysis = analyzePromptPackage(candidatePack, promptQualityContext(production.form, production.characterProfiles, "ai", production.generatedOutputs || []));
-          const candidateChangedSections = changedPromptSections(repair.pack, candidatePack);
-          if (candidateChangedSections.length && isRepairImprovement(repair.newAnalysis, candidateAnalysis)) repair = { ...repair, pack: candidatePack, newScore: candidateAnalysis.finalScore, newAnalysis: candidateAnalysis, changedSections: [...new Set([...repair.changedSections, ...candidateChangedSections])], improvements: [...repair.improvements, "AI semantic repair refined only the affected canonical prompt sections."] };
-        }
+  async function handleMaximizePromptQuality(): Promise<void> {
+    if (!production || ["analyzing", "repairing", "validating", "saving"].includes(promptOptimizationStatus)) return;
+    setPromptOptimizationError(null);
+    setPromptOptimizationStatus("analyzing");
+    const original = production;
+    try {
+      await Promise.resolve();
+      const context = promptQualityContext(production.form, production.characterProfiles, production.generationMode, production.generatedOutputs || []);
+      const initialAnalysis = analyzePromptPackage(production.pack as ProductionPack, context);
+      if (!initialAnalysis.repairableIssueCount) {
+        setPromptOptimizationStatus("complete");
+        setNotice("No safe additional improvements were found.");
+        return;
       }
+      setPromptOptimizationStatus("repairing");
+      setNotice(production.generationMode === "ai" ? "Repairing the AI production prompt…" : "Repairing the demo production prompt…");
+      await Promise.resolve();
+      const repair = maximizePromptQuality(production.pack as ProductionPack, production.form, production.characterProfiles, production.generationMode, production.generatedOutputs || []);
+      const candidatePack = normalizeProductionPackEncoding(repair.pack);
+      const normalizationChanges = changedPromptSections(repair.pack, candidatePack);
+      setPromptOptimizationStatus("validating");
+      await Promise.resolve();
+      const repairedAnalysis = analyzePromptPackage(candidatePack, context);
+      repair.newAnalysis = repairedAnalysis;
+      const canonicalChanges = changedPromptSections(production.pack as ProductionPack, candidatePack);
+      if (!canonicalChanges.length) {
+        setPromptOptimizationStatus("complete");
+        setNotice("No prompt changes were produced. Please try the optimization again.");
+        return;
+      }
+      if (!isRepairImprovement(initialAnalysis, repairedAnalysis)) throw new Error("The repair did not safely improve the production prompt. Your original production was preserved.");
+      setPromptOptimizationStatus("saving");
+      await Promise.resolve();
+      const updated = saveProductionRecord({ ...production, pack: candidatePack, promptQuality: repair.newAnalysis, promptQualityHistory: [...(production.promptQualityHistory || []), { score: repairedAnalysis.finalScore, label: repairedAnalysis.label, analyzedAt: repairedAnalysis.analyzedAt, analysisVersion: repairedAnalysis.analysisVersion, reason: "manual-maximize" }], lastPromptQualityRepair: { previousScore: initialAnalysis.finalScore, newScore: repairedAnalysis.finalScore, changedSections: [...new Set([...canonicalChanges, ...normalizationChanges])], improvements: repair.improvements, repairedAt: new Date().toISOString() } });
+      setPreviousProductionVersion(original);
+      setProduction(updated);
+      setPromptOptimizationStatus("complete");
+      setNotice(`Prompt Quality improved from ${initialAnalysis.finalScore}% to ${repairedAnalysis.finalScore}%. ${canonicalChanges.length} prompt section${canonicalChanges.length === 1 ? "" : "s"} repaired; ${repairedAnalysis.repairableIssueCount} issue${repairedAnalysis.repairableIssueCount === 1 ? " remains" : "s remain"}.`);
+    } catch (error) {
+      setPromptOptimizationError(error instanceof Error ? error.message : "We could not safely improve the prompt. Your original production was preserved.");
+      setPromptOptimizationStatus("error");
     }
-    const canonicalChanges = changedPromptSections(production.pack as ProductionPack, repair.pack);
-    const accepted = canonicalChanges.length > 0 && isRepairImprovement(repair.previousAnalysis, repair.newAnalysis);
-    const updated = saveProductionRecord(accepted ? {
-      ...production, pack: repair.pack, promptQuality: repair.newAnalysis,
-      promptQualityHistory: [...(production.promptQualityHistory || []), { score: repair.newScore, label: repair.newAnalysis.label, analyzedAt: repair.newAnalysis.analyzedAt, analysisVersion: repair.newAnalysis.analysisVersion, reason: "manual-maximize" }],
-      lastPromptQualityRepair: { previousScore: repair.previousScore, newScore: repair.newScore, changedSections: canonicalChanges, improvements: repair.improvements, repairedAt: new Date().toISOString() },
-    } : { ...production, lastPromptQualityRepair: undefined });
-    setProduction(updated);
-    setNotice(accepted ? `Prompt Quality improved from ${repair.previousScore}% to ${repair.newScore}%.` : "No prompt changes were produced. Please try the optimization again.");
-    setIsMaximizing(false);
+  }
+
+  function handleUndoMaximize() {
+    if (!previousProductionVersion) return;
+    const restored = saveProductionRecord(previousProductionVersion);
+    setProduction(restored);
+    setPreviousProductionVersion(null);
+    setPromptOptimizationStatus("idle");
+    setPromptOptimizationError(null);
+    setNotice("The prompt package and Prompt Quality score were restored to the version before Maximize.");
   }
 
   async function downloadWord() {
@@ -266,7 +284,7 @@ export function ResultsWorkspace({ productionId }: { productionId: string }) {
         {selectedTab === "frames" && <section className="results-frames-viewer"><header className="results-content-header"><div><p className="results-output-eyebrow">REFERENCE FRAMES</p><h2>Start &amp; End Frames</h2><p>Review the opening and final compositions for the production.</p></div><button type="button" className="production-emerald-gold-cta" onClick={() => copyText(bothFrames, "Start and end frames copied.")}>Copy Both Frames</button></header><div className="results-frames-grid"><FrameResultPanel title="Start Frame" prompt={pack.startFramePrompt} onCopy={() => copyText(pack.startFramePrompt || "", "Start frame copied.")} /><FrameResultPanel title="End Frame" prompt={pack.endFramePrompt} onCopy={() => copyText(pack.endFramePrompt || "", "End frame copied.")} /></div></section>}
         {selectedTab === "complete-production-prompt" && <section className="complete-production-prompt-viewer"><header className="results-content-header"><div><p className="results-output-eyebrow">COMPLETE MODEL-READY PACKAGE</p><h2>Complete Production Prompt</h2><p>Copy the full continuity lock, video direction, audio guidance, and execution safeguards in one action.</p></div><button type="button" className="production-emerald-gold-cta" onClick={() => copyText(completePrompt, "Complete production prompt copied.")}>Copy Complete Production Prompt</button></header><div className="complete-production-prompt-sections"><PromptResultSection title="Video Lock" content={pack.videoLock} copyLabel="Copy Video Lock" onCopy={() => copyText(pack.videoLock || "", "Video Lock copied.")} /><PromptResultSection title="Video Prompt" content={pack.videoTimeline} copyLabel="Copy Video Prompt" onCopy={() => copyText(pack.videoTimeline || "", "Video Prompt copied.")} /><PromptResultSection title="Music Direction" content={pack.musicPath} copyLabel="Copy Music" onCopy={() => copyText(pack.musicPath || "", "Music copied.")} /><PromptResultSection title="Sound Effects Direction" content={pack.soundEffects} copyLabel="Copy Sound Effects" onCopy={() => copyText(pack.soundEffects || "", "Sound effects copied.")} /><PromptResultSection title="Video Rules" content={pack.finalGenerationRule} copyLabel="Copy Video Rules" onCopy={() => copyText(pack.finalGenerationRule || "", "Video Rules copied.")} /></div></section>}
         {selectedTab === "timeline" && <section className="results-single-viewer"><header className="results-content-header"><div><p className="results-output-eyebrow">TIMELINE</p><h2>Action Timeline</h2></div><button type="button" className="production-secondary-button" onClick={() => copyText(pack.videoTimeline || "", "Timeline copied.")}>Copy Timeline</button></header><div className="results-output-content">{pack.videoTimeline}</div></section>}
-        {selectedTab === "prompt-quality" && production.promptQuality && <PromptQualityPanel analysis={production.promptQuality} onMaximize={handleMaximizePromptQuality} isMaximizing={isMaximizing} lastRepair={production.lastPromptQualityRepair} />}
+        {selectedTab === "prompt-quality" && production.promptQuality && <PromptQualityPanel analysis={production.promptQuality} onMaximize={handleMaximizePromptQuality} optimizationStatus={promptOptimizationStatus} optimizationError={promptOptimizationError} onUndo={handleUndoMaximize} canUndo={Boolean(previousProductionVersion)} lastRepair={production.lastPromptQualityRepair} />}
       </section>
       <aside className="results-summary-sidebar"><h2>Production Summary</h2><SummaryItem label="Title" value={production.title} /><SummaryItem label="Characters" value={`${production.characterProfiles.length}`} /><SummaryItem label="Character names" value={production.characterProfiles.map((character) => character.shortName).join(", ") || "None"} /><h2>Production Specifications</h2><SummaryItem label="Video Model" value={productionFormat.videoModel} /><SummaryItem label="Duration" value={`${productionFormat.durationSeconds} seconds`} /><SummaryItem label="Video Ratio" value={productionFormat.videoRatio} /><SummaryItem label="Generation Mode" value={productionFormat.generationMode === "ai" ? "AI Mode" : "Demo Mode"} /><SummaryItem label="Timing Structure" value={productionFormat.timingStructureMode === "custom" ? "Custom Timing" : "Automatic Timing"} /><SummaryItem label="Timeline beats" value={`${productionFormat.timeline.beats.length}`} />{productionFormat.resolution && <SummaryItem label="Resolution" value={productionFormat.resolution} />}<SummaryItem label="Outputs" value={`${(production.generatedOutputs || []).filter((output) => output !== "videoTitle").length} generated`} />{production.promptQuality && <button type="button" className="results-quality-summary-link" onClick={() => setActiveTab("prompt-quality")}><span>Prompt Quality</span><strong>{production.promptQuality.score}% — {production.promptQuality.label}</strong></button>}<Link href={`/production/${production.id}/edit`} className="production-secondary-button">Edit Production</Link></aside>
     </div>

@@ -2,7 +2,11 @@ import type { CharacterProfile, ProductionForm, ProductionPack, ResolvedProducti
 
 export type PromptPackageSectionId = "start-frame" | "end-frame" | "video-lock" | "video-prompt" | "music" | "sound-effects" | "video-rules" | "timeline";
 export type PromptPackageSections = Partial<Record<PromptPackageSectionId, string>>;
-export type AuthorizedProductionInventory = { characterIds: string[]; characterNames: string[]; objects: { id: string; name: string; description: string }[]; location: { name: string; description: string } };
+export type InventoryEntityKind = "character" | "movable-object" | "environment-location" | "environment-surface" | "scene-zone" | "object-attribute" | "visual-effect" | "unknown";
+export type ClassifiedPromptEntity = { text: string; normalizedText: string; kind: InventoryEntityKind; sectionId: PromptPackageSectionId; evidence: string };
+export type AuthorizedObjectDescriptor = { id: string; name: string; aliases: string[]; attributes: string[] };
+export type AuthorizedEnvironmentDescriptor = { locationName: string; surfaces: string[]; zones: string[]; allowedVocabulary: string[] };
+export type AuthorizedProductionInventory = { characterIds: string[]; characterNames: string[]; objects: AuthorizedObjectDescriptor[]; environment: AuthorizedEnvironmentDescriptor; location: { name: string; description: string } };
 export type UnauthorizedObjectFinding = { objectName: string; sections: PromptPackageSectionId[]; evidence: string[] };
 export type CharacterParticipationResult = { characterId: string; characterName: string; appearsInOpening: boolean; hasMeaningfulAction: boolean; causesOrAffectsEvent: boolean; reactsToEvent: boolean; appearsInPayoff: boolean; participationScore: number };
 export type ObjectTrajectorySegment = { startTime: number; endTime: number; initialPosition: string; forceOrTrigger: string; direction: string; movementType: "roll" | "slide" | "fall" | "launch" | "swing" | "bounce" | "carry" | "redirect" | "stop"; characterInteraction?: string; resultingPosition: string };
@@ -19,14 +23,25 @@ export function normalizeGeneratedTextEncoding(value: string): string {
 export function normalizeProductionPackEncoding(pack: ProductionPack): ProductionPack { return Object.fromEntries(Object.entries(pack).map(([key, value]) => [key, normalizeGeneratedTextEncoding(value)])) as ProductionPack; }
 
 export function buildAuthorizedProductionInventory(concept: ResolvedProductionConcept, characters: CharacterProfile[]): AuthorizedProductionInventory {
-  return { characterIds: characters.map((character) => character.id), characterNames: characters.map((character) => character.shortName), objects: [{ id: "primary-object", name: concept.primaryObject.objectName, description: concept.primaryObject.visualIdentity }], location: { name: concept.location.name, description: concept.location.visualDescription } };
+  const objectWords = concept.primaryObject.objectName.toLowerCase().split(/\s+/);
+  const attributes = [concept.primaryObject.visualIdentity.replace(new RegExp(`\\b${concept.primaryObject.objectName}\\b`, "i"), "").replace(/^one\s+/i, "").trim(), ...(concept.primaryObject.visualIdentity.match(/(?:leaf-shaped|printed|painted|striped|smooth|rounded|spiral|bright|dark|\w+-colored)\s+(?:mark|symbol|stripe|surface|shape|patch|pattern)/gi) || [])].filter(Boolean);
+  return { characterIds: characters.map((character) => character.id), characterNames: characters.map((character) => character.shortName), objects: [{ id: "primary-object", name: concept.primaryObject.objectName, aliases: [...new Set([concept.primaryObject.objectName, objectWords.at(-1) || concept.primaryObject.objectName, concept.primaryObject.visualIdentity])], attributes: [...new Set(attributes)] }], environment: { locationName: concept.location.name, surfaces: ["path", "stone path", "route", "ground", "boardwalk", "forest floor", "slope", "edge"], zones: ["upper route", "lower route", "upper area", "lower area", "payoff area", "action area", "payoff zone", "slope top", "slope lower", "curved edge", "workshop entrance", "boardwalk center"], allowedVocabulary: [concept.location.name, concept.location.visualDescription, ...concept.location.fixedEnvironmentFacts] }, location: { name: concept.location.name, description: concept.location.visualDescription } };
 }
-const KNOWN_PROPS = ["hiding screen", "screen", "sign", "cart", "barrier", "platform", "table", "chair", "tool", "vehicle", "box", "basket", "lantern", "seashell", "acorn", "berry", "mushroom"];
+const KNOWN_PROPS = ["folding screen", "hiding screen", "screen", "sign", "cart", "barrier", "platform", "table", "chair", "tool", "vehicle", "box", "basket", "lantern", "seashell", "acorn", "berry", "mushroom"];
 const LOCATION_SURFACES = ["ground", "sky", "sea", "boardwalk", "path", "slope", "stone path", "clearing", "floor", "wall"];
 const normalized = (value: string) => value.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+const SCENE_ZONE_TERMS = ["path", "stone path", "route", "upper route", "lower route", "upper area", "lower area", "payoff area", "action area", "ground", "boardwalk", "workshop", "forest floor", "clearing", "payoff zone", "slope", "edge"];
+const ATTRIBUTE_TERMS = ["leaf-shaped mark", "printed mark", "painted symbol", "stripe", "texture", "pattern", "color patch"];
+const EFFECT_TERMS = ["shadow", "light", "dust", "water splash"];
+export function classifyPromptEntity(text: string, sectionId: PromptPackageSectionId, authorizedInventory?: AuthorizedProductionInventory): ClassifiedPromptEntity {
+  const value = normalized(text);
+  const object = authorizedInventory?.objects.find((entry) => entry.aliases.some((alias) => value === normalized(alias)) || entry.attributes.some((attribute) => value === normalized(attribute)));
+  const kind: InventoryEntityKind = authorizedInventory?.characterNames.some((name) => value === normalized(name)) ? "character" : object?.attributes.some((attribute) => value === normalized(attribute)) ? "object-attribute" : object ? "movable-object" : ATTRIBUTE_TERMS.includes(value) || /(?:mark|symbol|stripe|texture|pattern|color patch)$/.test(value) ? "object-attribute" : SCENE_ZONE_TERMS.includes(value) || /^(?:upper|lower|payoff|action|slope|boardwalk)\s+(?:path|route|area|zone|edge|center|top|lower)$/.test(value) ? "scene-zone" : EFFECT_TERMS.includes(value) ? "visual-effect" : KNOWN_PROPS.includes(value) ? "movable-object" : authorizedInventory && value.includes(normalized(authorizedInventory.location.name)) ? "environment-location" : "unknown";
+  return { text, normalizedText: value, kind, sectionId, evidence: text };
+}
 export function detectUnauthorizedObjects({ sections, authorizedInventory }: { sections: PromptPackageSections; authorizedInventory: AuthorizedProductionInventory }): UnauthorizedObjectFinding[] {
-  const authorized = authorizedInventory.objects.flatMap((object) => [normalized(object.name), ...normalized(object.name).split(" ").filter((part) => part.length > 3)]);
-  return KNOWN_PROPS.filter((noun) => !LOCATION_SURFACES.includes(noun) && !authorized.some((name) => normalized(noun) === name || normalized(noun).includes(name) || name.includes(normalized(noun)))).map((noun) => {
+  const authorized = authorizedInventory.objects.flatMap((object) => object.aliases.map(normalized));
+  return KNOWN_PROPS.filter((noun) => classifyPromptEntity(noun, "video-prompt", authorizedInventory).kind === "movable-object" && !LOCATION_SURFACES.includes(noun) && !authorized.some((name) => normalized(noun) === name || normalized(noun).includes(name) || name.includes(normalized(noun)))).map((noun) => {
     const matches = Object.entries(sections).filter(([, value]) => new RegExp(`\\b${noun.replace(/ /g, "\\s+")}s?\\b`, "i").test(value || ""));
     return matches.length ? { objectName: noun, sections: matches.map(([section]) => section as PromptPackageSectionId), evidence: matches.map(([, value]) => (value || "").match(new RegExp(`.{0,45}\\b${noun.replace(/ /g, "\\s+")}s?\\b.{0,45}`, "i"))?.[0] || noun) } : null;
   }).filter((finding): finding is UnauthorizedObjectFinding => Boolean(finding));

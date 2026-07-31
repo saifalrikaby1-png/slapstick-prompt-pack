@@ -3,6 +3,7 @@ import { normalizeProductionFormat, validateProductionTimeline } from "./product
 import { detectUnresolvedPromptLanguage, GENERIC_ACTION_PHRASES, validateCharacterParticipation, validateObjectTrajectory } from "./production-concept";
 import { analyzeCharacterParticipation, buildAuthorizedProductionInventory, buildCompleteObjectTrajectory, detectUnauthorizedObjects, normalizeGeneratedTextEncoding, normalizeProductionPackEncoding, packSections, validateCompleteObjectTrajectory } from "./prompt-choreography";
 import { analyzeInternalValidationLanguage, buildResolvedSpatialActionPlan, removeInternalValidationLanguage, renderSpatialVideoPrompt, validateActionOwnership, validateCharacterPathContinuity, validateFinalStateReachability, validateLocationVocabulary, validateMeaningfulParticipation, validateObjectDirectionContinuity, validateSpatialActionPlan } from "./spatial-action-plan";
+import { buildMusicFromFinalizedBeats, buildSfxFromFinalizedBeats, getFinalizedProductionBeats, inferObjectMotionProfile, renderCoherentLocation, renderTimedDirections, resolveLocationPlan, validateAllCharacterFinalStates, validateLocationCoherence, validateObjectFinalState, validateObjectMotionCompatibility, validateRenderedPhysicalAction } from "./prompt-finalization";
 
 export type PromptQualityLevel = "maximum" | "expert" | "production-ready" | "needs-refinement" | "major-issues";
 export type PromptQualityStatus = "pass" | "warning" | "fail";
@@ -37,6 +38,7 @@ export type PromptQualityCheck = {
   id: string; categoryId: PromptQualityCategoryId; label: string; status: PromptQualityStatus;
   score: number; maxScore: number; message: string; affectedSections: PromptPackageSectionId[];
   repairable: boolean; severity: "critical" | "major" | "minor";
+  evidence: string; recommendedRepair: string; pointsLost: number;
 };
 export type PromptQualityCategory = { id: PromptQualityCategoryId; label: string; weight: number; earnedScore: number; maxScore: number; checks: PromptQualityCheck[] };
 export type PromptQualityCap = {
@@ -228,7 +230,8 @@ function allNames(text: string, characters: CharacterProfile[]) { return charact
 function makeCheck(categoryId: PromptQualityCategoryId, ok: boolean, partial: boolean, message: string, sections: PromptPackageSectionId[], severity: PromptQualityCheck["severity"] = "major", checkId = `${categoryId}-core`): PromptQualityCheck {
   const maxScore = categoryId === "prompt-balance" ? 0 : PROMPT_QUALITY_WEIGHTS[categoryId];
   const status: PromptQualityStatus = ok ? "pass" : partial ? "warning" : "fail";
-  return { id: checkId, categoryId, label: CATEGORY_LABELS[categoryId], status, score: ok ? maxScore : partial ? Math.round(maxScore * .65) : 0, maxScore, message, affectedSections: sections, repairable: !ok, severity };
+  const score = ok ? maxScore : partial ? Math.round(maxScore * .65) : 0;
+  return { id: checkId, categoryId, label: CATEGORY_LABELS[categoryId], status, score, maxScore, message, evidence: message, recommendedRepair: ok ? "No repair needed." : `Repair ${sections.join(", ")} and re-run Prompt Quality.`, pointsLost: maxScore - score, affectedSections: sections, repairable: !ok, severity };
 }
 
 export function analyzePromptPackage(pack: ProductionPack, context: PromptQualityContext): PromptQualityAnalysis {
@@ -275,21 +278,31 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   const modelFacingText = [pack.startFramePrompt, pack.endFramePrompt, pack.videoTimeline, pack.musicPath, pack.soundEffects].join("\n");
   const locationIssues = spatialPlan ? validateLocationVocabulary(modelFacingText, spatialPlan.locationVocabulary) : [];
   const clarityIssues = analyzeInternalValidationLanguage(modelFacingText);
+  const payoffText = pack.videoTimeline.split(/\n\s*\n/).at(-1) || pack.videoTimeline;
+  const characterFinalStates = spatialPlan?.finalCharacterStates.map((state) => ({ characterId: state.characterId, characterName: state.characterName, finalZoneId: state.zoneId, finalPosture: state.posture, finalFacing: state.facing, finalExpression: /defeated/i.test(state.posture) ? "surprised defeated expression" : "confident settled expression", supported: true, visible: true, settled: state.movementState === "settling" || state.movementState === "stationary" })) || [];
+  const characterFinalIssues = spatialPlan ? validateAllCharacterFinalStates({ selectedCharacters: context.selectedCharacters, finalStates: characterFinalStates, payoffText }) : [];
+  const finalObjectState = spatialPlan?.finalObjectStates[0];
+  const objectFinalIssues = spatialPlan ? validateObjectFinalState({ objectPath: spatialPlan.objectPath, finalState: finalObjectState ? { objectId: finalObjectState.objectId, objectName: finalObjectState.objectName, finalZoneId: finalObjectState.zoneId, finalPositionDescription: `stops in ${finalObjectState.zoneId}`, finalOrientation: "upright with defining mark visible", supported: true, visible: true, settled: finalObjectState.movementState === "settling" || finalObjectState.movementState === "stationary" } : undefined, videoLock: pack.videoLock, payoffText }) : [];
+  const physicalActionIssues = validateRenderedPhysicalAction(pack.videoTimeline);
+  const objectDescriptor = concept ? { id: "primary-object", name: concept.primaryObject.objectName, aliases: [concept.primaryObject.objectName], attributes: [concept.primaryObject.visualIdentity] } : undefined;
+  const motionCompatibilityIssues = spatialPlan && objectDescriptor ? validateObjectMotionCompatibility({ objectProfile: inferObjectMotionProfile(objectDescriptor), trajectory: spatialPlan.objectPath }) : [];
+  const locationPlan = concept ? resolveLocationPlan(concept) : undefined;
+  const locationCoherenceIssues = locationPlan ? validateLocationCoherence(locationPlan) : [];
   const checks: PromptQualityCheck[] = [
     makeCheck("character-consistency", namesInCharacter && namesInLock && !characterIdentityConflict, (namesInCharacter || namesInLock) && !characterIdentityConflict, namesInCharacter && namesInLock && !characterIdentityConflict ? "Every selected character and role is consistently represented." : characterIdentityConflict ? "One or more character identities conflict across the prompt package." : "One or more selected character identities are missing from Character information or Video Lock.", ["characters", "video-lock"], "critical", characterIdentityConflict ? "character-identity-conflict-core" : "character-consistency-core"),
     makeCheck("character-participation", missingActions.length === 0 && spatialParticipationIssues.length === 0, missingActions.length + spatialParticipationIssues.length === 1, [...missingActions.map((result) => result.characterName), ...spatialParticipationIssues.map((finding) => finding.message)].join("; ") || "Every selected foreground character meaningfully affects the story.", ["video-prompt", "timeline"], "critical"),
     makeCheck("concept-specificity", conceptSpecific, Boolean(concept) && unresolvedPatterns.length === 0, conceptSpecific ? "The package uses one concrete resolved story with exact cause, object trajectory, character functions, payoff, and final composition." : unresolvedPatterns.length ? "Unresolved placeholder language is blocked from finished prompt packages." : "Resolve a concrete location, object trajectory, initiating cause, character participation, payoff, and final composition.", ["start-frame", "end-frame", "video-prompt", "video-lock"], "critical"),
-    makeCheck("authorized-inventory", unauthorizedObjects.length === 0, false, unauthorizedObjects.length ? `Unauthorized object: '${unauthorizedObjects[0].objectName}' appears in ${unauthorizedObjects[0].sections.join(", ")} but is not included in the authorized production inventory.` : "Every section uses only the authorized cast, location, and object inventory.", ["start-frame", "end-frame", "video-lock", "video-prompt", "music", "sound-effects", "video-rules"], "critical"),
+    makeCheck("authorized-inventory", unauthorizedObjects.length === 0, false, unauthorizedObjects.length ? `Unauthorized object detected: “${unauthorizedObjects[0].objectName}”. Found in: ${unauthorizedObjects[0].sections.join(", ")}. Evidence: ${unauthorizedObjects[0].evidence[0]}. Authorized movable objects: ${inventory?.objects.map((object) => object.name).join(", ") || "none"}.` : "Every detected entity is correctly classified; scene zones, surfaces, object attributes, lighting, and effects are excluded from movable-object failures.", ["start-frame", "end-frame", "video-lock", "video-prompt", "music", "sound-effects", "video-rules"], "critical"),
     makeCheck("spatial-consistency", Boolean(spatialPlan) && spatialIssues.length === 0 && characterPathIssues.length === 0 && frameNames && ratioPresent, Boolean(spatialPlan) && spatialIssues.length + characterPathIssues.length <= 1, spatialIssues[0]?.message || characterPathIssues[0]?.message || "Initial placement, zone transitions, character paths, collisions, and frames are spatially consistent.", ["start-frame", "end-frame", "video-prompt", "timeline"], "critical"),
     makeCheck("action-ownership", Boolean(spatialPlan) && ownershipIssues.length === 0, Boolean(spatialPlan) && ownershipIssues.length === 1, ownershipIssues[0]?.message || "Every action owner is present, has physical access, and matches the causal role.", ["video-prompt", "timeline"], "critical"),
-    makeCheck("object-trajectory", trajectoryIssues.length === 0, trajectoryIssues.length === 1, trajectoryIssues[0]?.message || "The important object has a complete timed physical trajectory.", ["start-frame", "end-frame", "video-prompt", "timeline"], "critical"),
+    makeCheck("object-trajectory", trajectoryIssues.length === 0 && objectFinalIssues.length === 0 && motionCompatibilityIssues.length === 0, trajectoryIssues.length + objectFinalIssues.length + motionCompatibilityIssues.length === 1, trajectoryIssues[0]?.message || objectFinalIssues[0]?.evidence || motionCompatibilityIssues[0]?.evidence || "The important object has a complete shape-compatible trajectory, visible slowdown, final position, orientation, and settled state.", ["start-frame", "end-frame", "video-prompt", "timeline"], "critical"),
     makeCheck("direction-continuity", Boolean(spatialPlan) && directionIssues.length === 0, Boolean(spatialPlan) && directionIssues.length === 1, directionIssues[0]?.message || "Every object direction is generated from connected zone transitions.", ["video-prompt", "timeline"], "critical"),
     makeCheck("action-flow", Boolean(pack.videoTimeline.trim()) && timelineValidation.valid && actionDensity <= 4 && /(?:opening|begin|start|0:00)/i.test(pack.videoTimeline) && /(?:payoff|final|end)/i.test(pack.videoTimeline), Boolean(pack.videoTimeline.trim()) && timelineValidation.errors.length <= 1, timelineValidation.valid ? "Video Prompt needs a clear opening hook, chronological action, and reachable payoff at duration-appropriate density." : `Timeline coverage is invalid: ${timelineValidation.errors.join(" ")}`, ["video-prompt", "timeline"]),
-    makeCheck("final-state-reachability", Boolean(spatialPlan) && finalStateIssues.length === 0, Boolean(spatialPlan) && finalStateIssues.length === 1, finalStateIssues[0]?.message || "Every final character and object position follows from the preceding visible movement.", ["end-frame", "video-prompt", "timeline"], "critical"),
+    makeCheck("final-state-reachability", Boolean(spatialPlan) && finalStateIssues.length === 0 && characterFinalIssues.length === 0 && objectFinalIssues.length === 0, Boolean(spatialPlan) && finalStateIssues.length + characterFinalIssues.length + objectFinalIssues.length === 1, finalStateIssues[0]?.message || characterFinalIssues[0]?.evidence || objectFinalIssues[0]?.evidence || "Every selected character and moving object is explicitly named in the payoff with a reachable, visible, supported, settled final state.", ["end-frame", "video-prompt", "timeline"], "critical"),
     makeCheck("camera-motion", /camera|framing|shot|track|locked/i.test(`${pack.videoLock}\n${pack.videoTimeline}`) && /motion|movement|move/i.test(pack.videoTimeline), /camera|shot/i.test(complete), "Camera direction and subject motion must be concrete, readable, and keep the main action visible.", ["video-lock", "video-prompt"]),
     makeCheck("audio-synchronization", audioAligned && (context.musicEnabled ? Boolean(pack.musicPath.trim() && pack.soundEffects.trim()) : /no music/i.test(pack.musicPath)), audioAligned && Boolean(pack.soundEffects.trim()), audioAligned ? "Music and sound-effect boundaries synchronize with the concrete visual beats." : "Music or sound-effect timing does not align with the Video Prompt beat boundaries.", ["music", "sound-effects", "video-prompt"]),
     makeCheck("model-compatibility", contains(complete, [context.videoModel]) && ratioPresent && durationPresent, ratioPresent && durationPresent, "The prompt package must identify the selected model, duration, ratio, and reference-frame structure.", ["video-lock", "start-frame", "end-frame"]),
-    makeCheck("model-facing-clarity", clarityIssues.length === 0 && locationIssues.length === 0 && !sfxSeverelyOvergenerated && lockRulesConcise, clarityIssues.length + locationIssues.length <= 1, clarityIssues[0]?.message || locationIssues[0]?.message || "Model-facing sections use natural, location-consistent cinematic language without internal validation metadata.", ["start-frame", "end-frame", "video-prompt", "music", "sound-effects"], "major"),
+    makeCheck("model-facing-clarity", clarityIssues.length === 0 && locationIssues.length === 0 && physicalActionIssues.length === 0 && locationCoherenceIssues.length === 0 && !sfxSeverelyOvergenerated && lockRulesConcise, clarityIssues.length + locationIssues.length + physicalActionIssues.length + locationCoherenceIssues.length <= 1, clarityIssues[0]?.message || locationIssues[0]?.message || physicalActionIssues[0]?.evidence || locationCoherenceIssues[0]?.evidence || "Model-facing sections use grammatical physical actions, one contact method, coherent location wording, and no internal validation metadata.", ["start-frame", "end-frame", "video-prompt", "music", "sound-effects"], "major"),
   ];
   const categories = checks.map((check) => ({ id: check.categoryId, label: CATEGORY_LABELS[check.categoryId], weight: check.maxScore, earnedScore: check.score, maxScore: check.maxScore, checks: [check] }));
   const caps: PromptQualityCap[] = [];
@@ -322,6 +335,10 @@ export function analyzePromptPackage(pack: ProductionPack, context: PromptQualit
   if (directionIssues.some((finding) => finding.id === "object-path-disconnect")) addCap("unexplainedObjectReversal", "Unexplained object reversal", directionIssues.find((finding) => finding.id === "object-path-disconnect")!.message, 78, byCategory("direction-continuity"), ["video-prompt", "timeline"]);
   if (spatialIssues.some((finding) => finding.id === "impossible-collision")) addCap("impossibleCollision", "Impossible collision", spatialIssues.find((finding) => finding.id === "impossible-collision")!.message, 76, byCategory("spatial-consistency"), ["video-prompt", "timeline"]);
   if (finalStateIssues.length) addCap("unreachableFinalState", "Unreachable final state", finalStateIssues[0].message, 79, byCategory("final-state-reachability"), ["end-frame", "video-prompt", "timeline"]);
+  if (characterFinalIssues.length) addCap("missingCharacterFinalState", "Missing character final state", characterFinalIssues[0].evidence, 84, byCategory("final-state-reachability"), ["end-frame", "video-prompt"]);
+  if (objectFinalIssues.some((finding) => finding.id === "missing-object-final-state")) addCap("missingObjectFinalState", "Missing object final state", objectFinalIssues.find((finding) => finding.id === "missing-object-final-state")!.evidence, 82, byCategory("object-trajectory"), ["video-prompt", "end-frame"]);
+  if (objectFinalIssues.some((finding) => finding.id === "final-state-only-in-video-lock")) addCap("finalStateOnlyInVideoLock", "Final state only in Video Lock", objectFinalIssues.find((finding) => finding.id === "final-state-only-in-video-lock")!.evidence, 85, byCategory("object-trajectory"), ["video-lock", "video-prompt"]);
+  if (physicalActionIssues.length) addCap("malformedPhysicalAction", "Malformed physical action", physicalActionIssues[0].evidence, 82, byCategory("model-facing-clarity"), ["video-prompt"]);
   if (locationIssues.length) addCap("locationVocabularyContamination", "Location vocabulary contamination", locationIssues[0].message, 88, byCategory("model-facing-clarity"), ["start-frame", "end-frame", "video-prompt"]);
   if (clarityIssues.length) addCap("internalValidationLanguageInPrompt", "Internal validation language", clarityIssues[0].message, 91, byCategory("model-facing-clarity"), ["start-frame", "end-frame", "video-prompt", "music", "sound-effects"]);
   const unclearRedirection = trajectoryIssues.find((issue) => issue.id === "unclear-redirection");
@@ -391,6 +408,10 @@ export function changedPromptSections(before: ProductionPack, after: ProductionP
 }
 export function isRepairImprovement(before: PromptQualityAnalysis, after: PromptQualityAnalysis) {
   if (after.criticalIssueCount > before.criticalIssueCount) return false;
+  if (after.criticalIssueCount < before.criticalIssueCount) return true;
+  const beforeMajor = [...before.warnings, ...before.failedChecks].filter((check) => check.severity === "major" && check.status !== "pass").length;
+  const afterMajor = [...after.warnings, ...after.failedChecks].filter((check) => check.severity === "major" && check.status !== "pass").length;
+  if (afterMajor < beforeMajor) return true;
   if (after.finalScore > before.finalScore) return true;
   if (after.finalScore === before.finalScore && after.baseScore > before.baseScore) return true;
   return after.finalScore === before.finalScore && after.baseScore === before.baseScore && after.failedChecks.length < before.failedChecks.length;
@@ -417,13 +438,27 @@ export function repairPromptPackage(pack: ProductionPack, form: ProductionForm, 
   }
   if (issues.has("character-consistency")) update("characterBuildingPrompt", "characters", `Selected cast and fixed roles: ${names}.`, "Restored selected character identities and fixed roles.");
   if (issues.has("character-consistency") || issues.has("model-facing-clarity")) update("videoLock", "video-lock", `Immutable cast: ${names}. Global format: ${form.videoRatio}, ${form.duration} seconds, ${form.videoModel}. Preserve Start Frame to End Frame continuity.`, "Strengthened immutable identity, format, and frame-continuity locks.");
-  const spatialCategories: PromptQualityCategoryId[] = ["action-ownership", "direction-continuity", "spatial-consistency", "final-state-reachability", "character-participation"];
+  const spatialCategories: PromptQualityCategoryId[] = ["action-ownership", "direction-continuity", "spatial-consistency", "final-state-reachability", "character-participation", "object-trajectory", "model-facing-clarity"];
   if (form.resolvedProductionConcept && spatialCategories.some((category) => issues.has(category))) {
     const plan = buildResolvedSpatialActionPlan(form.resolvedProductionConcept, characters);
     repaired.videoTimeline = renderSpatialVideoPrompt(plan, form.resolvedProductionConcept);
     repaired.endFramePrompt = `${repaired.endFramePrompt.split("\n")[0]}\nReachable final state: ${form.resolvedProductionConcept.finalComposition}. The ${plan.objectPath.objectName} stops in ${plan.objectPath.finalZoneId}; every character holds the final zone reached in the preceding visible beat.`;
     changedSections.push("video-prompt", "end-frame");
     improvements.push("Rebuilt action ownership, object direction, character paths, collision feasibility, participation, and final positions from one canonical spatial plan.");
+  }
+  if (form.resolvedProductionConcept && (issues.has("audio-synchronization") || issues.has("object-trajectory") || issues.has("model-facing-clarity"))) {
+    const plan = form.resolvedSpatialActionPlan || buildResolvedSpatialActionPlan(form.resolvedProductionConcept, characters);
+    const beats = getFinalizedProductionBeats({ resolvedSpatialActionPlan: plan, concept: form.resolvedProductionConcept });
+    const music = buildMusicFromFinalizedBeats({ beats, concept: form.resolvedProductionConcept, form });
+    const sfx = buildSfxFromFinalizedBeats({ beats, concept: form.resolvedProductionConcept, characterVocalLocks: characters.map((character) => character.nonverbalSoundProfile), form });
+    repaired.musicPath = music.length ? renderTimedDirections(music) : "No Music.";
+    repaired.soundEffects = `VOCAL LOCKS — ${characters.map((character) => `${character.shortName}: ${character.nonverbalSoundProfile || "brief neutral nonverbal reaction"}`).join("; ")}.\n${renderTimedDirections(sfx)}\nNo spoken words. Every sound must match a visible action.`;
+    changedSections.push("music", "sound-effects"); improvements.push("Aligned Music and Sound Effects to the finalized Video Prompt beat boundaries.");
+  }
+  if (form.resolvedProductionConcept && issues.has("model-facing-clarity")) {
+    const coherent = renderCoherentLocation(resolveLocationPlan(form.resolvedProductionConcept));
+    repaired.startFramePrompt = repaired.startFramePrompt.replace(/Exact location:[^.]+\./i, `Exact location: ${coherent}.`);
+    changedSections.push("start-frame"); improvements.push("Clarified the selected location's spatial relationship without changing it.");
   }
   if (issues.has("action-flow")) update("videoTimeline", "video-prompt", "Opening hook begins immediately; actions proceed in chronological cause-and-effect order; the final beat resolves in a readable payoff and settled end composition.", "Clarified the opening hook, action progression, and final payoff.");
   if (issues.has("spatial-consistency") || issues.has("final-state-reachability")) {

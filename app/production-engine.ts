@@ -24,8 +24,9 @@ import {
 import { normalizeProductionFormat } from "./production-format";
 import * as ProductionConcept from "./production-concept";
 import type { ResolvedProductionConcept } from "./production-types";
-import { buildAuthorizedProductionInventory, buildCompleteObjectTrajectory, buildConciseSoundEffects, buildConciseVideoLock, buildConciseVideoRules, buildExecutableVideoBeats, buildMusicDirection, normalizeProductionPackEncoding } from "./prompt-choreography";
+import { buildAuthorizedProductionInventory, buildConciseVideoLock, buildConciseVideoRules, normalizeProductionPackEncoding } from "./prompt-choreography";
 import { buildResolvedSpatialActionPlan, renderSpatialVideoPrompt, removeInternalValidationLanguage, validateSpatialActionPlan } from "./spatial-action-plan";
+import { buildMusicFromFinalizedBeats, buildSfxFromFinalizedBeats, getFinalizedProductionBeats, renderCoherentLocation, renderTimedDirections, resolveLocationPlan } from "./prompt-finalization";
 import {
   inferMusicStyle,
   inferSoundEffectsStyle,
@@ -1036,8 +1037,10 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
   const finalObjectState = repairedSpatialPlan.finalObjectStates[0];
   const finalObjectZone = repairedSpatialPlan.zones.find((zone) => zone.id === finalObjectState?.zoneId);
   const spatialConcept: ResolvedProductionConcept = { ...resolvedConcept, primaryObject: { ...resolvedConcept.primaryObject, initialPosition: repairedSpatialPlan.zones.find((zone) => zone.id === repairedSpatialPlan.initialObjectStates[0]?.zoneId)?.description || resolvedConcept.primaryObject.initialPosition, finalPosition: finalObjectZone ? `upright and settled in the ${finalObjectZone.description}` : resolvedConcept.primaryObject.finalPosition }, finalComposition: `${repairedSpatialPlan.finalCharacterStates.map((state) => `${state.characterName} ${state.posture} in ${repairedSpatialPlan.zones.find((zone) => zone.id === state.zoneId)?.label || state.zoneId}`).join("; ")}; ${resolvedConcept.primaryObject.objectName} upright and settled in ${finalObjectZone?.label || finalObjectState?.zoneId}` };
-  const completeObjectTrajectory = buildCompleteObjectTrajectory(resolvedConcept);
-  const executableBeats = buildExecutableVideoBeats(resolvedConcept, completeObjectTrajectory);
+  const finalizedBeats = getFinalizedProductionBeats({ resolvedSpatialActionPlan: repairedSpatialPlan, concept: spatialConcept });
+  const finalizedMusic = buildMusicFromFinalizedBeats({ beats: finalizedBeats, concept: spatialConcept, form });
+  const finalizedSfx = buildSfxFromFinalizedBeats({ beats: finalizedBeats, concept: spatialConcept, characterVocalLocks: cast.map((character) => character.nonverbalSoundProfile), form });
+  const coherentLocation = renderCoherentLocation(resolveLocationPlan(spatialConcept));
   const configuredTimeline = form.timingStructureMode === "custom" && form.productionTimeline?.beats?.length
     ? form.productionTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} — ${beat.label}: ${beat.visualAction} Action owner: ${heroName}. ${beat.characterAction || ""} ${beat.cameraDirection || ""} ${beat.musicDirection || ""} ${beat.soundEffectsDirection || ""} ${beat.continuityNote || ""}`.replace(/\s+/g, " ").trim()).join("\n")
     : resolvedTimeline.beats.map((beat) => `${rangeLabel(beat.startSeconds, beat.endSeconds)} â€” ${beat.visualAction}`).join("\n");
@@ -1047,7 +1050,7 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
     : executableTimeline;
   const openingPositions = repairedSpatialPlan.initialCharacterStates.map((state) => `${state.characterName}: ${state.posture} in ${repairedSpatialPlan.zones.find((zone) => zone.id === state.zoneId)?.description || state.zoneId}`).join("; ");
   const finalPositions = repairedSpatialPlan.finalCharacterStates.map((state) => `${state.characterName}: ${state.posture} in ${repairedSpatialPlan.zones.find((zone) => zone.id === state.zoneId)?.description || state.zoneId}`).join("; ");
-  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Exact location: ${location}. Exact object: ${spatialConcept.primaryObject.visualIdentity}, ${spatialConcept.primaryObject.initialPosition}. Opening positions: ${openingPositions}. Initiating setup: ${resolvedConcept.openingHook}. Use wide or medium-wide visibility, matching lens, contact shadows, clear eye lines, and the first 0:00 motion cue. Do not show the payoff.`;
+  const conciseStartFrame = `Create the opening reference image in the global Video Ratio ${startRatio}, ${style}, for ${adapter.displayName}. Cast: exactly ${cast.length} characters: ${compactCast.replace(/\n/g, "; ")}. Exact location: ${coherentLocation}. Exact object: ${spatialConcept.primaryObject.visualIdentity}, ${spatialConcept.primaryObject.initialPosition}. Opening positions: ${openingPositions}. Initiating setup: ${resolvedConcept.openingHook}. Use wide or medium-wide visibility, matching lens, contact shadows, clear eye lines, and the first 0:00 motion cue. Do not show the payoff.`;
   const conciseEndFrame = `Create the final reference image in the same global Video Ratio ${endRatio}, ${style}, using the start-frame image as the continuity reference for ${adapter.displayName}. Preserve the same location, lighting, lens, scale, cast, and object. Exact payoff: ${ending}. Final positions: ${finalPositions}. Exact object final position: ${spatialConcept.primaryObject.finalPosition}. Final composition: ${spatialConcept.finalComposition}. Show complete settling and only the selected cast and object.`;
   void adaptedTimeline; void musicLines; void sfxLines; void conciseLock; void conciseFinalRule;
   const generatedPack: ProductionPack = {
@@ -1057,8 +1060,8 @@ NO duplicate characters. NO duplicate objects. NO additional characters or objec
     endFramePrompt: conciseEndFrame,
     videoLock: buildConciseVideoLock({ concept: spatialConcept, characters: cast, inventory: authorizedProductionInventory, form, style, model }),
     videoTimeline: finalTimeline,
-    musicPath: buildMusicDirection(executableBeats, form),
-    soundEffects: buildConciseSoundEffects(executableBeats, cast, resolvedConcept.primaryObject.objectName),
+    musicPath: finalizedMusic.length ? renderTimedDirections(finalizedMusic) : "No Music.",
+    soundEffects: `VOCAL LOCKS — ${cast.map((character) => `${character.shortName}: ${character.nonverbalSoundProfile || "brief neutral nonverbal effort and reaction sounds"}`).join("; ")}.\n${renderTimedDirections(finalizedSfx)}\nNo spoken words. Every sound must match a visible action.`,
     finalGenerationRule: buildConciseVideoRules(),
   };
   return normalizeProductionPackEncoding(Object.fromEntries(

@@ -4,15 +4,16 @@ import fs from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 
-function compile(source) {
+function compile(source, dependencies = {}) {
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const compiledModule = { exports: {} };
-  vm.runInNewContext(`(function(exports,module,require){${output}})(exports,module,require)`, { exports: compiledModule.exports, module: compiledModule, require: () => ({}), Date });
+  vm.runInNewContext(`(function(exports,module,require){${output}})(exports,module,require)`, { exports: compiledModule.exports, module: compiledModule, require: (id) => dependencies[id] || {}, Date });
   return compiledModule.exports;
 }
 
+const finalization = compile(fs.readFileSync("app/prompt-finalization.ts", "utf8"));
 const spatialSource = fs.readFileSync("app/spatial-action-plan.ts", "utf8");
-const spatial = compile(spatialSource);
+const spatial = compile(spatialSource, { "./prompt-finalization": finalization });
 const engineSource = fs.readFileSync("app/production-engine.ts", "utf8");
 const routeSource = fs.readFileSync("app/api/generate/route.ts", "utf8");
 const qualitySource = fs.readFileSync("app/prompt-quality.ts", "utf8");
